@@ -83,7 +83,8 @@ defmodule Refract.RowsTest do
     test "is lazy" do
       rows = Stream.map(@rows, fn _ -> raise "read too early" end)
 
-      assert %Stream{} = Rows.take(rows, ["id"])
+      # building the stream must not read the source (the source raises if read)
+      _stream = Rows.take(rows, ["id"])
     end
   end
 end

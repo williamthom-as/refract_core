@@ -1,19 +1,19 @@
 defmodule Refract.Writer do
-  @callback encode(rows :: Enumerable.t(), opts :: keyword()) :: :ok | {:error, term()}
+  @callback encode(rows :: Enumerable.t(), opts :: keyword()) :: Enumerable.t()
 
   defmacro __using__(_opts) do
     quote do
       @behaviour Refract.Writer
 
-      @spec write(Enumerable.t(), Path.t(), keyword()) :: Enumerable.t()
+      @spec write(Enumerable.t(), Path.t(), keyword()) :: :ok | {:error, term()}
 
-      def write(rows, path, opts), do: Refract.Writer.write(__MODULE__, rows, path, opts)
+      def write(rows, path, opts \\ []), do: Refract.Writer.write(__MODULE__, rows, path, opts)
     end
   end
 
   @spec write(module(), Enumerable.t(), Path.t(), keyword()) :: :ok | {:error, term()}
 
-  def write(writer, rows, path, opts \\ []) do
+  def write(writer, rows, path, opts) do
     tmp = "#{path}.#{System.unique_integer([:positive])}.tmp"
 
     with {:ok, file} <- File.open(tmp, [:write, :binary]) do
@@ -32,6 +32,5 @@ defmodule Refract.Writer do
       File.close(file)
       File.rename(tmp, path)
     end
-
   end
 end

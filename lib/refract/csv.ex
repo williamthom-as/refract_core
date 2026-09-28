@@ -1,5 +1,6 @@
 defmodule Refract.CSV do
   use Refract.Reader
+  use Refract.Writer
 
   alias Refract.CSV.Parsers
   alias Refract.CSV.Source
@@ -15,5 +16,38 @@ defmodule Refract.CSV do
        |> Source.strip_bom()
        |> parser.parse_stream(skip_headers: false)}
     end
+  end
+
+  @spec encode(rows :: Enumerable.t(), opts :: keyword()) :: Enumerable.t()
+
+  def encode(rows, opts) do
+    {:ok, parser} = Parsers.for_separator(Keyword.get(opts, :separator, ","))
+
+    rows
+    |> to_cells(Keyword.get(opts, :header))
+    |> parser.dump_to_stream()
+  end
+
+  defp to_cells(rows, nil) do
+    Stream.transform(rows, nil, fn
+      row, nil ->
+        header = row |> Map.keys() |> Enum.sort()
+
+        {[header, fetch_ordered_values(row, header)], header}
+
+      row, header ->
+        {[fetch_ordered_values(row, header)], header}
+    end)
+  end
+
+  defp to_cells(rows, header) do
+    Stream.concat(
+      [header],
+      Stream.map(rows, &fetch_ordered_values(&1, header))
+    )
+  end
+
+  defp fetch_ordered_values(row, headers) do
+    Enum.map(headers, fn header -> Map.fetch!(row, header) end)
   end
 end

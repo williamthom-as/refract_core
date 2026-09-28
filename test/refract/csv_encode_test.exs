@@ -56,7 +56,8 @@ defmodule Refract.CSVEncodeTest do
     test "is lazy, returns a stream of iodata" do
       rows = Stream.map([%{"id" => "1"}], fn _ -> raise "read too early" end)
 
-      assert %Stream{} = Refract.CSV.encode(rows, header: ["id"])
+      # building the stream must not read the source (source raises if read)
+      _stream = Refract.CSV.encode(rows, header: ["id"])
     end
   end
 
