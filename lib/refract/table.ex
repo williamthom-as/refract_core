@@ -2,6 +2,7 @@ defmodule Refract.Table do
   alias Refract.Table.Spec
   alias Refract.Table.Spec.Header
   alias Refract.Table.Spec.Row
+  alias Refract.Table.Spec.Stop
 
   @spec spec(opts :: keyword()) :: Spec.t()
 
@@ -18,5 +19,11 @@ defmodule Refract.Table do
 
   def match_row(%Spec{row: row_spec}, row) do
     Row.matches(row_spec, row)
+  end
+
+  @spec match_stop(Spec.t(), Refract.raw_row()) :: :continue | {:stop, Stop.condition()}
+
+  def match_stop(%Spec{stop: stop_spec}, row) do
+    Stop.matches(stop_spec, row)
   end
 end

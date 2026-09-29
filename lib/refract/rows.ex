@@ -1,4 +1,6 @@
 defmodule Refract.Rows do
+  alias Refract.String.Utils
+
   @spec update(
           Enumerable.t(),
           String.t() | [String.t()],
@@ -14,7 +16,7 @@ defmodule Refract.Rows do
       Enum.reduce(columns, row, fn col, acc ->
         value = Map.fetch!(acc, col)
 
-        if skip_blank and blank?(value) do
+        if skip_blank and Utils.blank?(value) do
           acc
         else
           Map.put(acc, col, fun.(value))
@@ -31,7 +33,4 @@ defmodule Refract.Rows do
       |> Map.new(fn col -> {col, Map.fetch!(row, col)} end)
     end)
   end
-
-  defp blank?(value) when value in ["", nil], do: true
-  defp blank?(_), do: false
 end

@@ -292,6 +292,14 @@ defmodule Refract.TableTest do
       assert Table.match_stop(table_spec(stop: [condition]), @total_line) == {:stop, condition}
     end
 
+    test "{:contains, regex} skips nil cells" do
+      condition = {:contains, ~r/invoice total/i}
+      spec = table_spec(stop: [condition])
+
+      assert Table.match_stop(spec, [nil, "Invoice Total", nil]) == {:stop, condition}
+      assert Table.match_stop(spec, [nil, "apple"]) == :continue
+    end
+
     test "a function stops when it returns truthy" do
       condition = &(length(&1) < 3)
       spec = table_spec(stop: [condition])
