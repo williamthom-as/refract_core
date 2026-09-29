@@ -13,6 +13,8 @@ defmodule Refract.Writer do
 
   @spec write(module(), Enumerable.t(), Path.t(), keyword()) :: :ok | {:error, term()}
 
+  @write_buffer_size 1_000
+
   def write(writer, rows, path, opts) do
     tmp = "#{path}.#{System.unique_integer([:positive])}.tmp"
 
@@ -20,6 +22,7 @@ defmodule Refract.Writer do
       try do
         rows
         |> writer.encode(opts)
+        |> Stream.chunk_every(@write_buffer_size)
         |> Enum.each(&IO.binwrite(file, &1))
       rescue
         e ->
