@@ -1,11 +1,11 @@
-defmodule Refract.CSVTest do
+defmodule Refract.CSV.StreamTest do
   use ExUnit.Case, async: true
 
   @moduletag timeout: 5_000
 
-  @csv Path.expand("../fixtures/csv", __DIR__)
+  @csv Path.expand("../../fixtures/csv", __DIR__)
 
-  @golden Path.expand("../fixtures/golden", __DIR__)
+  @golden Path.expand("../../fixtures/golden", __DIR__)
 
   defp fixture(name), do: Path.join(@csv, name)
 

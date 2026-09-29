@@ -1,4 +1,4 @@
-defmodule Refract.CSVEncodeTest do
+defmodule Refract.CSV.EncodeTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
