@@ -154,6 +154,13 @@ defmodule Refract.TableTest do
       assert Enum.sort(matched) == ["sku", "total"]
     end
 
+    test "skips cells that are not strings" do
+      row = [nil, "SKU", 2024, "Line Total", ~D[2010-01-01]]
+
+      assert Table.match_header(invoice_spec(min_matches: 2), row) ==
+               {:ok, %{"sku" => 1, "total" => 3}}
+    end
+
     test "header-like words are not a match" do
       row = ["Bill To", "", "", "", "", "SKU list attached", "Total due", "see below"]
 
