@@ -91,13 +91,13 @@ defmodule Refract.Table.Spec.Header do
     end)
   end
 
-  defp cell_matches?(nil, _patterns), do: false
-
-  defp cell_matches?(col, patterns) do
+  defp cell_matches?(col, patterns) when is_binary(col) do
     normalised_col = col |> String.trim() |> String.downcase()
 
     Enum.any?(patterns, &pattern_matches?(&1, col, normalised_col))
   end
+
+  defp cell_matches?(_col, _patterns), do: false
 
   defp pattern_matches?(%Regex{} = pattern, col, _normalised_col), do: Regex.match?(pattern, col)
 

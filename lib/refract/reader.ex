@@ -45,7 +45,7 @@ defmodule Refract.Reader do
              {[], Header.normalise(row)}
 
            row, header ->
-             {[Map.new(Enum.zip(header, row))], header}
+             {[Header.to_row(header, row)], header}
          end)}
 
       {:error, _reason} = error ->

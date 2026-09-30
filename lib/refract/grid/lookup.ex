@@ -43,7 +43,7 @@ defmodule Refract.Grid.Lookup do
     end
   end
 
-  defp to_rows(header, data), do: Enum.map(data, &Map.new(Enum.zip(header, &1)))
+  defp to_rows(header, data), do: Enum.map(data, &Header.to_row(header, &1))
 
   defp fetch(rows, x, y) when y < tuple_size(rows) do
     row = elem(rows, y)
