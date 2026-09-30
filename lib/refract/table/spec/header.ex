@@ -91,6 +91,8 @@ defmodule Refract.Table.Spec.Header do
     end)
   end
 
+  defp cell_matches?(nil, _patterns), do: false
+
   defp cell_matches?(col, patterns) do
     normalised_col = col |> String.trim() |> String.downcase()
 

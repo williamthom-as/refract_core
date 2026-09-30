@@ -1,14 +1,40 @@
 defmodule Refract.Table do
+  alias Refract.Table.Locate
   alias Refract.Table.Spec
   alias Refract.Table.Spec.Header
   alias Refract.Table.Spec.Row
   alias Refract.Table.Spec.Stop
 
+  defstruct [:header_row, :header, :columns, :rows]
+
+  @type t :: %__MODULE__{
+          header_row: pos_integer() | nil,
+          header: [String.t()],
+          columns: Header.positions(),
+          rows: Enumerable.t()
+        }
+
+  @spec new(
+          header_row :: pos_integer() | nil,
+          header :: [String.t()],
+          columns :: Header.positions(),
+          rows :: Enumerable.t()
+        ) :: t()
+
+  def new(header_row, header, columns, rows) do
+    %__MODULE__{
+      header_row: header_row,
+      header: header,
+      columns: columns,
+      rows: rows
+    }
+  end
+
   @spec spec(opts :: keyword()) :: Spec.t()
 
   def spec(opts), do: Spec.new(opts)
 
-  @spec match_header(Spec.t(), [String.t()]) ::
+  @spec match_header(Spec.t(), columns :: [String.t()]) ::
           {:ok, Header.positions()} | {:error, Header.miss()}
 
   def match_header(%Spec{header: header}, columns) do
@@ -26,4 +52,15 @@ defmodule Refract.Table do
   def match_stop(%Spec{stop: stop_spec}, row) do
     Stop.matches(stop_spec, row)
   end
+
+  @spec ordered_row(Refract.raw_row(), Header.positions()) :: Refract.row()
+
+  def ordered_row(row, positions) do
+    Map.new(positions, fn {name, pos} -> {name, Enum.at(row, pos)} end)
+  end
+
+  @spec locate(Enumerable.t(), Spec.t(), keyword()) ::
+          {:ok, t()} | {:error, {:header_not_found, Locate.header_miss()}}
+
+  def locate(raw, %Spec{} = spec, opts \\ []), do: Locate.run(raw, spec, opts)
 end

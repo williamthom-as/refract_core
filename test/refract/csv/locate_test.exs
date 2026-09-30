@@ -69,8 +69,8 @@ defmodule Refract.CSV.LocateTest do
   describe "locate/3" do
     test "finds a shifted header and streams the rows under it" do
       assert {:ok, table} = CSV.locate(shape("messy_invoice.csv"), invoice_spec())
-
       assert is_struct(table, Table)
+
       assert table.header_row == 10
       assert table.header == ["vendor", "sku", "item", "cost_per_kg", "kg", "total"]
 
