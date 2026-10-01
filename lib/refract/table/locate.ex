@@ -8,10 +8,9 @@ defmodule Refract.Table.Locate do
           {:ok, Table.t()} | {:error, {:header_not_found, header_miss()}}
 
   def run(raw, %Spec{} = spec, opts) do
-    within = Keyword.get(opts, :within, 100)
-    on_miss = Keyword.get(opts, :on_miss, :skip)
-
-    validate_on_miss(on_miss)
+    opts = validate_opts!(opts)
+    within = Keyword.fetch!(opts, :within)
+    on_miss = Keyword.fetch!(opts, :on_miss)
 
     case find_header(raw, spec, within) do
       {:error, best} ->
@@ -29,6 +28,23 @@ defmodule Refract.Table.Locate do
 
         {:ok, Table.new(header_row, header_names(positions), positions, rows)}
     end
+  end
+
+  @spec validate_opts!(keyword()) :: keyword()
+
+  def validate_opts!(opts) do
+    opts = Keyword.validate!(opts, within: 100, on_miss: :skip)
+
+    validate_within(Keyword.fetch!(opts, :within))
+    validate_on_miss(Keyword.fetch!(opts, :on_miss))
+
+    opts
+  end
+
+  defp validate_within(within) when is_integer(within) and within >= 0, do: :ok
+
+  defp validate_within(within) do
+    raise ArgumentError, "within must be a non negative integer, got: #{inspect(within)}"
   end
 
   defp validate_on_miss(on_miss) when on_miss in [:skip, :keep], do: :ok

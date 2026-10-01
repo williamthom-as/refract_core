@@ -1,6 +1,8 @@
 defmodule Refract.Table.Spec.Header do
   defstruct [:columns, :required, :min_matches]
 
+  import Refract.String.Utils, only: [normalise_search_value: 1]
+
   @type t :: %__MODULE__{
           columns: %{String.t() => [String.t() | Regex.t()]},
           required: [String.t()],
@@ -20,7 +22,7 @@ defmodule Refract.Table.Spec.Header do
 
         {:ok, columns} ->
           Map.new(columns, fn {key, patterns} ->
-            {key, Enum.map(patterns, &normalise_pattern/1)}
+            {key, Enum.map(patterns, &normalise_search_value/1)}
           end)
       end
 
@@ -38,11 +40,6 @@ defmodule Refract.Table.Spec.Header do
     }
   end
 
-  defp normalise_pattern(%Regex{} = pattern), do: pattern
-
-  defp normalise_pattern(pattern) when is_binary(pattern),
-    do: pattern |> String.trim() |> String.downcase()
-
   defp validate_min_matches(columns, min_matches) do
     if min_matches > map_size(columns) do
       raise ArgumentError, "min_matches cannot be greater than the number of header columns"
@@ -51,7 +48,7 @@ defmodule Refract.Table.Spec.Header do
 
   defp validate_required(columns, required) do
     Enum.each(required, fn req ->
-      unless Map.has_key?(columns, req) do
+      if not Map.has_key?(columns, req) do
         raise ArgumentError, "required column #{req} is not in header columns"
       end
     end)
@@ -92,7 +89,7 @@ defmodule Refract.Table.Spec.Header do
   end
 
   defp cell_matches?(col, patterns) when is_binary(col) do
-    normalised_col = col |> String.trim() |> String.downcase()
+    normalised_col = normalise_search_value(col)
 
     Enum.any?(patterns, &pattern_matches?(&1, col, normalised_col))
   end

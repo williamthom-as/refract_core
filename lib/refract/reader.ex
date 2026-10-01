@@ -60,6 +60,7 @@ defmodule Refract.Reader do
 
   def locate(reader, source, %Spec{} = spec, opts) do
     {locate_opts, open_opts} = Keyword.split(opts, [:within, :on_miss])
+    locate_opts = Locate.validate_opts!(locate_opts)
 
     case reader.open(source, open_opts) do
       {:ok, raw} -> Table.locate(raw, spec, locate_opts)
@@ -75,7 +76,7 @@ defmodule Refract.Reader do
 
     max_bytes = Keyword.get(grid_opts, :max_bytes, 10_000_000)
 
-    with :ok <- size_check(source, max_bytes, streams_allowed: true),
+    with :ok <- size_check(source, max_bytes, streams_allowed: false),
          {:ok, raw} <- reader.open(source, open_opts),
          rows <- Enum.to_list(raw) do
       {:ok, Grid.new(rows)}

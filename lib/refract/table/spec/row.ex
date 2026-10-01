@@ -1,4 +1,6 @@
 defmodule Refract.Table.Spec.Row do
+  import Refract.Utils, only: [truthy?: 1]
+
   defstruct [:match, :min_score]
 
   @type rule :: :integer | :number | :date | Regex.t() | (Refract.cell() -> as_boolean(term()))
@@ -27,11 +29,11 @@ defmodule Refract.Table.Spec.Row do
 
   defp validate_rules(rules) when is_map(rules) do
     Enum.each(rules, fn {column, rule} ->
-      unless is_binary(column) do
+      if not is_binary(column) do
         raise ArgumentError, "column names must be strings"
       end
 
-      unless valid_rule?(rule) do
+      if not valid_rule?(rule) do
         raise ArgumentError, "invalid rule for column #{column}: #{inspect(rule)}"
       end
     end)
@@ -114,7 +116,7 @@ defmodule Refract.Table.Spec.Row do
   end
 
   defp passes?(fun, value) when is_function(fun, 1) do
-    fun.(value) not in [nil, false]
+    truthy?(fun.(value))
   end
 
   defp passes?(_, _), do: false

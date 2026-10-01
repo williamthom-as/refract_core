@@ -26,7 +26,7 @@ defmodule Refract.CSV.EncodeTest do
       end
     end
 
-    test "without header: uses the first row's keys, sorted" do
+    test "without header: uses the first row keys, sorted" do
       rows = [%{"name" => "alice", "id" => "1"}]
 
       assert encode!(rows, []) == "id,name\n1,alice\n"

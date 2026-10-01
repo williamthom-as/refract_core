@@ -43,7 +43,7 @@ defmodule Refract.Table.Spec do
 
   defp validate_row_rules(rules, columns) do
     Enum.each(rules, fn {column, _rule} ->
-      unless Map.has_key?(columns, column) do
+      if not Map.has_key?(columns, column) do
         raise ArgumentError, "row rule for unknown column #{column}"
       end
     end)

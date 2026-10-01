@@ -11,9 +11,9 @@ defmodule Refract.Writer do
     end
   end
 
-  @spec write(module(), Enumerable.t(), Path.t(), keyword()) :: :ok | {:error, term()}
-
   @write_buffer_size 1_000
+
+  @spec write(module(), Enumerable.t(), Path.t(), keyword()) :: :ok | {:error, term()}
 
   def write(writer, rows, path, opts) do
     tmp = "#{path}.#{System.unique_integer([:positive])}.tmp"
@@ -32,8 +32,19 @@ defmodule Refract.Writer do
           reraise e, __STACKTRACE__
       end
 
-      File.close(file)
-      File.rename(tmp, path)
+      publish(file, tmp, path)
+    end
+  end
+
+  defp publish(file, tmp, path) do
+    with :ok <- File.close(file),
+         :ok <- File.rename(tmp, path) do
+      :ok
+    else
+      {:error, _reason} = error ->
+        File.rm(tmp)
+
+        error
     end
   end
 end

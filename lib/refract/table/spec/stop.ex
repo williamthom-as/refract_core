@@ -1,4 +1,6 @@
 defmodule Refract.Table.Spec.Stop do
+  import Refract.Utils, only: [truthy?: 1]
+
   alias Refract.String.Utils
 
   defstruct [:conditions]
@@ -21,7 +23,7 @@ defmodule Refract.Table.Spec.Stop do
 
   defp validate_conditions(conditions) when is_list(conditions) do
     Enum.each(conditions, fn condition ->
-      unless valid_condition?(condition) do
+      if not valid_condition?(condition) do
         raise ArgumentError, "invalid stop condition: #{inspect(condition)}"
       end
     end)
@@ -37,16 +39,16 @@ defmodule Refract.Table.Spec.Stop do
   @spec matches(t(), Refract.raw_row()) :: :continue | {:stop, condition()}
 
   def matches(%__MODULE__{conditions: conditions}, row) do
-    case Enum.find(conditions, &stop_condition_met(&1, row)) do
+    case Enum.find(conditions, &stop_condition_met?(&1, row)) do
       nil -> :continue
       condition -> {:stop, condition}
     end
   end
 
-  defp stop_condition_met(:blank, row), do: Enum.all?(row, &Utils.blank?/1)
+  defp stop_condition_met?(:blank, row), do: Enum.all?(row, &Utils.blank?/1)
 
-  defp stop_condition_met({:contains, regex}, row),
+  defp stop_condition_met?({:contains, regex}, row),
     do: Enum.any?(row, &(is_binary(&1) and Regex.match?(regex, &1)))
 
-  defp stop_condition_met(fun, row) when is_function(fun, 1), do: fun.(row)
+  defp stop_condition_met?(fun, row) when is_function(fun, 1), do: truthy?(fun.(row))
 end

@@ -13,6 +13,11 @@ defmodule Refract.Grid.LookupTest do
     grid
   end
 
+  defp load!(source) do
+    {:ok, grid} = CSV.load(source)
+    grid
+  end
+
   describe "load/2" do
     test "loads the whole source into a grid" do
       assert {:ok, grid} = CSV.load(@invoice)
@@ -50,7 +55,7 @@ defmodule Refract.Grid.LookupTest do
 
       assert Grid.cell(grid, "A1") == "ACME Produce Pty Ltd"
       assert Grid.cell(grid, "B4") == "INV-0042"
-      assert Grid.cell(grid, "H16") == "17.5"
+      assert Grid.cell(grid, "H16") == "9.5"
     end
 
     test "a ref outside the grid is nil" do
@@ -93,7 +98,7 @@ defmodule Refract.Grid.LookupTest do
     end
 
     test "cells outside the grid are nil" do
-      assert Grid.range(invoice(), "H16:I17") == [["17.5", nil], [nil, nil]]
+      assert Grid.range(invoice(), "H16:I17") == [["9.5", nil], [nil, nil]]
     end
 
     test "raises on a bad range" do
@@ -161,6 +166,129 @@ defmodule Refract.Grid.LookupTest do
                %{"id" => "1", "name" => "alice"},
                %{"id" => "2", "name" => "bob"}
              ]
+    end
+  end
+
+  describe "value/2" do
+    test "takes the value right of a label" do
+      assert Grid.value(invoice(), label: "Invoice No", take: :right) == "INV-0042"
+    end
+
+    test "take defaults to :right" do
+      assert Grid.value(invoice(), label: "Invoice No") == "INV-0042"
+    end
+
+    test "ignores case and surrounding whitespace on a string label" do
+      assert Grid.value(invoice(), label: "  invoice no ") == "INV-0042"
+    end
+
+    test "matches regex labels" do
+      assert Grid.value(invoice(), label: ~r/^date$/i) == "2010-01-01"
+      assert Grid.value(invoice(), label: ~r/invoice total/i) == "9.5"
+    end
+
+    test "a string label matches the whole cell" do
+      grid = load!({:string, "Invoice Notes,x\nInvoice No,INV-1\n"})
+
+      assert Grid.value(grid, label: "Invoice No") == "INV-1"
+    end
+
+    test "skips blank cells right of the label" do
+      grid = load!({:string, "Total,, ,42\n"})
+
+      assert Grid.value(grid, label: "Total") == "42"
+    end
+
+    test "takes the value below a label" do
+      grid = load!({:string, "Name,Age\n,\nAlice,30\n"})
+
+      assert Grid.value(grid, label: "Age", take: :below) == "30"
+    end
+
+    test "the first label in reading order wins" do
+      grid = load!({:string, "x,Total,1\nTotal,2\n"})
+
+      assert Grid.value(grid, label: "Total") == "1"
+    end
+
+    test "nil when the label is not found" do
+      assert Grid.value(invoice(), label: "PO Number") == nil
+    end
+
+    test "nil when nothing follows the label" do
+      grid = load!({:string, "Total,,\nNotes\n"})
+
+      assert Grid.value(grid, label: "Total") == nil
+      assert Grid.value(grid, label: "Notes", take: :below) == nil
+    end
+
+    test "skips cells that are not strings and returns native values" do
+      grid = Grid.new([[nil, 7, "Total", nil, 42]])
+
+      assert Grid.value(grid, label: "Total") == 42
+    end
+
+    test "raises without a label" do
+      assert_raise ArgumentError, fn -> Grid.value(invoice(), take: :right) end
+    end
+
+    test "raises on an unknown take" do
+      assert_raise ArgumentError, fn -> Grid.value(invoice(), label: "Total", take: :left) end
+    end
+  end
+
+  describe "block/2" do
+    test "takes the lines below a label until a blank" do
+      assert Grid.block(invoice(), after: "Bill To", until: :blank) == [
+               "Lean Davis",
+               "4 Farm Rd, Orange"
+             ]
+    end
+
+    test "until defaults to :blank" do
+      assert Grid.block(invoice(), after: "Bill To") == ["Lean Davis", "4 Farm Rd, Orange"]
+    end
+
+    test "matches regex labels" do
+      assert Grid.block(invoice(), after: ~r/^bill to$/i) == ["Lean Davis", "4 Farm Rd, Orange"]
+    end
+
+    test "reads down the label column" do
+      grid = load!({:string, "x,Address\ny,1 Main St\nz,Orange\n"})
+
+      assert Grid.block(grid, after: "Address") == ["1 Main St", "Orange"]
+    end
+
+    test "runs to the end of the grid" do
+      grid = load!({:string, "Notes\na\nb\n"})
+
+      assert Grid.block(grid, after: "Notes") == ["a", "b"]
+    end
+
+    test "a whitespace cell, nil or a short row ends the block" do
+      assert Grid.block(Grid.new([["Notes"], ["a"], ["  "], ["b"]]), after: "Notes") == ["a"]
+      assert Grid.block(Grid.new([["Notes"], ["a"], [nil], ["b"]]), after: "Notes") == ["a"]
+
+      assert Grid.block(Grid.new([["x", "Notes"], ["y", "a"], ["z"], ["w", "b"]]), after: "Notes") ==
+               ["a"]
+    end
+
+    test "empty when a blank follows the label" do
+      grid = load!({:string, "Notes\n\na\n"})
+
+      assert Grid.block(grid, after: "Notes") == []
+    end
+
+    test "nil when the label is not found" do
+      assert Grid.block(invoice(), after: "Ship To") == nil
+    end
+
+    test "raises without after" do
+      assert_raise ArgumentError, fn -> Grid.block(invoice(), until: :blank) end
+    end
+
+    test "raises on an unknown until" do
+      assert_raise ArgumentError, fn -> Grid.block(invoice(), after: "Bill To", until: :eof) end
     end
   end
 end

@@ -17,5 +17,5 @@ repeated_header         header repeated mid table pdf export style          mvp 
 anchors grid mode on messy_invoice
 value label invoice no take right gives INV-0042
 value label date take right gives 2010-01-01
-value label invoice total take right gives 17 5
+value label invoice total take right gives 9 5
 block after bill to until blank gives lean davis and 4 farm rd orange

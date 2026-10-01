@@ -63,6 +63,14 @@ defmodule Refract.Grid do
 
   def explain(%__MODULE__{} = grid, %Spec{} = spec), do: Classify.explain(grid, spec)
 
+  @spec value(t(), [Lookup.value_opt()]) :: Refract.cell()
+
+  def value(%__MODULE__{} = grid, opts \\ []), do: Lookup.value(grid, opts)
+
+  @spec block(t(), [Lookup.block_opt()]) :: [Refract.cell()] | nil
+
+  def block(%__MODULE__{} = grid, opts \\ []), do: Lookup.block(grid, opts)
+
   @spec rows_as_list(t()) :: [[Refract.cell()]]
 
   def rows_as_list(%__MODULE__{rows: rows}) do

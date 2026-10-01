@@ -140,6 +140,16 @@ defmodule Refract.CSV.LocateTest do
         CSV.locate(shape("messy_invoice.csv"), invoice_spec(), on_miss: :ignore)
       end
     end
+
+    test "checks locate options before opening the source" do
+      assert_raise ArgumentError, fn ->
+        CSV.locate(shape("missing.csv"), invoice_spec(), on_miss: :ignore)
+      end
+
+      assert_raise ArgumentError, fn ->
+        CSV.locate(shape("missing.csv"), invoice_spec(), within: -1)
+      end
+    end
   end
 
   describe "locate/3 header not found" do

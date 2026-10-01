@@ -47,7 +47,7 @@ defmodule Refract.TableTest do
     )
   end
 
-  @total_line ["", "", "", "", "", "", "Invoice Total", "17.5"]
+  @total_line ["", "", "", "", "", "", "Invoice Total", "9.5"]
   @blank_line ["", "", " ", "", "", "", "", ""]
   @raw_line ["", "ABC123", "1", "78632478", "apple", "1.5", "2", "3"]
 
@@ -312,6 +312,14 @@ defmodule Refract.TableTest do
       spec = table_spec(stop: [condition])
 
       assert Table.match_stop(spec, ["a", "b"]) == {:stop, condition}
+      assert Table.match_stop(spec, @raw_line) == :continue
+    end
+
+    test "a function returning a value that is not a boolean" do
+      condition = fn row -> Enum.find(row, &(&1 == "END")) end
+      spec = table_spec(stop: [condition])
+
+      assert Table.match_stop(spec, ["", "END"]) == {:stop, condition}
       assert Table.match_stop(spec, @raw_line) == :continue
     end
 
