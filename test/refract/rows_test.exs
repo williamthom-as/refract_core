@@ -315,4 +315,79 @@ defmodule Refract.RowsTest do
       _stream = Rows.until(rows, fn _ -> true end)
     end
   end
+
+  describe "pivot/2" do
+    @opts [by: "id", key: "key", value: "value", columns: ["name", "type", "owner"]]
+
+    @long [
+      %{"id" => "i-1", "key" => "name", "value" => "web"},
+      %{"id" => "i-1", "key" => "type", "value" => "t3"},
+      %{"id" => "i-1", "key" => "owner", "value" => "bob"},
+      %{"id" => "i-2", "key" => "name", "value" => "db"},
+      %{"id" => "i-2", "key" => "type", "value" => "m5"},
+      %{"id" => "i-2", "key" => "owner", "value" => "amy"}
+    ]
+
+    test "turns the lines of each id into one row" do
+      assert @long |> Rows.pivot(@opts) |> Enum.to_list() == [
+               %{"id" => "i-1", "name" => "web", "type" => "t3", "owner" => "bob"},
+               %{"id" => "i-2", "name" => "db", "type" => "m5", "owner" => "amy"}
+             ]
+    end
+
+    test "ids can have any number of lines and a missing key is nil" do
+      long = [
+        %{"id" => "i-1", "key" => "name", "value" => "web"},
+        %{"id" => "i-2", "key" => "owner", "value" => "amy"},
+        %{"id" => "i-2", "key" => "name", "value" => "db"}
+      ]
+
+      assert long |> Rows.pivot(@opts) |> Enum.to_list() == [
+               %{"id" => "i-1", "name" => "web", "type" => nil, "owner" => nil},
+               %{"id" => "i-2", "name" => "db", "type" => nil, "owner" => "amy"}
+             ]
+    end
+
+    test "other columns on the lines are dropped" do
+      long = [%{"id" => "i-1", "key" => "name", "value" => "web", "seen" => "2026"}]
+
+      assert [row] = long |> Rows.pivot(@opts) |> Enum.to_list()
+      refute Map.has_key?(row, "seen")
+    end
+
+    test "a key twice for one id raises" do
+      long = [
+        %{"id" => "i-1", "key" => "name", "value" => "web"},
+        %{"id" => "i-1", "key" => "name", "value" => "api"}
+      ]
+
+      assert_raise ArgumentError, ~r/name/, fn -> long |> Rows.pivot(@opts) |> Enum.to_list() end
+    end
+
+    test "a key not in columns raises" do
+      long = [%{"id" => "i-1", "key" => "region", "value" => "us-east"}]
+
+      assert_raise ArgumentError, ~r/region/, fn ->
+        long |> Rows.pivot(@opts) |> Enum.to_list()
+      end
+    end
+
+    test "a missing option raises" do
+      assert_raise KeyError, fn -> Rows.pivot(@long, Keyword.delete(@opts, :columns)) end
+    end
+
+    test "an unknown option raises" do
+      assert_raise ArgumentError, fn -> Rows.pivot(@long, [{:colums, []} | @opts]) end
+    end
+
+    test "no lines gives no rows" do
+      assert [] |> Rows.pivot(@opts) |> Enum.to_list() == []
+    end
+
+    test "is lazy" do
+      rows = Stream.map(@long, fn _ -> raise "read too early" end)
+
+      _stream = Rows.pivot(rows, @opts)
+    end
+  end
 end

@@ -104,6 +104,28 @@ defmodule Refract.Rows do
     end)
   end
 
+  @spec pivot(Enumerable.t(), keyword()) :: Enumerable.t()
+
+  def pivot(rows, opts) do
+    opts = Keyword.validate!(opts, [:by, :key, :value, :columns])
+
+    by = Keyword.fetch!(opts, :by)
+    key = Keyword.fetch!(opts, :key)
+    value = Keyword.fetch!(opts, :value)
+    columns = Keyword.fetch!(opts, :columns)
+
+    rows
+    |> Stream.chunk_by(&Map.fetch!(&1, by))
+    |> Stream.map(fn [first | _] = lines ->
+      id = Map.fetch!(first, by)
+      values = Enum.reduce(lines, %{}, &insert_pivot_value(&1, &2, id, key, value, columns))
+
+      columns
+      |> Map.new(fn col -> {col, Map.get(values, col)} end)
+      |> Map.put(by, id)
+    end)
+  end
+
   # csv parser keeps long values as references to original bin,
   # by copying it we can avoid holding in memory
   defp detach(value) when is_binary(value) do
@@ -115,4 +137,19 @@ defmodule Refract.Rows do
   end
 
   defp detach(value), do: value
+
+  defp insert_pivot_value(line, values, id, key, value, columns) do
+    col = Map.fetch!(line, key)
+
+    cond do
+      col not in columns ->
+        raise ArgumentError, "key #{inspect(col)} for id #{inspect(id)} is not in columns"
+
+      Map.has_key?(values, col) ->
+        raise ArgumentError, "key #{inspect(col)} appears twice for id #{inspect(id)}"
+
+      true ->
+        Map.put(values, col, Map.fetch!(line, value))
+    end
+  end
 end
