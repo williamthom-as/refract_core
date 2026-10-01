@@ -7,7 +7,7 @@ defmodule Refract.E2E.EmptyColumnsTest do
 
   alias Refract.Golden
 
-  test "empty_columns (ruby cure empty_columns_spec)", %{tmp_dir: dir} do
+  test "names blank headers and keeps whitespace only cells", %{tmp_dir: dir} do
     out = Path.join(dir, "empty_columns.csv")
 
     assert {:ok, rows} = Refract.CSV.stream(Golden.path("empty_columns", "input.csv"))

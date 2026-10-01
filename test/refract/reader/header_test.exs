@@ -77,7 +77,7 @@ defmodule Refract.Reader.HeaderTest do
       assert Header.normalise(["col_1", ""], []) == ["col_1", "col_1_2"]
     end
 
-    test "matches ruby cure empty_columns output" do
+    test "blank and whitespace headers become col_N by position" do
       assert Header.normalise(["identifier", "name", " ", ""], []) ==
                ["identifier", "name", "col_2", "col_3"]
     end

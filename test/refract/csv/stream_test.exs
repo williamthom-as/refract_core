@@ -100,7 +100,7 @@ defmodule Refract.CSV.StreamTest do
              ]
     end
 
-    test "ruby cure empty_columns input" do
+    test "blank header cells get generated names" do
       rows = rows!(Path.join(@golden, "empty_columns/input.csv"))
 
       assert rows == [
@@ -130,7 +130,7 @@ defmodule Refract.CSV.StreamTest do
                Refract.CSV.stream({:string, "a~b\n1~2\n"}, separator: "~")
     end
 
-    test "skip: drops parsed rows above the header (ruby cure bad_data)" do
+    test "skip: drops parsed rows above the header" do
       rows = rows!(Path.join(@golden, "bad_data/input.csv"), skip: 3)
 
       assert hd(rows) == %{

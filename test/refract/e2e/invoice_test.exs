@@ -115,7 +115,7 @@ defmodule Refract.E2E.InvoiceTest do
     |> Enum.sum()
   end
 
-  describe "cure invoice by fixed refs" do
+  describe "tidy invoice by fixed refs" do
     test "values above and below the table" do
       grid = load!(@golden)
 
@@ -135,7 +135,7 @@ defmodule Refract.E2E.InvoiceTest do
     end
   end
 
-  describe "cure invoice by pattern" do
+  describe "tidy invoice by pattern" do
     test "locate finds the same rows as the fixed refs" do
       grid = load!(@golden)
 
