@@ -1,7 +1,7 @@
 defmodule Refract.Table.Spec.Header do
   defstruct [:columns, :required, :min_matches]
 
-  import Refract.String.Utils, only: [normalise_search_value: 1]
+  import Refract.String.Utils, only: [normalise: 1]
 
   @type t :: %__MODULE__{
           columns: %{String.t() => [String.t() | Regex.t()]},
@@ -22,7 +22,7 @@ defmodule Refract.Table.Spec.Header do
 
         {:ok, columns} ->
           Map.new(columns, fn {key, patterns} ->
-            {key, Enum.map(patterns, &normalise_search_value/1)}
+            {key, Enum.map(patterns, &normalise/1)}
           end)
       end
 
@@ -89,7 +89,7 @@ defmodule Refract.Table.Spec.Header do
   end
 
   defp cell_matches?(col, patterns) when is_binary(col) do
-    normalised_col = normalise_search_value(col)
+    normalised_col = normalise(col)
 
     Enum.any?(patterns, &pattern_matches?(&1, col, normalised_col))
   end

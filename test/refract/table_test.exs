@@ -237,6 +237,25 @@ defmodule Refract.TableTest do
       refute passes?(:date, "not a date")
     end
 
+    test "rules fail rather than crash on cells of another type" do
+      refute passes?(:integer, 1.5)
+      refute passes?(:number, ~D[2010-01-01])
+      refute passes?(:date, 12)
+    end
+
+    test ":number parses like Parse.number" do
+      assert passes?(:number, "1,234.56")
+      assert passes?(:number, " 3 ")
+      assert passes?(:number, Decimal.new("1.5"))
+    end
+
+    test ":date parses like Parse.date" do
+      assert passes?(:date, "2010/01/01")
+      assert passes?(:date, "2010-01-01T09:30:00Z")
+      assert passes?(:date, ~N[2010-01-01 09:30:00])
+      refute passes?(:date, "01/02/2010")
+    end
+
     test "regex rules match the cell" do
       assert passes?(~r/^[A-Z]{3}\d{3}$/, "ABC123")
       refute passes?(~r/^[A-Z]{3}\d{3}$/, "Subtotal")

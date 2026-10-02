@@ -9,6 +9,9 @@ defmodule Refract.WriterTest do
 
     @impl Refract.Writer
     def encode(rows, _opts), do: Stream.map(rows, fn row -> [row["id"], "\n"] end)
+
+    @impl Refract.Writer
+    def extension, do: "txt"
   end
 
   describe "use Refract.Writer" do

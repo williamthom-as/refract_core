@@ -7,6 +7,7 @@ defmodule Refract.E2E.InvoiceTest do
   alias Refract.CSV
   alias Refract.Golden
   alias Refract.Grid
+  alias Refract.Rows
   alias Refract.Table
 
   @golden Golden.path("invoice", "input.csv")
@@ -132,6 +133,18 @@ defmodule Refract.E2E.InvoiceTest do
       rows = Grid.table(grid, at: "A4:G10")
 
       assert sum(rows, "total_cost") == grid |> Grid.cell("G12") |> String.to_float()
+    end
+  end
+
+  describe "tidy invoice replace rules" do
+    test "the item typo is fixed by a plain function" do
+      items =
+        load!(@golden)
+        |> Grid.table(at: "A4:G10")
+        |> Rows.update("item", &String.replace(&1, ~r/^oarnge$/, "orange"))
+        |> Enum.map(& &1["item"])
+
+      assert items == ["apple", "orange", "pear", "apple", "apple", "orange"]
     end
   end
 
