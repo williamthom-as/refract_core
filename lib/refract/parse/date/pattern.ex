@@ -76,7 +76,7 @@ defmodule Refract.Parse.Date.Pattern do
     size = byte_size(literal)
 
     case string do
-      <<^literal::binary-size(size), rest::binary>> -> walk(tokens, rest, fields)
+      <<^literal::binary-size(^size), rest::binary>> -> walk(tokens, rest, fields)
       _mismatch -> nil
     end
   end

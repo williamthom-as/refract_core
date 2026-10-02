@@ -162,7 +162,8 @@ defmodule Refract.Pseudonym.FF1 do
     # step 6.ii: r = prf(p || q)
     r = cbc_mac(ctx.p <> q, ctx)
     # step 6.iii and 6.iv: s, y
-    <<y::size(ctx.d * 8), _rest::binary>> = stretch(r, ctx)
+    d_bits = ctx.d * 8
+    <<y::size(^d_bits), _rest::binary>> = stretch(r, ctx)
 
     y
   end
