@@ -5,8 +5,12 @@ defmodule Refract.CSV do
   alias Refract.CSV.Parsers
   alias Refract.CSV.Source
 
+  @impl Refract.Writer
+  def extension, do: "csv"
+
   @spec open(source :: Refract.source(), keyword()) :: {:ok, Enumerable.t()} | {:error, term()}
 
+  @impl true
   def open(source, opts) do
     with {:ok, parser} <- Parsers.for_separator(Keyword.get(opts, :separator, ",")),
          {:ok, content} <- Source.open(source, opts) do
@@ -20,6 +24,7 @@ defmodule Refract.CSV do
 
   @spec encode(rows :: Enumerable.t(), opts :: keyword()) :: Enumerable.t()
 
+  @impl true
   def encode(rows, opts) do
     {:ok, parser} = Parsers.for_separator(Keyword.get(opts, :separator, ","))
 

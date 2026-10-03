@@ -2,7 +2,7 @@ defmodule Refract.Grid.Lookup do
   alias Refract.Grid
   alias Refract.Reader.Header
 
-  import Refract.String.Utils, only: [blank?: 1, normalise_search_value: 1]
+  import Refract.String.Utils, only: [blank?: 1, normalise: 1]
 
   @spec table(Grid.t(), keyword()) :: [Refract.row()]
 
@@ -47,7 +47,7 @@ defmodule Refract.Grid.Lookup do
     validate_label(label)
     validate_take(take)
 
-    case find_label(rows, normalise_search_value(label)) do
+    case find_label(rows, normalise(label)) do
       nil -> nil
       {x, y} -> take |> fetch_next(grid, x, y) |> Enum.find(&(not blank?(&1)))
     end
@@ -66,7 +66,7 @@ defmodule Refract.Grid.Lookup do
     validate_label(after_label)
     validate_until(until)
 
-    case find_label(rows, normalise_search_value(after_label)) do
+    case find_label(rows, normalise(after_label)) do
       nil ->
         nil
 
@@ -186,7 +186,7 @@ defmodule Refract.Grid.Lookup do
     do: Regex.match?(label, cell)
 
   defp cell_matches_label?(cell, label) when is_binary(label) and is_binary(cell),
-    do: normalise_search_value(cell) == label
+    do: normalise(cell) == label
 
   defp cell_matches_label?(_cell, _label), do: false
 

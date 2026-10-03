@@ -36,6 +36,7 @@ defmodule Refract.MixProject do
   defp deps do
     [
       {:nimble_csv, "~> 1.3"},
+      {:decimal, "~> 2.0"},
       {:stream_data, "~> 1.4", only: [:dev, :test]},
       {:benchee, "~> 1.5", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

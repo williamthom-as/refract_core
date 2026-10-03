@@ -1,6 +1,8 @@
 defmodule Refract.Table.Spec.Row do
   import Refract.Utils, only: [truthy?: 1]
 
+  alias Refract.Parse
+
   defstruct [:match, :min_score]
 
   @type rule :: :integer | :number | :date | Regex.t() | (Refract.cell() -> as_boolean(term()))
@@ -84,32 +86,11 @@ defmodule Refract.Table.Spec.Row do
 
   defp passes?(_, nil), do: false
 
-  defp passes?(:integer, value) when is_integer(value), do: true
+  defp passes?(:integer, value), do: match?({:ok, _}, Parse.integer(value))
 
-  defp passes?(:integer, value) when is_binary(value) do
-    case Integer.parse(value) do
-      {_, ""} -> true
-      _ -> false
-    end
-  end
+  defp passes?(:number, value), do: match?({:ok, _}, Parse.number(value))
 
-  defp passes?(:number, value) when is_binary(value) do
-    case Float.parse(value) do
-      {_, ""} -> true
-      _ -> false
-    end
-  end
-
-  defp passes?(:number, value), do: is_number(value)
-
-  defp passes?(:date, %Date{}), do: true
-
-  defp passes?(:date, value) when is_binary(value) do
-    case Date.from_iso8601(value) do
-      {:ok, _} -> true
-      _ -> false
-    end
-  end
+  defp passes?(:date, value), do: match?({:ok, _}, Parse.date(value))
 
   defp passes?(%Regex{} = regex, value) when is_binary(value) do
     Regex.match?(regex, value)
