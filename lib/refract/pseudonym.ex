@@ -34,9 +34,40 @@ defmodule Refract.Pseudonym do
 
   def apply(value, _domain, _keyring, _opts), do: {:error, {:not_a_string, value}}
 
+  @spec apply!(term(), Keyring.domain(), Keyring.t(), [opt()]) :: String.t()
+
   def apply!(value, domain, keyring, opts \\ []) do
     value
     |> __MODULE__.apply(domain, keyring, opts)
+    |> handle_apply_result()
+  end
+
+
+  @spec reverse(term(), Keyring.domain(), Keyring.t(), [opt()]) ::
+          {:ok, String.t()} | {:error, error()}
+
+  def reverse(value, domain, keyring, opts \\ [])
+
+  def reverse(value, domain, keyring, opts) when is_binary(value) do
+    {ff1_opts, opts} = Keyword.split(opts, [:min_domain])
+
+    opts = Keyword.validate!(opts, alphabet: :digits, canonical: & &1)
+
+    canonical = Keyword.fetch!(opts, :canonical)
+    alphabet = opts |> Keyword.fetch!(:alphabet) |> alphabet()
+
+    {:ok, key} = fetch_key(keyring, domain)
+
+    FF1.decrypt(key, to_string(domain), alphabet, canonical.(value), ff1_opts)
+  end
+
+  def reverse(value, _domain, _keyring, _opts), do: {:error, {:not_a_string, value}}
+
+  @spec reverse!(term(), Keyring.domain(), Keyring.t(), [opt()]) :: String.t()
+
+  def reverse!(value, domain, keyring, opts \\ []) do
+    value
+    |> __MODULE__.reverse(domain, keyring, opts)
     |> handle_apply_result()
   end
 
@@ -44,15 +75,6 @@ defmodule Refract.Pseudonym do
 
   defp handle_apply_result({:error, {reason, _detail}}),
     do: raise(ArgumentError, "pseudonym failed: #{reason}")
-
-  # @spec apply!(term(), Keyring.domain(), Keyring.t(), [opt()]) ::
-  #         String.t()
-
-  # @spec reverse(term(), Keyring.domain(), Keyring.t(), [opt()]) ::
-  #         {:ok, String.t()} | {:error, error()}
-
-  # @spec reverse!(term(), Keyring.domain(), Keyring.t(), [opt()]) ::
-  #         String.t()
 
   defp fetch_key(keyring, domain) do
     {_version, key} = Keyring.key(keyring, domain)
@@ -68,13 +90,5 @@ defmodule Refract.Pseudonym do
     do: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
   defp alphabet(custom) when is_binary(custom), do: custom
-  defp alphabet(other), do: raise(ArgumentError, "unknown alphabet:
-  #{inspect(other)}")
-
-  defp validate_alphabet(alphabet) when alphabet in [:digits, :hex, :base36, :alphanumeric] do
-    :ok
-  end
-
-  defp validate_alphabet(alphabet),
-    do: raise(ArgumentError, "invalid alphabet: #{inspect(alphabet)}")
+  defp alphabet(other), do: raise(ArgumentError, "unknown alphabet: #{inspect(other)}")
 end
