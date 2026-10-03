@@ -15,19 +15,16 @@ defmodule Refract.Pseudonym do
   @spec apply(term(), Keyring.domain(), Keyring.t(), [opt()]) ::
           {:ok, String.t()} | {:error, error()}
 
-  def apply(value, domain, keyring)
-
   def apply(value, domain, keyring, opts \\ [])
 
   def apply(value, domain, keyring, opts) when is_binary(value) do
-    {ff1_opts, opts} = Keyword.split(opts, [:min_domain])
-
-    opts = Keyword.validate!(opts, alphabet: :digits, canonical: & &1)
+    opts = Keyword.validate!(opts, alphabet: :digits, canonical: & &1, min_domain: 1_000_000)
 
     canonical = Keyword.fetch!(opts, :canonical)
     alphabet = opts |> Keyword.fetch!(:alphabet) |> alphabet()
+    ff1_opts = Keyword.take(opts, [:min_domain])
 
-    {:ok, key} = fetch_key(keyring, domain)
+    {_version, key} = Keyring.key(keyring, domain)
 
     FF1.encrypt(key, to_string(domain), alphabet, canonical.(value), ff1_opts)
   end
@@ -39,9 +36,8 @@ defmodule Refract.Pseudonym do
   def apply!(value, domain, keyring, opts \\ []) do
     value
     |> __MODULE__.apply(domain, keyring, opts)
-    |> handle_apply_result()
+    |> unwrap_result()
   end
-
 
   @spec reverse(term(), Keyring.domain(), Keyring.t(), [opt()]) ::
           {:ok, String.t()} | {:error, error()}
@@ -49,14 +45,13 @@ defmodule Refract.Pseudonym do
   def reverse(value, domain, keyring, opts \\ [])
 
   def reverse(value, domain, keyring, opts) when is_binary(value) do
-    {ff1_opts, opts} = Keyword.split(opts, [:min_domain])
-
-    opts = Keyword.validate!(opts, alphabet: :digits, canonical: & &1)
+    opts = Keyword.validate!(opts, alphabet: :digits, canonical: & &1, min_domain: 1_000_000)
 
     canonical = Keyword.fetch!(opts, :canonical)
     alphabet = opts |> Keyword.fetch!(:alphabet) |> alphabet()
+    ff1_opts = Keyword.take(opts, [:min_domain])
 
-    {:ok, key} = fetch_key(keyring, domain)
+    {_version, key} = Keyring.key(keyring, domain)
 
     FF1.decrypt(key, to_string(domain), alphabet, canonical.(value), ff1_opts)
   end
@@ -68,19 +63,13 @@ defmodule Refract.Pseudonym do
   def reverse!(value, domain, keyring, opts \\ []) do
     value
     |> __MODULE__.reverse(domain, keyring, opts)
-    |> handle_apply_result()
+    |> unwrap_result()
   end
 
-  defp handle_apply_result({:ok, result}), do: result
+  defp unwrap_result({:ok, result}), do: result
 
-  defp handle_apply_result({:error, {reason, _detail}}),
+  defp unwrap_result({:error, {reason, _detail}}),
     do: raise(ArgumentError, "pseudonym failed: #{reason}")
-
-  defp fetch_key(keyring, domain) do
-    {_version, key} = Keyring.key(keyring, domain)
-
-    {:ok, key}
-  end
 
   defp alphabet(:digits), do: "0123456789"
   defp alphabet(:hex), do: "0123456789abcdef"
