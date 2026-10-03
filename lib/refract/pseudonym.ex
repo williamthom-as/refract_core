@@ -15,6 +15,10 @@ defmodule Refract.Pseudonym do
   @spec apply(term(), Keyring.domain(), Keyring.t(), [opt()]) ::
           {:ok, String.t()} | {:error, error()}
 
+  def apply(value, domain, keyring)
+
+  def apply(value, domain, keyring, opts \\ [])
+
   def apply(value, domain, keyring, opts) when is_binary(value) do
     {ff1_opts, opts} = Keyword.split(opts, [:min_domain])
 
@@ -29,6 +33,17 @@ defmodule Refract.Pseudonym do
   end
 
   def apply(value, _domain, _keyring, _opts), do: {:error, {:not_a_string, value}}
+
+  def apply!(value, domain, keyring, opts \\ []) do
+    value
+    |> __MODULE__.apply(domain, keyring, opts)
+    |> handle_apply_result()
+  end
+
+  defp handle_apply_result({:ok, result}), do: result
+
+  defp handle_apply_result({:error, {reason, _detail}}),
+    do: raise(ArgumentError, "pseudonym failed: #{reason}")
 
   # @spec apply!(term(), Keyring.domain(), Keyring.t(), [opt()]) ::
   #         String.t()
