@@ -1,4 +1,4 @@
-defmodule Refract.Pseudonym.FF1 do
+defmodule Refract.Privacy.Pseudonym.FF1 do
   # nist sp 800-38g ff1, algorithm 7 encrypt, algorithm 8 decrypt
   #
   # reference impl:

@@ -1,10 +1,10 @@
-defmodule Refract.PseudonymTest do
+defmodule Refract.Privacy.PseudonymTest do
   use ExUnit.Case, async: true
 
   @moduletag timeout: 5_000
 
-  alias Refract.Keyring
-  alias Refract.Pseudonym
+  alias Refract.Privacy.Keyring
+  alias Refract.Privacy.Pseudonym
 
   @root_1 :binary.copy(<<1>>, 32)
   @root_2 :binary.copy(<<2>>, 32)

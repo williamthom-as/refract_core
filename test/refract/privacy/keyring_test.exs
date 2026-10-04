@@ -1,9 +1,9 @@
-defmodule Refract.KeyringTest do
+defmodule Refract.Privacy.KeyringTest do
   use ExUnit.Case, async: true
 
   @moduletag timeout: 5_000
 
-  alias Refract.Keyring
+  alias Refract.Privacy.Keyring
 
   @root_1 :binary.copy(<<1>>, 32)
   @root_2 :binary.copy(<<2>>, 32)
@@ -82,14 +82,17 @@ defmodule Refract.KeyringTest do
       System.put_env("#{prefix}_1", Base.encode64(@root_1))
       on_exit(fn -> System.delete_env("#{prefix}_1") end)
 
-      keyring = Keyring.from_provider!(Refract.KeyProvider.Env, [prefix: prefix], pins: %{})
+      keyring =
+        Keyring.from_provider!(Refract.Privacy.KeyProvider.Env, [prefix: prefix], pins: %{})
 
       assert Keyring.key(keyring, :instance_id) == Keyring.key(keyring(), :instance_id)
     end
 
     test "a provider error raises" do
       assert_raise ArgumentError, ~r/no_keys/, fn ->
-        Keyring.from_provider!(Refract.KeyProvider.Env, prefix: "REFRACT_TEST_NOTHING_HERE")
+        Keyring.from_provider!(Refract.Privacy.KeyProvider.Env,
+          prefix: "REFRACT_TEST_NOTHING_HERE"
+        )
       end
     end
   end
@@ -98,7 +101,7 @@ defmodule Refract.KeyringTest do
     keyring = keyring(keys: %{1 => @root_1, 2 => @root_2})
     output = inspect(keyring)
 
-    assert output == "#Refract.Keyring<versions: [1, 2]>"
+    assert output == "#Refract.Privacy.Keyring<versions: [1, 2]>"
     refute output =~ Base.encode64(@root_1)
   end
 end

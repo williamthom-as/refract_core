@@ -1,7 +1,7 @@
-defmodule Refract.Pseudonym do
-  alias Refract.Keyring
+defmodule Refract.Privacy.Pseudonym do
+  alias Refract.Privacy.Keyring
 
-  alias Refract.Pseudonym.FF1
+  alias Refract.Privacy.Pseudonym.FF1
 
   @type alphabet :: :digits | :hex | :base36 | :alphanumeric | String.t()
 

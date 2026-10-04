@@ -1,4 +1,4 @@
-defmodule Refract.Keyring do
+defmodule Refract.Privacy.Keyring do
   @type version :: pos_integer()
 
   @type domain :: atom() | String.t()
@@ -96,6 +96,7 @@ defmodule Refract.Keyring do
 
   defimpl Inspect do
     def inspect(keyring, _opts),
-      do: "#Refract.Keyring<versions: #{inspect(keyring.keys |> Map.keys() |> Enum.sort())}>"
+      do:
+        "#Refract.Privacy.Keyring<versions: #{inspect(keyring.keys |> Map.keys() |> Enum.sort())}>"
   end
 end

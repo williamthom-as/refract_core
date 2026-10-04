@@ -1,9 +1,9 @@
-defmodule Refract.KeyProvider.EnvTest do
+defmodule Refract.Privacy.KeyProvider.EnvTest do
   use ExUnit.Case, async: true
 
   @moduletag timeout: 5_000
 
-  alias Refract.KeyProvider.Env
+  alias Refract.Privacy.KeyProvider.Env
 
   @root_1 :binary.copy(<<1>>, 32)
   @root_2 :binary.copy(<<2>>, 32)

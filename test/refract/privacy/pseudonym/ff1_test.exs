@@ -1,10 +1,10 @@
-defmodule Refract.Pseudonym.FF1Test do
+defmodule Refract.Privacy.Pseudonym.FF1Test do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
   @moduletag timeout: 10_000
 
-  alias Refract.Pseudonym.FF1
+  alias Refract.Privacy.Pseudonym.FF1
 
   @digits "0123456789"
   @base36 "0123456789abcdefghijklmnopqrstuvwxyz"

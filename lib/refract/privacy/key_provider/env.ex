@@ -1,7 +1,7 @@
-defmodule Refract.KeyProvider.Env do
-  @behaviour Refract.KeyProvider
+defmodule Refract.Privacy.KeyProvider.Env do
+  @behaviour Refract.Privacy.KeyProvider
 
-  @impl Refract.KeyProvider
+  @impl Refract.Privacy.KeyProvider
 
   def fetch(opts) do
     opts = Keyword.validate!(opts, prefix: "REFRACT_KEY")
