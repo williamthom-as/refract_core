@@ -31,7 +31,7 @@ refract differs
 
 aws expected usage account id is 987654321 in cure due to cross column history bleed
 aws refract domains do not bleed so gen digits gives keyed 10 digit value
-aws regenerate expected at m4 with test keyring other columns unchanged
+aws expected regenerated 2026-10-04 usage account id is gen digits length 10 domain aws_account with the test keyring root 32 bytes of 1 giving 4526247778 other columns unchanged
 aws output column order follows source order product code before usage type
 total_arrivals expected corrected 2026-10-02 year is the year of the date in every row cure had 66 rows with a stale year from translation history bleed
 total_arrivals expected corrected 2026-10-02 arrivals and difference exact for jan 2017 jul 2018 jul 2019 cure float truncation gave 2069999 for 2.07 million
