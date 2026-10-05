@@ -144,6 +144,27 @@ defmodule Refract.Rows do
     end)
   end
 
+  @spec parallel(Enumerable.t(), (Enumerable.t() -> Enumerable.t()), keyword()) :: Enumerable.t()
+
+  def parallel(rows, fun, opts \\ []) do
+    opts = Keyword.validate!(opts, chunk: 1_000, max_concurrency: System.schedulers_online())
+
+    chunk = Keyword.fetch!(opts, :chunk)
+    max_concurrency = Keyword.fetch!(opts, :max_concurrency)
+
+    validate_positive(chunk, :chunk)
+    validate_positive(max_concurrency, :max_concurrency)
+
+    rows
+    |> Stream.chunk_every(chunk)
+    |> Task.async_stream(&run_chunk(&1, fun),
+      max_concurrency: max_concurrency,
+      ordered: true,
+      timeout: :infinity
+    )
+    |> Stream.flat_map(&chunk_rows/1)
+  end
+
   # csv parser keeps long values as references to original bin,
   # by copying it we can avoid holding in memory
   defp detach(value) when is_binary(value) do
@@ -179,4 +200,19 @@ defmodule Refract.Rows do
 
   defp validate_fun(fun),
     do: raise(ArgumentError, "function #{inspect(fun)} must accept 1 or 2 arguments")
+
+  defp run_chunk(chunk, fun) do
+    {:ok, chunk |> fun.() |> Enum.to_list()}
+  rescue
+    exception -> {:error, exception, __STACKTRACE__}
+  end
+
+  defp chunk_rows({:ok, {:ok, rows}}), do: rows
+  defp chunk_rows({:ok, {:error, exception, stacktrace}}), do: reraise(exception, stacktrace)
+
+  defp validate_positive(value, _name) when is_integer(value) and value > 0, do: :ok
+
+  defp validate_positive(value, name) do
+    raise ArgumentError, "#{name} must be a positive integer, got: #{inspect(value)}"
+  end
 end

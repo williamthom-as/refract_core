@@ -11,7 +11,9 @@ defmodule Refract.Privacy.Noise do
   alias Refract.Privacy.Keyed
   alias Refract.Privacy.Keyring
 
-  @seed_range Integer.pow(2, 256)
+  @seed_range Integer.pow(2, 64)
+  @spread_places 18
+  @spread_scale Integer.pow(10, 18)
 
   @type value :: number() | Decimal.t()
 
@@ -69,13 +71,15 @@ defmodule Refract.Privacy.Noise do
   end
 
   defp spread(seed, domain, keyring) do
-    seed
-    |> Keyed.integer(domain, keyring)
-    |> Decimal.new()
-    |> Decimal.div(@seed_range)
-    |> Decimal.mult(2)
-    |> Decimal.sub(1)
+    <<top::64, _rest::binary>> = Keyed.bytes(seed, domain, keyring)
+
+    ((2 * top - @seed_range) * @spread_scale)
+    |> Bitwise.>>>(64)
+    |> to_spread()
   end
+
+  defp to_spread(scaled) when scaled < 0, do: Decimal.new(-1, -scaled, -@spread_places)
+  defp to_spread(scaled), do: Decimal.new(1, scaled, -@spread_places)
 
   defp validate_amount(amount) when is_number(amount) and amount >= 0, do: :ok
 
