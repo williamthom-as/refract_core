@@ -424,6 +424,58 @@ defmodule Refract.RowsTest do
     end
   end
 
+  describe "fill_down/2" do
+    @sparse [
+      %{"id" => "a", "kind" => "x", "n" => "1"},
+      %{"id" => "", "kind" => nil, "n" => "2"},
+      %{"id" => "  ", "kind" => "y", "n" => "3"},
+      %{"id" => "b", "kind" => "", "n" => "4"}
+    ]
+
+    test "a blank cell takes the last value above it" do
+      assert @sparse |> Rows.fill_down("id") |> Enum.map(& &1["id"]) == ["a", "a", "a", "b"]
+    end
+
+    test "fills several columns independently" do
+      assert @sparse |> Rows.fill_down(["id", "kind"]) |> Enum.map(&{&1["id"], &1["kind"]}) == [
+               {"a", "x"},
+               {"a", "x"},
+               {"a", "y"},
+               {"b", "y"}
+             ]
+    end
+
+    test "other columns are untouched" do
+      assert @sparse |> Rows.fill_down("id") |> Enum.map(& &1["n"]) == ["1", "2", "3", "4"]
+    end
+
+    test "blanks before the first value stay blank" do
+      rows = [%{"id" => ""}, %{"id" => nil}, %{"id" => "a"}, %{"id" => ""}]
+
+      assert rows |> Rows.fill_down("id") |> Enum.map(& &1["id"]) == ["", nil, "a", "a"]
+    end
+
+    test "values that are not strings are carried too" do
+      rows = [%{"id" => 7}, %{"id" => nil}]
+
+      assert rows |> Rows.fill_down("id") |> Enum.map(& &1["id"]) == [7, 7]
+    end
+
+    test "unknown column raises" do
+      assert_raise KeyError, fn -> @sparse |> Rows.fill_down("di") |> Enum.to_list() end
+    end
+
+    test "no rows gives no rows" do
+      assert [] |> Rows.fill_down("id") |> Enum.to_list() == []
+    end
+
+    test "is lazy" do
+      rows = Stream.map(@sparse, fn _ -> raise "read too early" end)
+
+      _stream = Rows.fill_down(rows, "id")
+    end
+  end
+
   describe "group/2" do
     @lines [
       %{"id" => "i-1", "kg" => "2", "seen" => "2026"},

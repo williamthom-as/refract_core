@@ -125,6 +125,25 @@ defmodule Refract.Rows do
 
   def drop_blank(rows, column), do: Stream.reject(rows, &blank?(&1, column))
 
+  @spec fill_down(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
+
+  def fill_down(rows, column) do
+    columns = List.wrap(column)
+
+    Stream.transform(rows, %{}, fn row, last ->
+      {filled, last} =
+        Enum.reduce(columns, {row, last}, fn col, {acc, last} ->
+          cond do
+            not blank?(row, col) -> {acc, Map.put(last, col, Map.fetch!(row, col))}
+            Map.has_key?(last, col) -> {Map.put(acc, col, Map.fetch!(last, col)), last}
+            true -> {acc, last}
+          end
+        end)
+
+      {[filled], last}
+    end)
+  end
+
   @spec from(Enumerable.t(), (Refract.row() -> as_boolean(term()))) :: Enumerable.t()
 
   def from(rows, fun) do
