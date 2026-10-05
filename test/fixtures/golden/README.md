@@ -42,5 +42,6 @@ structural asserts
 
 simple_chunked 3 rows at 2 per file gives 1 default with 2 rows and 2 default with 1 row
 simple_chunked test column is 12 digits test column 2 stays def
+simple_translations fruit columns share domain fruit colour columns share domain colour lowercase letters alphabet min domain 0 since red is 17576 values every word replaced length kept same word same pseudonym across columns and rows reverse gives the word back id untouched
 db_testing name translates identically across colors and dessert
 db_testing dessert plus dessert two gives 10 rows

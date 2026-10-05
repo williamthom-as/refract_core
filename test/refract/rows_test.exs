@@ -50,6 +50,45 @@ defmodule Refract.RowsTest do
       assert Enum.map(rows, & &1["note"]) == ["filled", "filled"]
     end
 
+    test "a two argument function also gets the row and column" do
+      rows =
+        Rows.update(@rows, "name", fn value, ctx -> "#{ctx.row["id"]}-#{ctx.column}-#{value}" end)
+
+      assert Enum.map(rows, & &1["name"]) == ["1-name-alice", "2-name-bob"]
+    end
+
+    test "ctx is a Rows.Ctx struct" do
+      [ctx] =
+        [%{"a" => "x"}] |> Rows.update("a", fn _value, ctx -> ctx end) |> Enum.map(& &1["a"])
+
+      assert is_struct(ctx, Rows.Ctx)
+      assert ctx.row == %{"a" => "x"}
+      assert ctx.column == "a"
+    end
+
+    test "ctx row is the row before this update so column order does not matter" do
+      rows = [%{"a" => "1", "b" => "2"}]
+      swap = fn _value, ctx -> if ctx.column == "a", do: ctx.row["b"], else: ctx.row["a"] end
+
+      assert rows |> Rows.update(["a", "b"], swap) |> Enum.to_list() == [
+               %{"a" => "2", "b" => "1"}
+             ]
+
+      assert rows |> Rows.update(["b", "a"], swap) |> Enum.to_list() == [
+               %{"a" => "2", "b" => "1"}
+             ]
+    end
+
+    test "skip_blank still skips with a two argument function" do
+      rows = Rows.update(@rows, "note", fn _value, _ctx -> "filled" end, skip_blank: true)
+
+      assert Enum.map(rows, & &1["note"]) == ["", nil]
+    end
+
+    test "functions of other arities raise" do
+      assert_raise ArgumentError, fn -> Rows.update(@rows, "name", fn _a, _b, _c -> "x" end) end
+    end
+
     test "is lazy" do
       test_pid = self()
 
