@@ -1,4 +1,6 @@
 defmodule Refract do
+  @moduledoc false
+
   # communal types
 
   # data
