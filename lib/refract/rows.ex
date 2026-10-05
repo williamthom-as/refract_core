@@ -3,12 +3,12 @@ defmodule Refract.Rows do
 
   alias Refract.String.Utils
 
-  alias Refract.String.Utils
+  alias Refract.Rows.Ctx
 
   @spec update(
           Enumerable.t(),
           String.t() | [String.t()],
-          (Refract.cell() -> Refract.cell()),
+          (Refract.cell() -> Refract.cell()) | (Refract.cell(), Ctx.t() -> Refract.cell()),
           keyword()
         ) :: Enumerable.t()
 
@@ -16,14 +16,19 @@ defmodule Refract.Rows do
     skip_blank = Keyword.get(opts, :skip_blank, false)
     columns = List.wrap(column)
 
+    validate_fun(fun)
+
     Stream.map(rows, fn row ->
       Enum.reduce(columns, row, fn col, acc ->
-        value = Map.fetch!(acc, col)
+        value = Map.fetch!(row, col)
 
         if skip_blank and Utils.blank?(value) do
           acc
         else
-          Map.put(acc, col, fun.(value))
+          ctx = Ctx.new(row, col)
+          result = call(fun, value, ctx)
+
+          Map.put(acc, col, result)
         end
       end)
     end)
@@ -152,4 +157,13 @@ defmodule Refract.Rows do
         Map.put(values, col, Map.fetch!(line, value))
     end
   end
+
+  defp call(fun, value, _ctx) when is_function(fun, 1), do: fun.(value)
+
+  defp call(fun, value, ctx) when is_function(fun, 2), do: fun.(value, ctx)
+
+  defp validate_fun(fun) when is_function(fun, 1) or is_function(fun, 2), do: :ok
+
+  defp validate_fun(fun),
+    do: raise(ArgumentError, "function #{inspect(fun)} must accept 1 or 2 arguments")
 end
