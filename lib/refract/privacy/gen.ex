@@ -1,4 +1,14 @@
 defmodule Refract.Privacy.Gen do
+  @moduledoc """
+  use for stable, deterministic privacy preserving identifiers. the same input will always
+  produce the same output. this is one way only, you cannot get original output back from
+  the generated content. can collide in short outputs, use `Pseudonym` for joinable ids
+
+      Refract.Privacy.Gen.digits("123456789012", length: 10, domain: :account, keyring: keyring)
+      Refract.Privacy.Gen.hex(id, length: 17, domain: :instance_id, keyring: keyring)
+      Refract.Privacy.Gen.guid(id, domain: :instance_id, keyring: keyring)
+  """
+
   alias Refract.Privacy.Keyed
   alias Refract.Privacy.Keyring
 

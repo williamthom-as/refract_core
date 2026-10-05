@@ -1,4 +1,16 @@
 defmodule Refract.Privacy.Redact do
+  @moduledoc """
+
+  redact information from a value. can set custom character, how many to
+  keep at the start and end. if the value is nil, returns nil.
+
+      iex> Refract.Privacy.Redact.mask("1234567890", keep_last: 4)
+      "******7890"
+
+      iex> Refract.Privacy.Redact.blank("secret")
+      ""
+  """
+
   @type mask_opt ::
           {:keep_first, non_neg_integer()}
           | {:keep_last, non_neg_integer()}

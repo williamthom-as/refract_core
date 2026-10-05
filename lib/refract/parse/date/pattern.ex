@@ -1,4 +1,6 @@
 defmodule Refract.Parse.Date.Pattern do
+  @moduledoc false
+
   @months %{
     "jan" => 1,
     "feb" => 2,

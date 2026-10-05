@@ -1,4 +1,17 @@
 defmodule Refract.Rows do
+  @moduledoc """
+  all functions over a stream of row maps. all are lazily evaluated, so chain them together.
+  unknown columns raises. `update` can take either a function operating on the value, or a
+  function provided both the value and a `Refract.Rows.Ctx`(holds row and operated on column
+  name).
+
+      rows
+      |> Refract.Rows.rename(%{"col_0" => "date"})
+      |> Refract.Rows.update("cost", &Refract.Parse.number!/1)
+      |> Refract.Rows.put("year", &(&1["date"] |> String.split(" ") |> List.last()))
+      |> Stream.reject(&Refract.Rows.blank?/1)
+  """
+
   import Refract.Utils, only: [truthy?: 1]
 
   alias Refract.String.Utils

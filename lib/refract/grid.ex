@@ -1,4 +1,20 @@
 defmodule Refract.Grid do
+  @moduledoc """
+  data structure and utils for a [small] file that has been loaded wholely into memory
+  as rows of cells providing for fixed refs and labels capabilities compared to
+  streams.
+
+  cells and ranges are accessed by a1 refs, values and blocks by nearby labels.
+  `locate`, `classify` and `explain` work the same as on a stream
+
+      {:ok, grid} = Refract.CSV.load("invoice.csv")
+
+      Refract.Grid.cell(grid, "B1")
+      Refract.Grid.table(grid, at: "A4:G10")
+      Refract.Grid.value(grid, label: "invoice no", take: :right)
+      Refract.Grid.block(grid, after: "bill to")
+  """
+
   alias Refract.Grid.Classify
   alias Refract.Grid.Lookup
 

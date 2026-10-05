@@ -1,4 +1,13 @@
 defmodule Refract.Privacy.Noise do
+  @moduledoc """
+  shift numbers by a keyed amount, seeded by the entity not the value.
+  the same entity shifts the same way every time and numbers keep their
+  type
+
+      Refract.Privacy.Noise.relative(cost, 0.05, seed: instance_id, domain: :cost, keyring: keyring)
+      Refract.Privacy.Noise.absolute(count, 3, seed: instance_id, domain: :count, keyring: keyring)
+  """
+
   alias Refract.Privacy.Keyed
   alias Refract.Privacy.Keyring
 

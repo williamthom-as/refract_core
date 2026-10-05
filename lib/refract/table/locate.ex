@@ -1,4 +1,6 @@
 defmodule Refract.Table.Locate do
+  @moduledoc false
+
   alias Refract.Table
   alias Refract.Table.Spec
 

@@ -1,4 +1,6 @@
 defmodule Refract.Grid.Classify do
+  @moduledoc false
+
   alias Refract.Grid
   alias Refract.Table
   alias Refract.Table.Spec

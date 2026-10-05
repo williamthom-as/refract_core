@@ -1,4 +1,6 @@
 defmodule Refract.File.Utils do
+  @moduledoc false
+
   @spec size(source :: Refract.source()) ::
           {:ok, non_neg_integer()} | {:ok, :unknown} | {:error, term()}
 

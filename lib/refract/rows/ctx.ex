@@ -1,4 +1,12 @@
 defmodule Refract.Rows.Ctx do
+  @moduledoc """
+  provided to row update funs, contains the column name targeted and row being updated.
+
+      Refract.Rows.update(rows, "cost", fn value, ctx ->
+        Refract.Privacy.Noise.relative(value, 0.05, seed: ctx.row["instance"], domain: :cost, keyring: keyring)
+      end)
+  """
+
   @type t :: %__MODULE__{
           row: Refract.row(),
           column: String.t()

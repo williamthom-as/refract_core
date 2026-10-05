@@ -1,4 +1,6 @@
 defmodule Refract.Table.Spec.Stop do
+  @moduledoc false
+
   import Refract.Utils, only: [truthy?: 1]
 
   alias Refract.String.Utils
