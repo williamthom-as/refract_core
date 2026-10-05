@@ -1,4 +1,6 @@
 defmodule Refract.CSV.Source do
+  @moduledoc false
+
   @spec open(Refract.source(), keyword()) :: {:ok, Enumerable.t()} | {:error, term()}
 
   def open({:string, content}, _opts), do: {:ok, [content]}

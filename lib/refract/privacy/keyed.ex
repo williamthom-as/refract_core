@@ -1,4 +1,13 @@
 defmodule Refract.Privacy.Keyed do
+  @moduledoc """
+
+  provides stable keyed bytes for a value, used as the base for `Gen` and
+  `Noise`. this is one way, use `Pseudonym` when it must reverse or never
+  collide
+
+      Refract.Privacy.Keyed.integer("i-0abc", :instance_id, keyring)
+  """
+
   alias Refract.Privacy.Keyring
 
   @subkey_label "refract/keyed"

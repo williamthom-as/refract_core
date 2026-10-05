@@ -1,4 +1,6 @@
 defmodule Refract.Reader.Header do
+  @moduledoc false
+
   @nil_col_prefix "col"
 
   @spec normalise([Refract.cell()], [String.t()]) :: [String.t()]

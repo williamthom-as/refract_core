@@ -1,4 +1,6 @@
 defmodule Refract.Table.Spec do
+  @moduledoc false
+
   alias Refract.Table.Spec.Header
   alias Refract.Table.Spec.Row
   alias Refract.Table.Spec.Stop

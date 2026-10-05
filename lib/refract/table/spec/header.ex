@@ -1,4 +1,6 @@
 defmodule Refract.Table.Spec.Header do
+  @moduledoc false
+
   defstruct [:columns, :required, :min_matches]
 
   import Refract.String.Utils, only: [normalise: 1]

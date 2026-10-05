@@ -1,4 +1,12 @@
 defmodule Refract.Privacy.Keyring do
+  @moduledoc """
+  handles root secrets by version, plus a key per domain derived from root secret.
+  highest version is current, but to pin a domain to an older version use `pins:`.
+
+      keyring = Refract.Privacy.Keyring.from_provider!(Refract.Privacy.KeyProvider.Env, [])
+      keyring = Refract.Privacy.Keyring.new!(keys: %{1 => root}, pins: %{instance_id: 1})
+  """
+
   @type version :: pos_integer()
 
   @type domain :: atom() | String.t()

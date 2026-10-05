@@ -1,4 +1,13 @@
 defmodule Refract.Writer do
+  @moduledoc """
+  behaviour for writers, implement `encode/2` and `extension/0` to make use of.
+  `use Refract.Writer` injects `write/3` and `write_chunks/3`.
+
+  note: you can check/verify a custom writer with `Refract.Test.WriterCase`
+
+      {:ok, paths} = Refract.CSV.write_chunks(rows, "out", prefix: "bills", rows_per_file: 10_000)
+  """
+
   @callback encode(rows :: Enumerable.t(), opts :: keyword()) :: Enumerable.t()
 
   @callback extension() :: String.t()

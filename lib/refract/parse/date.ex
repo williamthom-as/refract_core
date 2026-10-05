@@ -1,4 +1,6 @@
 defmodule Refract.Parse.Date do
+  @moduledoc false
+
   alias Refract.Parse.Date.Pattern
 
   @type format :: :iso | :ymd | :dmy | :mdy | String.t()

@@ -1,4 +1,6 @@
 defmodule Refract.String.Utils do
+  @moduledoc false
+
   @spec blank?(term()) :: boolean()
 
   def blank?(value) when is_binary(value), do: String.trim(value) == ""

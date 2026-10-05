@@ -1,4 +1,16 @@
 defmodule Refract.Privacy.KeyProvider.Env do
+  @moduledoc """
+  fetches privacy keys from env vars. root secrets are required to be base64,
+  and are built from PREFIX_1, PREFIX_2.
+
+  the default prefix is `REFRACT_KEY`, but can be overridden with the `prefix`
+  option.
+
+  to make a new root secret, use `openssl rand -base64 32`
+
+      Refract.Privacy.KeyProvider.Env.fetch(prefix: "REFRACT_KEY")
+  """
+
   @behaviour Refract.Privacy.KeyProvider
 
   @impl Refract.Privacy.KeyProvider

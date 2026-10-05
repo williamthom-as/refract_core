@@ -1,4 +1,24 @@
 defmodule Refract.Table do
+  @moduledoc """
+  allows for sophisticated table finding and parsing, providing the ability to describe a table
+  by its columns, then find it anywhere in a file. useful if your file is not in a strict tabular
+  format, or has multiple tables in it.
+
+  header columns take aliases and regexes, rows take rules, stop ends the table.
+
+  `locate` searches the first `within:` lines and streams the rows below
+
+      spec =
+        Refract.Table.spec(
+          header: [columns: %{"sku" => ["sku"], "total" => ["line total", "total"]}],
+          row: [match: %{"sku" => :integer, "total" => :number}],
+          stop: [:blank]
+        )
+
+      {:ok, table} = Refract.CSV.locate("invoice.csv", spec)
+      Enum.to_list(table.rows)
+  """
+
   alias Refract.Table.Locate
   alias Refract.Table.Spec
   alias Refract.Table.Spec.Header

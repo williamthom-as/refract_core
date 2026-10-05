@@ -1,4 +1,6 @@
 defmodule Refract.CSV.Parsers do
+  @moduledoc false
+
   NimbleCSV.define(Refract.CSV.Parsers.Comma, separator: ",", escape: "\"")
 
   NimbleCSV.define(Refract.CSV.Parsers.Tab, separator: "\t", escape: "\"")

@@ -1,4 +1,11 @@
 defmodule Refract.Preview do
+  @moduledoc """
+  print the first rows as a table, useful for debugging post transforms and/or
+  previewing a file.
+
+      Refract.Preview.print(rows, limit: 5, title: "bills")
+  """
+
   @max_cell_width 30
 
   @type print_opt ::

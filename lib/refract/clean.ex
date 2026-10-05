@@ -1,4 +1,16 @@
 defmodule Refract.Clean do
+  @moduledoc """
+
+  funs to clean up strings, like whitespace and control characters.
+  if the value is not a string, returns it unchanged.
+
+      iex> Refract.Clean.normalise_whitespace("  big   red\tapple ")
+      "big red apple"
+
+      iex> Refract.Clean.strip_control_characters("ap\u200bple")
+      "apple"
+  """
+
   @spec normalise_whitespace(term()) :: term()
 
   def normalise_whitespace(value) when is_binary(value) do

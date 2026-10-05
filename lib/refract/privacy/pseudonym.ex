@@ -1,4 +1,20 @@
 defmodule Refract.Privacy.Pseudonym do
+  @moduledoc """
+  provides reversible pseudonyms for a value, used for joinable ids.
+  you can swap a value for a fake one and keep same format.
+
+  uses ff1 under the hood, so same key, domain and value always give the
+  same output and two values never share one. assuming you have the same
+  key you can always get a transformed value back.
+
+  `canonical:` links spelling variants. under 1,000,000 possible values
+  is refused unless `min_domain:` is lowered
+
+      Refract.Privacy.Pseudonym.apply!("1234567890", :instance_id, keyring)
+      Refract.Privacy.Pseudonym.apply!("0abc123def4567890", :instance_id, keyring, alphabet: :hex)
+      Refract.Privacy.Pseudonym.reverse!(pseudonym, :instance_id, keyring)
+  """
+
   alias Refract.Privacy.Keyring
 
   alias Refract.Privacy.Pseudonym.FF1

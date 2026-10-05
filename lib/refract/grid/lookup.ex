@@ -1,4 +1,6 @@
 defmodule Refract.Grid.Lookup do
+  @moduledoc false
+
   alias Refract.Grid
   alias Refract.Reader.Header
 

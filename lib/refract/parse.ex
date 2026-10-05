@@ -1,4 +1,28 @@
 defmodule Refract.Parse do
+  @moduledoc """
+  parses cells into typed values:
+  - numbers are `Decimal` (`locale:` picks the separators)
+  - dates try iso first, day or month first never guessed, custom patterns supported
+  via `formats:`
+
+  note: each version comes with optional bang version that raises on failure.
+
+      iex> Refract.Parse.number("1,234.56")
+      {:ok, Decimal.new("1234.56")}
+
+      iex> Refract.Parse.number("1.234,56", locale: :de)
+      {:ok, Decimal.new("1234.56")}
+
+      iex> Refract.Parse.date("02-Oct-2026", formats: ["dd-MMM-yyyy", :iso])
+      {:ok, ~D[2026-10-02]}
+
+      iex> Refract.Parse.boolean("Yes")
+      {:ok, true}
+
+      iex> Refract.Parse.integer("12a")
+      {:error, {:not_an_integer, "12a"}}
+  """
+
   alias Refract.Parse.Date, as: DateParser
 
   import Refract.String.Utils, only: [normalise: 1]

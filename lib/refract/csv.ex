@@ -1,4 +1,13 @@
 defmodule Refract.CSV do
+  @moduledoc """
+  csv reader and writer impls, providing `stream`, `locate`, `load`, `write`, `write_chunks`
+  supports different separators like comma, semicolon, tab, pipe via `separator:`
+  will strip utf8 bom by default, and fail fast on a missing file.
+
+      {:ok, rows} = Refract.CSV.stream("bills.csv", skip: 1)
+      :ok = Refract.CSV.write(rows, "out/bills.csv", header: ["date", "cost"])
+  """
+
   use Refract.Reader
   use Refract.Writer
 

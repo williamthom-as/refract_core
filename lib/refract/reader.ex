@@ -1,4 +1,18 @@
 defmodule Refract.Reader do
+  @moduledoc """
+  behaviour for tabular readers. to use, implement `open/2` and return arrays of cells
+  `use Refract.Reader` injects `stream/2`, `locate/3` and `load/2`.
+
+  note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
+
+      defmodule MyReader do
+        use Refract.Reader
+
+        @impl Refract.Reader
+        def open(source, opts), do: {:ok, lines_of_cells}
+      end
+  """
+
   @callback open(source :: Refract.source(), opts :: keyword()) ::
               {:ok, Enumerable.t()} | {:error, term()}
 
