@@ -66,7 +66,23 @@ defmodule Refract.Rows do
     end)
   end
 
-  @spec rename(Enumerable.t(), %{String.t() => String.t()}) :: Enumerable.t()
+  @spec rename(Enumerable.t(), %{String.t() => String.t()} | (String.t() -> String.t())) ::
+          Enumerable.t()
+
+  def rename(rows, fun) when is_function(fun, 1) do
+    Stream.map(rows, fn row ->
+      Enum.reduce(row, %{}, fn {old, value}, acc ->
+        new = fun.(old)
+
+        if Map.has_key?(acc, new) do
+          raise ArgumentError,
+                "renaming #{inspect(old)} to #{inspect(new)} clashes with another column"
+        end
+
+        Map.put(acc, new, value)
+      end)
+    end)
+  end
 
   def rename(rows, rename_columns) do
     Stream.map(rows, fn row ->
@@ -76,7 +92,14 @@ defmodule Refract.Rows do
     end)
   end
 
-  @spec drop(Enumerable.t(), [String.t()]) :: Enumerable.t()
+  @spec drop(Enumerable.t(), [String.t()] | (String.t() -> as_boolean(term()))) ::
+          Enumerable.t()
+
+  def drop(rows, fun) when is_function(fun, 1) do
+    Stream.map(rows, fn row ->
+      Map.reject(row, fn {col, _value} -> truthy?(fun.(col)) end)
+    end)
+  end
 
   def drop(rows, columns) do
     Stream.map(rows, fn row ->
@@ -86,7 +109,14 @@ defmodule Refract.Rows do
     end)
   end
 
-  @spec take(Enumerable.t(), [String.t()]) :: Enumerable.t()
+  @spec take(Enumerable.t(), [String.t()] | (String.t() -> as_boolean(term()))) ::
+          Enumerable.t()
+
+  def take(rows, fun) when is_function(fun, 1) do
+    Stream.map(rows, fn row ->
+      for {col, value} <- row, truthy?(fun.(col)), into: %{}, do: {col, detach(value)}
+    end)
+  end
 
   def take(rows, candidate_columns) do
     Stream.map(rows, fn row ->
@@ -124,6 +154,15 @@ defmodule Refract.Rows do
   @spec drop_blank(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
 
   def drop_blank(rows, column), do: Stream.reject(rows, &blank?(&1, column))
+
+  @spec distinct(Enumerable.t(), String.t()) :: Enumerable.t()
+
+  def distinct(rows, column) do
+    rows
+    |> drop_blank(column)
+    |> Stream.map(&Map.fetch!(&1, column))
+    |> Stream.uniq()
+  end
 
   @spec fill_down(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
 

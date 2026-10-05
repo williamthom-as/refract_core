@@ -137,11 +137,24 @@ defmodule Refract.RowsTest do
       assert rows |> Rows.take(["n", "d", "x"]) |> Enum.to_list() == rows
     end
 
+    test "a function keeps the columns it is true for" do
+      rows = [%{"q1_total" => "10", "q2_total" => "12", "id" => "1"}]
+
+      assert rows |> Rows.take(&String.ends_with?(&1, "_total")) |> Enum.to_list() == [
+               %{"q1_total" => "10", "q2_total" => "12"}
+             ]
+    end
+
+    test "a function matching nothing gives empty rows" do
+      assert @rows |> Rows.take(&String.starts_with?(&1, "x")) |> Enum.to_list() == [%{}, %{}]
+    end
+
     test "is lazy" do
       rows = Stream.map(@rows, fn _ -> raise "read too early" end)
 
       # building the stream must not read the source (the source raises if read)
       _stream = Rows.take(rows, ["id"])
+      _stream = Rows.take(rows, &(&1 == "id"))
     end
   end
 
@@ -211,10 +224,27 @@ defmodule Refract.RowsTest do
       end
     end
 
+    test "a function renames every column" do
+      rows = [%{"Invoice Number" => "1", "Date of Issue" => "2026/10/02"}]
+
+      assert rows |> Rows.rename(&Refract.Clean.slug/1) |> Enum.to_list() == [
+               %{"invoice_number" => "1", "date_of_issue" => "2026/10/02"}
+             ]
+    end
+
+    test "a function that sends two columns to one name raises" do
+      rows = [%{"a" => 1, "A" => 2}]
+
+      assert_raise ArgumentError, ~r/clashes/, fn ->
+        rows |> Rows.rename(&String.downcase/1) |> Enum.to_list()
+      end
+    end
+
     test "is lazy" do
       rows = Stream.map(@rows, fn _ -> raise "read too early" end)
 
       _stream = Rows.rename(rows, %{"id" => "key"})
+      _stream = Rows.rename(rows, &String.upcase/1)
     end
   end
 
@@ -232,10 +262,23 @@ defmodule Refract.RowsTest do
       end
     end
 
+    test "a function removes the columns it is true for" do
+      rows = [%{"id" => "1", "col_2" => "", "col_3" => ""}]
+
+      assert rows |> Rows.drop(&String.starts_with?(&1, "col_")) |> Enum.to_list() == [
+               %{"id" => "1"}
+             ]
+    end
+
+    test "a function matching nothing leaves the rows alone" do
+      assert @rows |> Rows.drop(&String.starts_with?(&1, "x")) |> Enum.to_list() == @rows
+    end
+
     test "is lazy" do
       rows = Stream.map(@rows, fn _ -> raise "read too early" end)
 
       _stream = Rows.drop(rows, ["id"])
+      _stream = Rows.drop(rows, &(&1 == "id"))
     end
   end
 
@@ -421,6 +464,45 @@ defmodule Refract.RowsTest do
       rows = Stream.map(@rows, fn _ -> raise "read too early" end)
 
       _stream = Rows.until(rows, fn _ -> true end)
+    end
+  end
+
+  describe "distinct/2" do
+    @traits [
+      %{"id" => "a", "trait" => "weight"},
+      %{"id" => "a", "trait" => "teeth"},
+      %{"id" => "b", "trait" => ""},
+      %{"id" => "b", "trait" => "weight"},
+      %{"id" => "c", "trait" => nil}
+    ]
+
+    test "each value once, in the order first seen" do
+      assert @traits |> Rows.distinct("trait") |> Enum.to_list() == ["weight", "teeth"]
+    end
+
+    test "blanks are left out" do
+      refute "" in Enum.to_list(Rows.distinct(@traits, "trait"))
+      refute nil in Enum.to_list(Rows.distinct(@traits, "trait"))
+    end
+
+    test "values that are not strings are kept apart from their text" do
+      rows = [%{"n" => 1}, %{"n" => "1"}, %{"n" => 1}]
+
+      assert rows |> Rows.distinct("n") |> Enum.to_list() == [1, "1"]
+    end
+
+    test "unknown column raises" do
+      assert_raise KeyError, fn -> @traits |> Rows.distinct("tarit") |> Enum.to_list() end
+    end
+
+    test "no rows gives no values" do
+      assert [] |> Rows.distinct("trait") |> Enum.to_list() == []
+    end
+
+    test "is lazy" do
+      rows = Stream.map(@traits, fn _ -> raise "read too early" end)
+
+      _stream = Rows.distinct(rows, "trait")
     end
   end
 
