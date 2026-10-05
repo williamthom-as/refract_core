@@ -4,6 +4,7 @@ defmodule Refract.Parse do
   - numbers are `Decimal` (`locale:` picks the separators)
   - dates try iso first, day or month first never guessed, custom patterns supported
   via `formats:`
+  - datetimes take same `formats:` for the date component with a time trailing after
 
   note: each version comes with optional bang version that raises on failure.
 
@@ -15,6 +16,9 @@ defmodule Refract.Parse do
 
       iex> Refract.Parse.date("02-Oct-2026", formats: ["dd-MMM-yyyy", :iso])
       {:ok, ~D[2026-10-02]}
+
+      iex> Refract.Parse.datetime("02/10/2026 9:30", formats: [:dmy])
+      {:ok, ~N[2026-10-02 09:30:00]}
 
       iex> Refract.Parse.boolean("Yes")
       {:ok, true}
@@ -96,6 +100,23 @@ defmodule Refract.Parse do
 
       {:error, reason} ->
         raise ArgumentError, "cannot parse #{inspect(value)} as a date: #{inspect(reason)}"
+    end
+  end
+
+  @spec datetime(term(), [DateParser.opt()]) ::
+          {:ok, NaiveDateTime.t()} | {:error, {:not_a_datetime, term()}}
+
+  def datetime(value, opts \\ []), do: DateParser.parse_datetime(value, opts)
+
+  @spec datetime!(term(), [DateParser.opt()]) :: NaiveDateTime.t()
+
+  def datetime!(value, opts \\ []) do
+    case datetime(value, opts) do
+      {:ok, naive} ->
+        naive
+
+      {:error, reason} ->
+        raise ArgumentError, "cannot parse #{inspect(value)} as a datetime: #{inspect(reason)}"
     end
   end
 
