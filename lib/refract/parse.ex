@@ -37,9 +37,9 @@ defmodule Refract.Parse do
 
   def number(value, opts \\ []) do
     opts = Keyword.validate!(opts, locale: :en)
-    seperator = seperators(Keyword.fetch!(opts, :locale))
+    separator = separators(Keyword.fetch!(opts, :locale))
 
-    parse_number(value, seperator)
+    parse_number(value, separator)
   end
 
   @spec number!(term(), [number_opt()]) :: Decimal.t()
@@ -54,16 +54,16 @@ defmodule Refract.Parse do
     end
   end
 
-  defp parse_number(%Decimal{} = d, _seperators), do: {:ok, d}
-  defp parse_number(value, _seperators) when is_integer(value), do: {:ok, Decimal.new(value)}
-  defp parse_number(value, _seperators) when is_float(value), do: {:ok, Decimal.from_float(value)}
+  defp parse_number(%Decimal{} = d, _separators), do: {:ok, d}
+  defp parse_number(value, _separators) when is_integer(value), do: {:ok, Decimal.new(value)}
+  defp parse_number(value, _separators) when is_float(value), do: {:ok, Decimal.from_float(value)}
 
-  defp parse_number(value, seperators) when is_binary(value) do
+  defp parse_number(value, separators) when is_binary(value) do
     normalised =
       value
       |> String.trim()
-      |> String.replace(seperators.thousands, "")
-      |> String.replace(seperators.decimal, ".")
+      |> String.replace(separators.thousands, "")
+      |> String.replace(separators.decimal, ".")
 
     case Decimal.parse(normalised) do
       {decimal, ""} ->
@@ -74,11 +74,11 @@ defmodule Refract.Parse do
     end
   end
 
-  defp parse_number(value, _seperators), do: {:error, {:not_a_number, value}}
+  defp parse_number(value, _separators), do: {:error, {:not_a_number, value}}
 
-  defp seperators(:en), do: %{decimal: ".", thousands: ","}
-  defp seperators(:de), do: %{decimal: ",", thousands: "."}
-  defp seperators(locale), do: raise(ArgumentError, "unknown locale: #{inspect(locale)}")
+  defp separators(:en), do: %{decimal: ".", thousands: ","}
+  defp separators(:de), do: %{decimal: ",", thousands: "."}
+  defp separators(locale), do: raise(ArgumentError, "unknown locale: #{inspect(locale)}")
 
   # date
 

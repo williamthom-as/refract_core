@@ -25,10 +25,6 @@ defmodule Refract.Privacy.Keyring do
 
   @spec new!([opt()]) :: t()
 
-  @spec from_provider!(module(), keyword(), [{:pins, %{domain() => version()}}]) :: t()
-
-  @spec key(t(), domain()) :: {version(), binary()}
-
   def new!(opts) do
     opts = Keyword.validate!(opts, [:keys, pins: %{}])
 
@@ -49,6 +45,8 @@ defmodule Refract.Privacy.Keyring do
     %__MODULE__{keys: keys, pins: converted_pins, current: current}
   end
 
+  @spec from_provider!(module(), keyword(), [{:pins, %{domain() => version()}}]) :: t()
+
   def from_provider!(provider, provider_opts, opts \\ []) do
     keys =
       case provider.fetch(provider_opts) do
@@ -62,6 +60,8 @@ defmodule Refract.Privacy.Keyring do
 
     new!(Keyword.merge(opts, keys: keys))
   end
+
+  @spec key(t(), domain()) :: {version(), binary()}
 
   def key(%__MODULE__{keys: keys, pins: pins, current: current}, domain) do
     domain = to_string(domain)

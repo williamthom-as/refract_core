@@ -4,6 +4,8 @@ defmodule Refract.Rows do
   unknown columns raises. `update` can take either a function operating on the value, or a
   function provided both the value and a `Refract.Rows.Ctx`(holds row and operated on column
   name).
+  `pivot` needs the lines for one id next to each other. `parallel` runs a pipeline on chunks
+  across cores, same output and order.
 
       rows
       |> Refract.Rows.rename(%{"col_0" => "date"})
