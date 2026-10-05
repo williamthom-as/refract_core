@@ -429,4 +429,63 @@ defmodule Refract.RowsTest do
       _stream = Rows.pivot(rows, @opts)
     end
   end
+
+  describe "parallel/3" do
+    defp numbered(n), do: for(i <- 1..n, do: %{"id" => "#{i}", "name" => "n#{i}"})
+
+    defp upcase(chunk), do: Rows.update(chunk, "name", &String.upcase/1)
+
+    test "gives the same rows in the same order as running the pipeline in sequence" do
+      rows = numbered(2_500)
+
+      assert rows |> Rows.parallel(&upcase/1, chunk: 100) |> Enum.to_list() ==
+               rows |> upcase() |> Enum.to_list()
+    end
+
+    test "the function gets chunks of rows" do
+      sizes =
+        numbered(250)
+        |> Rows.parallel(fn chunk -> [%{"size" => Enum.count(chunk)}] end, chunk: 100)
+        |> Enum.map(& &1["size"])
+
+      assert sizes == [100, 100, 50]
+    end
+
+    test "keyed privacy output is the same in parallel" do
+      keyring = Refract.Privacy.Keyring.new!(keys: %{1 => :binary.copy(<<1>>, 32)})
+      rows = for i <- 1..500, do: %{"eid" => Integer.to_string(982_000_000_000_000 + i)}
+
+      pseudonymise =
+        &Rows.update(&1, "eid", fn eid -> Refract.Privacy.Pseudonym.apply!(eid, :eid, keyring) end)
+
+      assert rows |> Rows.parallel(pseudonymise, chunk: 50) |> Enum.to_list() ==
+               rows |> pseudonymise.() |> Enum.to_list()
+    end
+
+    test "is lazy" do
+      rows = Stream.map(@rows, fn _ -> raise "read too early" end)
+
+      _stream = Rows.parallel(rows, &upcase/1)
+    end
+
+    test "a raise in a chunk reaches the caller as the same exception" do
+      assert_raise RuntimeError, "boom", fn ->
+        numbered(10) |> Rows.parallel(fn _chunk -> raise "boom" end) |> Enum.to_list()
+      end
+    end
+
+    test "chunk and max_concurrency must be positive integers" do
+      for bad <- [0, -1, 1.5] do
+        assert_raise ArgumentError, fn -> Rows.parallel(@rows, &upcase/1, chunk: bad) end
+
+        assert_raise ArgumentError, fn ->
+          Rows.parallel(@rows, &upcase/1, max_concurrency: bad)
+        end
+      end
+    end
+
+    test "unknown option raises" do
+      assert_raise ArgumentError, fn -> Rows.parallel(@rows, &upcase/1, chunks: 10) end
+    end
+  end
 end
