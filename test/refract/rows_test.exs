@@ -285,6 +285,75 @@ defmodule Refract.RowsTest do
     end
   end
 
+  describe "blank?/2" do
+    @row %{"id" => "1", "name" => "", "note" => nil, "tag" => "  "}
+
+    test "true when the column is nil, empty or whitespace" do
+      assert Rows.blank?(@row, "name")
+      assert Rows.blank?(@row, "note")
+      assert Rows.blank?(@row, "tag")
+    end
+
+    test "false when the column has a value" do
+      refute Rows.blank?(@row, "id")
+    end
+
+    test "several columns are blank only when all of them are" do
+      assert Rows.blank?(@row, ["name", "note"])
+      refute Rows.blank?(@row, ["name", "id"])
+    end
+
+    test "other columns do not matter" do
+      assert Rows.blank?(%{"a" => "x", "b" => ""}, "b")
+    end
+
+    test "values that are not strings count as values" do
+      refute Rows.blank?(%{"a" => 0}, "a")
+    end
+
+    test "unknown column raises, so a typo can never silently keep a row" do
+      assert_raise KeyError, fn -> Rows.blank?(@row, "nmae") end
+    end
+
+    test "drops rows missing a value with Stream.reject" do
+      rows = [%{"id" => "1"}, %{"id" => ""}, %{"id" => nil}, %{"id" => "2"}]
+
+      assert rows |> Stream.reject(&Rows.blank?(&1, "id")) |> Enum.map(& &1["id"]) == ["1", "2"]
+    end
+  end
+
+  describe "drop_blank/2" do
+    @padded [
+      %{"id" => "1", "name" => "alice"},
+      %{"id" => "", "name" => "  "},
+      %{"id" => "2", "name" => ""},
+      %{"id" => nil, "name" => nil}
+    ]
+
+    test "drops rows that are blank in every column" do
+      assert @padded |> Rows.drop_blank() |> Enum.map(& &1["id"]) == ["1", "2"]
+    end
+
+    test "drops rows that are blank in the named column" do
+      assert @padded |> Rows.drop_blank("name") |> Enum.map(& &1["id"]) == ["1"]
+    end
+
+    test "drops rows that are blank in all of several columns" do
+      assert @padded |> Rows.drop_blank(["id", "name"]) |> Enum.map(& &1["id"]) == ["1", "2"]
+    end
+
+    test "unknown column raises" do
+      assert_raise KeyError, fn -> @padded |> Rows.drop_blank("nmae") |> Enum.to_list() end
+    end
+
+    test "is lazy" do
+      rows = Stream.map(@padded, fn _ -> raise "read too early" end)
+
+      _stream = Rows.drop_blank(rows)
+      _stream = Rows.drop_blank(rows, "id")
+    end
+  end
+
   describe "from/2" do
     @marked [
       %{"id" => "junk"},
@@ -352,6 +421,80 @@ defmodule Refract.RowsTest do
       rows = Stream.map(@rows, fn _ -> raise "read too early" end)
 
       _stream = Rows.until(rows, fn _ -> true end)
+    end
+  end
+
+  describe "group/2" do
+    @lines [
+      %{"id" => "i-1", "kg" => "2", "seen" => "2026"},
+      %{"id" => "i-1", "kg" => "3", "seen" => "2027"},
+      %{"id" => "i-2", "kg" => "5", "seen" => "2026"}
+    ]
+
+    defp total(lines),
+      do: %{"kg" => lines |> Enum.map(&String.to_integer(&1["kg"])) |> Enum.sum()}
+
+    test "folds the lines of each id into one row with the function" do
+      assert @lines |> Rows.group(by: "id", into: &total/1) |> Enum.to_list() == [
+               %{"id" => "i-1", "kg" => 5},
+               %{"id" => "i-2", "kg" => 5}
+             ]
+    end
+
+    test "the function is given every line of the id in order" do
+      assert @lines
+             |> Rows.group(by: "id", into: &%{"seen" => Enum.map(&1, fn l -> l["seen"] end)})
+             |> Enum.to_list() == [
+               %{"id" => "i-1", "seen" => ["2026", "2027"]},
+               %{"id" => "i-2", "seen" => ["2026"]}
+             ]
+    end
+
+    test "the by column is always on the row, even if the function drops it" do
+      assert [row | _] = @lines |> Rows.group(by: "id", into: fn _ -> %{} end) |> Enum.to_list()
+
+      assert row == %{"id" => "i-1"}
+    end
+
+    test "only neighbouring lines are grouped, like pivot" do
+      lines = [%{"id" => "a"}, %{"id" => "b"}, %{"id" => "a"}]
+
+      assert lines |> Rows.group(by: "id", into: &%{"n" => length(&1)}) |> Enum.map(& &1["id"]) ==
+               ["a", "b", "a"]
+    end
+
+    test "unknown by column raises" do
+      assert_raise KeyError, fn ->
+        @lines |> Rows.group(by: "di", into: &total/1) |> Enum.to_list()
+      end
+    end
+
+    test "a function that does not return a row raises" do
+      assert_raise ArgumentError, ~r/i-1/, fn ->
+        @lines |> Rows.group(by: "id", into: fn _ -> :nope end) |> Enum.to_list()
+      end
+    end
+
+    test "into must be a function of the lines" do
+      assert_raise ArgumentError, fn -> Rows.group(@lines, by: "id", into: &Map.get/2) end
+    end
+
+    test "an unknown option raises" do
+      assert_raise ArgumentError, fn -> Rows.group(@lines, by: "id", into: &total/1, with: 1) end
+    end
+
+    test "a missing option raises" do
+      assert_raise KeyError, fn -> Rows.group(@lines, by: "id") end
+    end
+
+    test "no lines gives no rows" do
+      assert [] |> Rows.group(by: "id", into: &total/1) |> Enum.to_list() == []
+    end
+
+    test "is lazy" do
+      rows = Stream.map(@lines, fn _ -> raise "read too early" end)
+
+      _stream = Rows.group(rows, by: "id", into: &total/1)
     end
   end
 
