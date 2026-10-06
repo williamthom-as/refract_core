@@ -81,6 +81,8 @@ defmodule Refract.Parse do
     sign <> lead <> (amount |> strip_leading_currency() |> strip_trailing_currency())
   end
 
+  defp strip_currency(value, _currency), do: value
+
   defp strip_leading_currency(amount) do
     {code, rest} = String.split_at(amount, code_length(amount))
 
@@ -121,8 +123,6 @@ defmodule Refract.Parse do
     |> length()
     |> min(3)
   end
-
-  defp strip_currency(value, _currency), do: value
 
   defp accounting_sign("(" <> rest) do
     if String.ends_with?(rest, ")") do
