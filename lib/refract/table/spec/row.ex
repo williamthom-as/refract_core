@@ -7,7 +7,13 @@ defmodule Refract.Table.Spec.Row do
 
   defstruct [:match, :min_score]
 
-  @type rule :: :integer | :number | :date | Regex.t() | (Refract.cell() -> as_boolean(term()))
+  @type rule ::
+          :integer
+          | :number
+          | :date
+          | :datetime
+          | Regex.t()
+          | (Refract.cell() -> as_boolean(term()))
 
   @type rules :: %{String.t() => rule()}
 
@@ -45,7 +51,7 @@ defmodule Refract.Table.Spec.Row do
 
   defp validate_rules(_), do: raise(ArgumentError, "match rules must be a map")
 
-  defp valid_rule?(rule) when rule in [:integer, :number, :date], do: true
+  defp valid_rule?(rule) when rule in [:integer, :number, :date, :datetime], do: true
   defp valid_rule?(%Regex{}), do: true
   defp valid_rule?(fun) when is_function(fun, 1), do: true
   defp valid_rule?(_), do: false
@@ -93,6 +99,8 @@ defmodule Refract.Table.Spec.Row do
   defp passes?(:number, value), do: match?({:ok, _}, Parse.number(value))
 
   defp passes?(:date, value), do: match?({:ok, _}, Parse.date(value))
+
+  defp passes?(:datetime, value), do: match?({:ok, _}, Parse.datetime(value))
 
   defp passes?(%Regex{} = regex, value) when is_binary(value) do
     Regex.match?(regex, value)

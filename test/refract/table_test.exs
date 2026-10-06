@@ -256,6 +256,16 @@ defmodule Refract.TableTest do
       refute passes?(:date, "01/02/2010")
     end
 
+    test ":datetime needs a time and parses like Parse.datetime" do
+      assert passes?(:datetime, "2010-01-01 09:30:00")
+      assert passes?(:datetime, "2010/01/01 9:30")
+      assert passes?(:datetime, ~N[2010-01-01 09:30:00])
+      refute passes?(:datetime, "2010-01-01")
+      refute passes?(:datetime, ~D[2010-01-01])
+      refute passes?(:datetime, "01/02/2010 9:30")
+      refute passes?(:datetime, "not a time")
+    end
+
     test "regex rules match the cell" do
       assert passes?(~r/^[A-Z]{3}\d{3}$/, "ABC123")
       refute passes?(~r/^[A-Z]{3}\d{3}$/, "Subtotal")
