@@ -1,0 +1,9 @@
+Asset Tag,Reading Type,Reading Value,Taken At
+PUMP-01,Pressure (kPa),410,2/10/2026 9:30
+,Temperature,61,2/10/2026 9:31
+,Pressure (kPa),425,3/10/2026 9:30
+PUMP-02,Temperature,58,2/10/2026 9:40
+,Flow Rate,12.5,2/10/2026 9:41
+,,,
+PUMP-03,Flow Rate,11.0,2/10/2026 9:50
+,Temperature,,2/10/2026 9:51
