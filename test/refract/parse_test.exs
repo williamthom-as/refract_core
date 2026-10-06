@@ -56,6 +56,41 @@ defmodule Refract.ParseTest do
       assert {:ok, _} = Parse.number("1234567890123456789012345678901234")
     end
 
+    test "currency signs are errors by default" do
+      assert Parse.number("$8.40") == {:error, {:not_a_number, "$8.40"}}
+    end
+
+    test "currency: true takes a leading sign or code" do
+      assert Parse.number("$8.40", currency: true) == ok("8.40")
+      assert Parse.number("$1,916.88", currency: true) == ok("1916.88")
+      assert Parse.number("A$ 5", currency: true) == ok("5")
+      assert Parse.number("€1.234,56", currency: true, locale: :de) == ok("1234.56")
+      assert Parse.number("AUD 12.50", currency: true) == ok("12.50")
+    end
+
+    test "currency: true takes a trailing sign or code" do
+      assert Parse.number("12.50 AUD", currency: true) == ok("12.50")
+      assert Parse.number("12,50€", currency: true, locale: :de) == ok("12.50")
+    end
+
+    test "currency: true takes negatives either side of the sign and accounting parentheses" do
+      assert Parse.number("-$5", currency: true) == ok("-5")
+      assert Parse.number("$-5", currency: true) == ok("-5")
+      assert Parse.number("($1,234.56)", currency: true) == ok("-1234.56")
+    end
+
+    test "currency: true still parses plain numbers and rejects a sign alone" do
+      assert Parse.number("8.40", currency: true) == ok("8.40")
+      assert Parse.number("$", currency: true) == {:error, {:not_a_number, "$"}}
+      assert Parse.number("$-", currency: true) == {:error, {:not_a_number, "$-"}}
+      assert Parse.number("($5", currency: true) == {:error, {:not_a_number, "($5"}}
+      assert Parse.number("$5 kg", currency: true) == {:error, {:not_a_number, "$5 kg"}}
+    end
+
+    test "currency must be a boolean" do
+      assert_raise ArgumentError, fn -> Parse.number("1", currency: :yes) end
+    end
+
     test "unknown locale raises" do
       assert_raise ArgumentError, fn -> Parse.number("1", locale: :xx) end
     end
