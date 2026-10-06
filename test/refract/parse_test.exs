@@ -47,6 +47,50 @@ defmodule Refract.ParseTest do
       assert Parse.number(nil) == {:error, {:not_a_number, nil}}
     end
 
+    test "numbers past decimal128 are errors rather than a hang" do
+      assert Parse.number("1e1000000000") == {:error, {:not_a_number, "1e1000000000"}}
+
+      assert Parse.number("12345678901234567890123456789012345") ==
+               {:error, {:not_a_number, "12345678901234567890123456789012345"}}
+
+      assert {:ok, _} = Parse.number("1234567890123456789012345678901234")
+    end
+
+    test "currency signs are errors by default" do
+      assert Parse.number("$8.40") == {:error, {:not_a_number, "$8.40"}}
+    end
+
+    test "currency: true takes a leading sign or code" do
+      assert Parse.number("$8.40", currency: true) == ok("8.40")
+      assert Parse.number("$1,916.88", currency: true) == ok("1916.88")
+      assert Parse.number("A$ 5", currency: true) == ok("5")
+      assert Parse.number("€1.234,56", currency: true, locale: :de) == ok("1234.56")
+      assert Parse.number("AUD 12.50", currency: true) == ok("12.50")
+    end
+
+    test "currency: true takes a trailing sign or code" do
+      assert Parse.number("12.50 AUD", currency: true) == ok("12.50")
+      assert Parse.number("12,50€", currency: true, locale: :de) == ok("12.50")
+    end
+
+    test "currency: true takes negatives either side of the sign and accounting parentheses" do
+      assert Parse.number("-$5", currency: true) == ok("-5")
+      assert Parse.number("$-5", currency: true) == ok("-5")
+      assert Parse.number("($1,234.56)", currency: true) == ok("-1234.56")
+    end
+
+    test "currency: true still parses plain numbers and rejects a sign alone" do
+      assert Parse.number("8.40", currency: true) == ok("8.40")
+      assert Parse.number("$", currency: true) == {:error, {:not_a_number, "$"}}
+      assert Parse.number("$-", currency: true) == {:error, {:not_a_number, "$-"}}
+      assert Parse.number("($5", currency: true) == {:error, {:not_a_number, "($5"}}
+      assert Parse.number("$5 kg", currency: true) == {:error, {:not_a_number, "$5 kg"}}
+    end
+
+    test "currency must be a boolean" do
+      assert_raise ArgumentError, fn -> Parse.number("1", currency: :yes) end
+    end
+
     test "unknown locale raises" do
       assert_raise ArgumentError, fn -> Parse.number("1", locale: :xx) end
     end
@@ -113,6 +157,18 @@ defmodule Refract.ParseTest do
     test "iso date times keep the date" do
       assert Parse.date("2026-10-02T09:30:00Z") == {:ok, ~D[2026-10-02]}
       assert Parse.date("2026-10-02T09:30:00") == {:ok, ~D[2026-10-02]}
+    end
+
+    test "a time after any format keeps the date" do
+      assert Parse.date("2026-10-02 09:30:00") == {:ok, ~D[2026-10-02]}
+      assert Parse.date("2026/10/02 09:30:00") == {:ok, ~D[2026-10-02]}
+      assert Parse.date("2/10/2026 9:30", formats: [:dmy]) == {:ok, ~D[2026-10-02]}
+      assert Parse.date("02 Oct 2026 9:30", formats: ["dd MMM yyyy"]) == {:ok, ~D[2026-10-02]}
+    end
+
+    test "text after the date that is not a time is an error" do
+      assert Parse.date("2026-10-02 noon") == {:error, {:not_a_date, "2026-10-02 noon"}}
+      assert Parse.date("2026-10-02 25:00") == {:error, {:not_a_date, "2026-10-02 25:00"}}
     end
 
     test "year first with slash or dot by default" do
@@ -262,6 +318,83 @@ defmodule Refract.ParseTest do
 
     test "raises on text that is not a date" do
       assert_raise ArgumentError, ~r/soon/, fn -> Parse.date!("soon") end
+    end
+  end
+
+  describe "datetime/2" do
+    test "parses iso date times" do
+      assert Parse.datetime("2026-10-02T09:30:00") == {:ok, ~N[2026-10-02 09:30:00]}
+      assert Parse.datetime("2026-10-02 09:30:00") == {:ok, ~N[2026-10-02 09:30:00]}
+    end
+
+    test "offsets and fractions are dropped" do
+      assert Parse.datetime("2026-10-02T09:30:00Z") == {:ok, ~N[2026-10-02 09:30:00]}
+      assert Parse.datetime("2026-10-02T09:30:00.123+10:00") == {:ok, ~N[2026-10-02 09:30:00]}
+    end
+
+    test "year first with slash by default" do
+      assert Parse.datetime("2026/10/02 05:29:25") == {:ok, ~N[2026-10-02 05:29:25]}
+    end
+
+    test "seconds are optional and the hour can be one digit" do
+      assert Parse.datetime("2026/10/02 9:30") == {:ok, ~N[2026-10-02 09:30:00]}
+    end
+
+    test "trims surrounding whitespace" do
+      assert Parse.datetime(" 2026-10-02 09:30:00\n") == {:ok, ~N[2026-10-02 09:30:00]}
+    end
+
+    test "day or month first is never guessed by default" do
+      assert Parse.datetime("02/10/2026 9:30") ==
+               {:error, {:not_a_datetime, "02/10/2026 9:30"}}
+    end
+
+    test "dmy and mdy and patterns when asked for" do
+      assert Parse.datetime("2/10/2026 9:30", formats: [:dmy]) == {:ok, ~N[2026-10-02 09:30:00]}
+      assert Parse.datetime("2/10/2026 9:30", formats: [:mdy]) == {:ok, ~N[2026-02-10 09:30:00]}
+
+      assert Parse.datetime("02 Oct 2026 9:30", formats: ["dd MMM yyyy"]) ==
+               {:ok, ~N[2026-10-02 09:30:00]}
+    end
+
+    test "a date without a time is an error" do
+      assert Parse.datetime("2026-10-02") == {:error, {:not_a_datetime, "2026-10-02"}}
+      assert Parse.datetime(~D[2026-10-02]) == {:error, {:not_a_datetime, ~D[2026-10-02]}}
+    end
+
+    test "impossible dates and times are errors" do
+      assert Parse.datetime("2026-02-30 09:30") == {:error, {:not_a_datetime, "2026-02-30 09:30"}}
+      assert Parse.datetime("2026-10-02 24:00") == {:error, {:not_a_datetime, "2026-10-02 24:00"}}
+      assert Parse.datetime("2026-10-02 09:60") == {:error, {:not_a_datetime, "2026-10-02 09:60"}}
+    end
+
+    test "native date times pass and utc date times drop the zone" do
+      assert Parse.datetime(~N[2026-10-02 09:30:00]) == {:ok, ~N[2026-10-02 09:30:00]}
+      assert Parse.datetime(~U[2026-10-02 09:30:00Z]) == {:ok, ~N[2026-10-02 09:30:00]}
+    end
+
+    test "text, blank and nil are errors" do
+      assert Parse.datetime("soon") == {:error, {:not_a_datetime, "soon"}}
+      assert Parse.datetime("") == {:error, {:not_a_datetime, ""}}
+      assert Parse.datetime(nil) == {:error, {:not_a_datetime, nil}}
+    end
+
+    test "unknown format raises" do
+      assert_raise ArgumentError, fn -> Parse.datetime("2026-10-02 09:30", formats: [:ydm]) end
+    end
+
+    test "unknown option raises" do
+      assert_raise ArgumentError, fn -> Parse.datetime("2026-10-02 09:30", fromats: [:dmy]) end
+    end
+  end
+
+  describe "datetime!/2" do
+    test "returns the naive date time" do
+      assert Parse.datetime!("02/10/2026 9:30", formats: [:dmy]) == ~N[2026-10-02 09:30:00]
+    end
+
+    test "raises on text that is not a datetime" do
+      assert_raise ArgumentError, ~r/soon/, fn -> Parse.datetime!("soon") end
     end
   end
 

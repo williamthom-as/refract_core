@@ -15,6 +15,7 @@ db_testing           post mvp    db testing spec                             col
 simple_joins         post mvp    simple joins spec and string contents spec  names ages expected
 complex_joins        post mvp    complex joins spec                          names ages expected
 multisheet_anon      post mvp    multisheet anon spec                        customers orders payments expected data expected lookup
+long_to_wide         refract     none, added 2026-10-06                      input expected
 
 input quirks
 ============
@@ -36,6 +37,7 @@ aws output column order follows source order product code before usage type
 total_arrivals expected corrected 2026-10-02 year is the year of the date in every row cure had 66 rows with a stale year from translation history bleed
 total_arrivals expected corrected 2026-10-02 arrivals and difference exact for jan 2017 jul 2018 jul 2019 cure float truncation gave 2069999 for 2.07 million
 total_arrivals input ends with a blank line then notes so rows stop at the first blank row
+long_to_wide input only writes the asset tag on the first line of its block, has a blank padding row, a reading with no value and day first timestamps
 
 structural asserts
 ==================
@@ -45,3 +47,4 @@ simple_chunked test column is 12 digits test column 2 stays def
 simple_translations fruit columns share domain fruit colour columns share domain colour lowercase letters alphabet min domain 0 since red is 17576 values every word replaced length kept same word same pseudonym across columns and rows reverse gives the word back id untouched
 db_testing name translates identically across colors and dessert
 db_testing dessert plus dessert two gives 10 rows
+long_to_wide reading types slugged and sorted are flow_rate pressure_kpa temperature, 7 lines after the blank is dropped and the tag filled, the empty temperature reading does not count and does not win latest, latest_at is the last line of the asset even when its value is empty

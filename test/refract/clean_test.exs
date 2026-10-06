@@ -53,4 +53,62 @@ defmodule Refract.CleanTest do
       end
     end
   end
+
+  describe "slug/1" do
+    test "lowercases and joins words with underscores" do
+      assert Clean.slug("Live Weight") == "live_weight"
+      assert Clean.slug("Date of Issue") == "date_of_issue"
+    end
+
+    test "runs of punctuation and spaces become one underscore" do
+      assert Clean.slug("Unit Price (ex GST)") == "unit_price_ex_gst"
+      assert Clean.slug("Cost/kg") == "cost_kg"
+    end
+
+    test "leading and trailing separators are dropped" do
+      assert Clean.slug("_draft") == "draft"
+      assert Clean.slug(" total! ") == "total"
+    end
+
+    test "accents are folded to plain letters" do
+      assert Clean.slug("Café Crème") == "cafe_creme"
+    end
+
+    test "an existing slug is unchanged" do
+      assert Clean.slug("line_total_2") == "line_total_2"
+    end
+
+    test "blank becomes empty" do
+      assert Clean.slug(" \t ") == ""
+    end
+
+    test "values that are not strings pass through" do
+      for value <- [nil, 7, ~D[2026-10-02]] do
+        assert Clean.slug(value) == value
+      end
+    end
+  end
+
+  describe "digits/1" do
+    test "keeps only the digits" do
+      assert Clean.digits("982 123532837465") == "982123532837465"
+      assert Clean.digits(":964001015014250") == "964001015014250"
+      assert Clean.digits("+61 (0)4 1234 5678") == "610412345678"
+    end
+
+    test "all digits is unchanged" do
+      assert Clean.digits("0412345678") == "0412345678"
+    end
+
+    test "no digits becomes empty" do
+      assert Clean.digits("n/a") == ""
+      assert Clean.digits("") == ""
+    end
+
+    test "values that are not strings pass through" do
+      for value <- [nil, 7, ~D[2026-10-02]] do
+        assert Clean.digits(value) == value
+      end
+    end
+  end
 end

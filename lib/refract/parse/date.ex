@@ -7,13 +7,33 @@ defmodule Refract.Parse.Date do
 
   @type opt :: {:formats, [format()]}
 
+  @time ~r/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/
+
   @spec parse(term(), [opt()]) :: {:ok, Date.t()} | {:error, {:not_a_date, term()}}
 
   def parse(value, opts) do
-    opts = Keyword.validate!(opts, formats: [:iso, :ymd])
-    formats = Keyword.fetch!(opts, :formats)
+    case scan(value, formats(opts), :optional) do
+      {:ok, date, _time} -> {:ok, date}
+      nil -> {:error, {:not_a_date, value}}
+    end
+  end
 
-    parse_date(value, Enum.map(formats, &compile_format/1))
+  @spec parse_datetime(term(), [opt()]) ::
+          {:ok, NaiveDateTime.t()} | {:error, {:not_a_datetime, term()}}
+
+  def parse_datetime(value, opts) do
+    case scan(value, formats(opts), :required) do
+      {:ok, date, time} -> NaiveDateTime.new(date, time)
+      nil -> {:error, {:not_a_datetime, value}}
+    end
+  end
+
+  defp formats(opts) do
+    opts = Keyword.validate!(opts, formats: [:iso, :ymd])
+
+    opts
+    |> Keyword.fetch!(:formats)
+    |> Enum.map(&compile_format/1)
   end
 
   # patterns compile once here, so a bad one raises before any value is read
@@ -24,22 +44,63 @@ defmodule Refract.Parse.Date do
     raise ArgumentError, "unknown date format: #{inspect(format)}"
   end
 
-  defp parse_date(%Date{} = date, _formats), do: {:ok, date}
-  defp parse_date(%NaiveDateTime{} = naive, _formats), do: {:ok, NaiveDateTime.to_date(naive)}
-  defp parse_date(%DateTime{} = date_time, _formats), do: {:ok, DateTime.to_date(date_time)}
+  defp scan(%Date{} = date, _formats, :optional), do: {:ok, date, nil}
+  defp scan(%Date{}, _formats, :required), do: nil
 
-  defp parse_date(value, formats) when is_binary(value) do
-    trimmed = String.trim(value)
+  defp scan(%NaiveDateTime{} = naive, _formats, _rule),
+    do: {:ok, NaiveDateTime.to_date(naive), NaiveDateTime.to_time(naive)}
 
-    Enum.find_value(formats, {:error, {:not_a_date, value}}, &date_in_format(&1, trimmed))
+  defp scan(%DateTime{} = date_time, formats, rule),
+    do: date_time |> DateTime.to_naive() |> scan(formats, rule)
+
+  defp scan(value, formats, rule) when is_binary(value) do
+    value
+    |> String.trim()
+    |> splits()
+    |> Enum.find_value(fn {date_part, time_part} ->
+      with {:ok, date} <- find_date(date_part, formats),
+           {:ok, time} <- scan_time(time_part, rule) do
+        {:ok, date, time}
+      end
+    end)
   end
 
-  defp parse_date(value, _formats), do: {:error, {:not_a_date, value}}
+  defp scan(_value, _formats, _rule), do: nil
+
+  defp splits(string) do
+    [{string, nil}] ++ split_last(string, " ") ++ split_last(string, "T")
+  end
+
+  defp split_last(string, separator) do
+    case string |> String.reverse() |> String.split(separator, parts: 2) do
+      [_only] -> []
+      [time, date] -> [{String.reverse(date), String.reverse(time)}]
+    end
+  end
+
+  defp find_date(string, formats) do
+    Enum.find_value(formats, &date_in_format(&1, string))
+  end
+
+  defp scan_time(nil, :optional), do: {:ok, nil}
+  defp scan_time(nil, :required), do: nil
+
+  defp scan_time(string, _rule) do
+    with [_all, hour, minute | rest] <- Regex.run(@time, string),
+         {:ok, time} <- Time.new(to_int(hour), to_int(minute), to_int(List.first(rest, "0"))) do
+      {:ok, time}
+    else
+      _invalid -> nil
+    end
+  end
+
+  defp to_int(""), do: 0
+  defp to_int(digits), do: String.to_integer(digits)
 
   defp date_in_format(:iso, string) do
     case Date.from_iso8601(string) do
       {:ok, date} -> {:ok, date}
-      {:error, _reason} -> iso_date_time(string)
+      {:error, _reason} -> nil
     end
   end
 
@@ -49,13 +110,6 @@ defmodule Refract.Parse.Date do
     case String.split(string, ["/", "-", "."]) do
       [first, second, third] -> numeric_date(format, first, second, third)
       _parts -> nil
-    end
-  end
-
-  defp iso_date_time(string) do
-    case NaiveDateTime.from_iso8601(string) do
-      {:ok, naive} -> {:ok, NaiveDateTime.to_date(naive)}
-      {:error, _reason} -> nil
     end
   end
 

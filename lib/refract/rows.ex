@@ -4,14 +4,15 @@ defmodule Refract.Rows do
   unknown columns raises. `update` can take either a function operating on the value, or a
   function provided both the value and a `Refract.Rows.Ctx`(holds row and operated on column
   name).
-  `pivot` needs the lines for one id next to each other. `parallel` runs a pipeline on chunks
-  across cores, same output and order.
+  `group` folds lines of one id val into a row with a function, `pivot` is the key/value special
+  case of it. both need the lines for one id val next to each other. `parallel` runs a pipeline on
+  chunks across cores for perf gains
 
       rows
       |> Refract.Rows.rename(%{"col_0" => "date"})
       |> Refract.Rows.update("cost", &Refract.Parse.number!/1)
       |> Refract.Rows.put("year", &(&1["date"] |> String.split(" ") |> List.last()))
-      |> Stream.reject(&Refract.Rows.blank?/1)
+      |> Refract.Rows.drop_blank()
   """
 
   import Refract.Utils, only: [truthy?: 1]
@@ -65,7 +66,23 @@ defmodule Refract.Rows do
     end)
   end
 
-  @spec rename(Enumerable.t(), %{String.t() => String.t()}) :: Enumerable.t()
+  @spec rename(Enumerable.t(), %{String.t() => String.t()} | (String.t() -> String.t())) ::
+          Enumerable.t()
+
+  def rename(rows, fun) when is_function(fun, 1) do
+    Stream.map(rows, fn row ->
+      Enum.reduce(row, %{}, fn {old, value}, acc ->
+        new = fun.(old)
+
+        if Map.has_key?(acc, new) do
+          raise ArgumentError,
+                "renaming #{inspect(old)} to #{inspect(new)} clashes with another column"
+        end
+
+        Map.put(acc, new, value)
+      end)
+    end)
+  end
 
   def rename(rows, rename_columns) do
     Stream.map(rows, fn row ->
@@ -75,7 +92,14 @@ defmodule Refract.Rows do
     end)
   end
 
-  @spec drop(Enumerable.t(), [String.t()]) :: Enumerable.t()
+  @spec drop(Enumerable.t(), [String.t()] | (String.t() -> as_boolean(term()))) ::
+          Enumerable.t()
+
+  def drop(rows, fun) when is_function(fun, 1) do
+    Stream.map(rows, fn row ->
+      Map.reject(row, fn {col, _value} -> truthy?(fun.(col)) end)
+    end)
+  end
 
   def drop(rows, columns) do
     Stream.map(rows, fn row ->
@@ -85,7 +109,14 @@ defmodule Refract.Rows do
     end)
   end
 
-  @spec take(Enumerable.t(), [String.t()]) :: Enumerable.t()
+  @spec take(Enumerable.t(), [String.t()] | (String.t() -> as_boolean(term()))) ::
+          Enumerable.t()
+
+  def take(rows, fun) when is_function(fun, 1) do
+    Stream.map(rows, fn row ->
+      for {col, value} <- row, truthy?(fun.(col)), into: %{}, do: {col, detach(value)}
+    end)
+  end
 
   def take(rows, candidate_columns) do
     Stream.map(rows, fn row ->
@@ -108,6 +139,50 @@ defmodule Refract.Rows do
     Enum.all?(row, fn {_col, value} -> Utils.blank?(value) end)
   end
 
+  @spec blank?(Refract.row(), String.t() | [String.t()]) :: boolean()
+
+  def blank?(row, column) do
+    column
+    |> List.wrap()
+    |> Enum.all?(fn col -> row |> Map.fetch!(col) |> Utils.blank?() end)
+  end
+
+  @spec drop_blank(Enumerable.t()) :: Enumerable.t()
+
+  def drop_blank(rows), do: Stream.reject(rows, &blank?/1)
+
+  @spec drop_blank(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
+
+  def drop_blank(rows, column), do: Stream.reject(rows, &blank?(&1, column))
+
+  @spec distinct(Enumerable.t(), String.t()) :: Enumerable.t()
+
+  def distinct(rows, column) do
+    rows
+    |> drop_blank(column)
+    |> Stream.map(&Map.fetch!(&1, column))
+    |> Stream.uniq()
+  end
+
+  @spec fill_down(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
+
+  def fill_down(rows, column) do
+    columns = List.wrap(column)
+
+    Stream.transform(rows, %{}, fn row, last ->
+      {filled, last} =
+        Enum.reduce(columns, {row, last}, fn col, {acc, last} ->
+          cond do
+            not blank?(row, col) -> {acc, Map.put(last, col, Map.fetch!(row, col))}
+            Map.has_key?(last, col) -> {Map.put(acc, col, Map.fetch!(last, col)), last}
+            true -> {acc, last}
+          end
+        end)
+
+      {[filled], last}
+    end)
+  end
+
   @spec from(Enumerable.t(), (Refract.row() -> as_boolean(term()))) :: Enumerable.t()
 
   def from(rows, fun) do
@@ -124,6 +199,28 @@ defmodule Refract.Rows do
     end)
   end
 
+  @spec group(Enumerable.t(), keyword()) :: Enumerable.t()
+
+  def group(rows, opts) do
+    opts = Keyword.validate!(opts, [:by, :into])
+
+    by = Keyword.fetch!(opts, :by)
+    into = Keyword.fetch!(opts, :into)
+
+    validate_into(into)
+
+    rows
+    |> Stream.chunk_by(&Map.fetch!(&1, by))
+    |> Stream.map(fn [first | _] = lines ->
+      id = Map.fetch!(first, by)
+
+      lines
+      |> into.()
+      |> validate_grouped(id)
+      |> Map.put(by, id)
+    end)
+  end
+
   @spec pivot(Enumerable.t(), keyword()) :: Enumerable.t()
 
   def pivot(rows, opts) do
@@ -134,16 +231,15 @@ defmodule Refract.Rows do
     value = Keyword.fetch!(opts, :value)
     columns = Keyword.fetch!(opts, :columns)
 
-    rows
-    |> Stream.chunk_by(&Map.fetch!(&1, by))
-    |> Stream.map(fn [first | _] = lines ->
-      id = Map.fetch!(first, by)
-      values = Enum.reduce(lines, %{}, &insert_pivot_value(&1, &2, id, key, value, columns))
+    group(rows,
+      by: by,
+      into: fn [first | _] = lines ->
+        id = Map.fetch!(first, by)
+        values = Enum.reduce(lines, %{}, &insert_pivot_value(&1, &2, id, key, value, columns))
 
-      columns
-      |> Map.new(fn col -> {col, Map.get(values, col)} end)
-      |> Map.put(by, id)
-    end)
+        Map.new(columns, fn col -> {col, Map.get(values, col)} end)
+      end
+    )
   end
 
   @spec parallel(Enumerable.t(), (Enumerable.t() -> Enumerable.t()), keyword()) :: Enumerable.t()
@@ -178,6 +274,20 @@ defmodule Refract.Rows do
   end
 
   defp detach(value), do: value
+
+  defp validate_into(fun) when is_function(fun, 1), do: :ok
+
+  defp validate_into(fun),
+    do: raise(ArgumentError, "into must be a function of the lines, got: #{inspect(fun)}")
+
+  defp validate_grouped(row, _id) when is_map(row), do: row
+
+  defp validate_grouped(other, id),
+    do:
+      raise(
+        ArgumentError,
+        "into must return a row map for id #{inspect(id)}, got: #{inspect(other)}"
+      )
 
   defp insert_pivot_value(line, values, id, key, value, columns) do
     col = Map.fetch!(line, key)
