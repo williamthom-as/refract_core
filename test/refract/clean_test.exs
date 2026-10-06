@@ -88,4 +88,27 @@ defmodule Refract.CleanTest do
       end
     end
   end
+
+  describe "digits/1" do
+    test "keeps only the digits" do
+      assert Clean.digits("982 123532837465") == "982123532837465"
+      assert Clean.digits(":964001015014250") == "964001015014250"
+      assert Clean.digits("+61 (0)4 1234 5678") == "610412345678"
+    end
+
+    test "all digits is unchanged" do
+      assert Clean.digits("0412345678") == "0412345678"
+    end
+
+    test "no digits becomes empty" do
+      assert Clean.digits("n/a") == ""
+      assert Clean.digits("") == ""
+    end
+
+    test "values that are not strings pass through" do
+      for value <- [nil, 7, ~D[2026-10-02]] do
+        assert Clean.digits(value) == value
+      end
+    end
+  end
 end

@@ -12,6 +12,9 @@ defmodule Refract.Clean do
 
       iex> Refract.Clean.slug("Unit Price (ex GST)")
       "unit_price_ex_gst"
+
+      iex> Refract.Clean.digits("+61 (0)4 1234 5678")
+      "610412345678"
   """
 
   @spec normalise_whitespace(term()) :: term()
@@ -44,4 +47,10 @@ defmodule Refract.Clean do
   end
 
   def slug(value), do: value
+
+  @spec digits(term()) :: term()
+
+  def digits(value) when is_binary(value), do: String.replace(value, ~r/\D+/u, "")
+
+  def digits(value), do: value
 end
