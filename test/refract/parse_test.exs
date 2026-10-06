@@ -47,6 +47,15 @@ defmodule Refract.ParseTest do
       assert Parse.number(nil) == {:error, {:not_a_number, nil}}
     end
 
+    test "numbers past decimal128 are errors rather than a hang" do
+      assert Parse.number("1e1000000000") == {:error, {:not_a_number, "1e1000000000"}}
+
+      assert Parse.number("12345678901234567890123456789012345") ==
+               {:error, {:not_a_number, "12345678901234567890123456789012345"}}
+
+      assert {:ok, _} = Parse.number("1234567890123456789012345678901234")
+    end
+
     test "unknown locale raises" do
       assert_raise ArgumentError, fn -> Parse.number("1", locale: :xx) end
     end
