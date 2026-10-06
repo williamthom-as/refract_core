@@ -74,6 +74,18 @@ defmodule Refract.CleanTest do
       assert Clean.slug("Café Crème") == "cafe_creme"
     end
 
+    test "letters and digits from any script are kept" do
+      assert Clean.slug("価格 (税込)") == "価格_税込"
+      assert Clean.slug("Straße 2") == "straße_2"
+      assert Clean.slug("Цена") == "цена"
+      assert Clean.slug("मूल्य") == "मूल्य"
+    end
+
+    test "composed characters stay composed" do
+      assert Clean.slug("가격") == "가격"
+      assert Clean.slug("가격") |> String.normalize(:nfc) == Clean.slug("가격")
+    end
+
     test "an existing slug is unchanged" do
       assert Clean.slug("line_total_2") == "line_total_2"
     end
@@ -93,7 +105,12 @@ defmodule Refract.CleanTest do
     test "keeps only the digits" do
       assert Clean.digits("982 123532837465") == "982123532837465"
       assert Clean.digits(":964001015014250") == "964001015014250"
-      assert Clean.digits("+61 (0)4 1234 5678") == "610412345678"
+      assert Clean.digits("(02) 9876 5432") == "0298765432"
+    end
+
+    test "only ascii digits are kept" do
+      assert Clean.digits("\u0663\u0664\u0665") == ""
+      assert Clean.digits("1\uFF12 3") == "13"
     end
 
     test "all digits is unchanged" do

@@ -5,36 +5,64 @@ defmodule Refract.Parse.Date do
 
   @type format :: :iso | :ymd | :dmy | :mdy | String.t()
 
+  @type offset :: :reject | :utc
+
   @type opt :: {:formats, [format()]}
 
-  @time ~r/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/
+  @type datetime_opt :: opt() | {:offset, offset()}
+
+  @type datetime_error :: {:not_a_datetime, term()} | {:has_offset, term()}
+
+  @time ~r/^(?<hour>\d{1,2}):(?<minute>\d{2})(?::(?<second>\d{2})(?:\.(?<fraction>\d+))?)?(?<offset>Z|[+-]\d{2}:?\d{2})?$/
+
+  @meridiem ~r/(?<=\d)\s*([ap])\.?m\.?$/i
 
   @spec parse(term(), [opt()]) :: {:ok, Date.t()} | {:error, {:not_a_date, term()}}
 
   def parse(value, opts) do
-    case scan(value, formats(opts), :optional) do
-      {:ok, date, _time} -> {:ok, date}
+    opts = Keyword.validate!(opts, formats: [:iso, :ymd])
+
+    formats = Keyword.fetch!(opts, :formats)
+
+    case scan(value, compile_formats(formats), :optional) do
+      {:ok, date, _time, _offset} -> {:ok, date}
       nil -> {:error, {:not_a_date, value}}
     end
   end
 
-  @spec parse_datetime(term(), [opt()]) ::
-          {:ok, NaiveDateTime.t()} | {:error, {:not_a_datetime, term()}}
+  @spec parse_datetime(term(), [datetime_opt()]) ::
+          {:ok, NaiveDateTime.t()} | {:error, datetime_error()}
 
   def parse_datetime(value, opts) do
-    case scan(value, formats(opts), :required) do
-      {:ok, date, time} -> NaiveDateTime.new(date, time)
-      nil -> {:error, {:not_a_datetime, value}}
+    opts = Keyword.validate!(opts, formats: [:iso, :ymd], offset: :reject)
+
+    formats = Keyword.fetch!(opts, :formats)
+    offset = Keyword.fetch!(opts, :offset)
+
+    validate_offset(offset)
+
+    case scan(value, compile_formats(formats), :required) do
+      {:ok, date, time, seconds} ->
+        date
+        |> NaiveDateTime.new!(time)
+        |> apply_offset(seconds, offset, value)
+
+      nil ->
+        {:error, {:not_a_datetime, value}}
     end
   end
 
-  defp formats(opts) do
-    opts = Keyword.validate!(opts, formats: [:iso, :ymd])
+  defp validate_offset(offset) when offset in [:reject, :utc], do: :ok
 
-    opts
-    |> Keyword.fetch!(:formats)
-    |> Enum.map(&compile_format/1)
+  defp validate_offset(offset) do
+    raise ArgumentError, "offset must be :reject or :utc, got: #{inspect(offset)}"
   end
+
+  defp apply_offset(naive, 0, _offset, _value), do: {:ok, naive}
+  defp apply_offset(naive, seconds, :utc, _value), do: {:ok, NaiveDateTime.add(naive, -seconds)}
+  defp apply_offset(_naive, _seconds, :reject, value), do: {:error, {:has_offset, value}}
+
+  defp compile_formats(formats), do: Enum.map(formats, &compile_format/1)
 
   # patterns compile once here, so a bad one raises before any value is read
   defp compile_format(format) when format in [:iso, :ymd, :dmy, :mdy], do: format
@@ -44,23 +72,28 @@ defmodule Refract.Parse.Date do
     raise ArgumentError, "unknown date format: #{inspect(format)}"
   end
 
-  defp scan(%Date{} = date, _formats, :optional), do: {:ok, date, nil}
+  defp scan(%Date{} = date, _formats, :optional), do: {:ok, date, nil, 0}
   defp scan(%Date{}, _formats, :required), do: nil
 
   defp scan(%NaiveDateTime{} = naive, _formats, _rule),
-    do: {:ok, NaiveDateTime.to_date(naive), NaiveDateTime.to_time(naive)}
+    do: {:ok, NaiveDateTime.to_date(naive), NaiveDateTime.to_time(naive), 0}
 
-  defp scan(%DateTime{} = date_time, formats, rule),
-    do: date_time |> DateTime.to_naive() |> scan(formats, rule)
+  defp scan(%DateTime{} = date_time, _formats, _rule) do
+    naive = DateTime.to_naive(date_time)
+
+    {:ok, NaiveDateTime.to_date(naive), NaiveDateTime.to_time(naive),
+     date_time.utc_offset + date_time.std_offset}
+  end
 
   defp scan(value, formats, rule) when is_binary(value) do
-    value
-    |> String.trim()
+    {string, meridiem} = value |> String.trim() |> split_meridiem()
+
+    string
     |> splits()
     |> Enum.find_value(fn {date_part, time_part} ->
       with {:ok, date} <- find_date(date_part, formats),
-           {:ok, time} <- scan_time(time_part, rule) do
-        {:ok, date, time}
+           {:ok, time, offset} <- scan_time(time_part, meridiem, rule) do
+        {:ok, date, time, offset}
       end
     end)
   end
@@ -82,17 +115,57 @@ defmodule Refract.Parse.Date do
     Enum.find_value(formats, &date_in_format(&1, string))
   end
 
-  defp scan_time(nil, :optional), do: {:ok, nil}
-  defp scan_time(nil, :required), do: nil
+  defp split_meridiem(string) do
+    case Regex.run(@meridiem, string) do
+      [_all, letter] -> {Regex.replace(@meridiem, string, ""), meridiem(String.downcase(letter))}
+      nil -> {string, nil}
+    end
+  end
 
-  defp scan_time(string, _rule) do
-    with [_all, hour, minute | rest] <- Regex.run(@time, string),
-         {:ok, time} <- Time.new(to_int(hour), to_int(minute), to_int(List.first(rest, "0"))) do
-      {:ok, time}
+  defp meridiem("a"), do: :am
+  defp meridiem("p"), do: :pm
+
+  defp scan_time(nil, nil, :optional), do: {:ok, nil, 0}
+  defp scan_time(nil, _meridiem, _rule), do: nil
+
+  defp scan_time(string, meridiem, _rule) do
+    with %{"hour" => hour, "minute" => minute, "second" => second} = parts <-
+           Regex.named_captures(@time, string),
+         {:ok, hour} <- clock_hour(to_int(hour), meridiem),
+         {:ok, time} <-
+           Time.new(hour, to_int(minute), to_int(second), fraction(parts["fraction"])) do
+      {:ok, time, offset_seconds(parts["offset"])}
     else
       _invalid -> nil
     end
   end
+
+  defp clock_hour(hour, nil), do: {:ok, hour}
+  defp clock_hour(hour, _meridiem) when hour < 1 or hour > 12, do: :error
+  defp clock_hour(12, :am), do: {:ok, 0}
+  defp clock_hour(12, :pm), do: {:ok, 12}
+  defp clock_hour(hour, :am), do: {:ok, hour}
+  defp clock_hour(hour, :pm), do: {:ok, hour + 12}
+
+  defp fraction(""), do: {0, 0}
+
+  defp fraction(digits) do
+    kept = String.slice(digits, 0, 6)
+
+    {kept |> String.pad_trailing(6, "0") |> String.to_integer(), String.length(kept)}
+  end
+
+  defp offset_seconds(""), do: 0
+  defp offset_seconds("Z"), do: 0
+
+  defp offset_seconds(<<sign, hours::binary-size(2), minutes::binary>>) do
+    seconds = (to_int(hours) * 60 + to_int(String.trim_leading(minutes, ":"))) * 60
+
+    signed(sign, seconds)
+  end
+
+  defp signed(?-, seconds), do: -seconds
+  defp signed(?+, seconds), do: seconds
 
   defp to_int(""), do: 0
   defp to_int(digits), do: String.to_integer(digits)

@@ -100,7 +100,7 @@ defmodule Refract.Table.Spec.Row do
 
   defp passes?(:date, value), do: match?({:ok, _}, Parse.date(value))
 
-  defp passes?(:datetime, value), do: match?({:ok, _}, Parse.datetime(value))
+  defp passes?(:datetime, value), do: match?({:ok, _}, Parse.datetime(value, offset: :utc))
 
   defp passes?(%Regex{} = regex, value) when is_binary(value) do
     Regex.match?(regex, value)

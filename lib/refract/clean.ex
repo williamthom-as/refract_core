@@ -13,8 +13,8 @@ defmodule Refract.Clean do
       iex> Refract.Clean.slug("Unit Price (ex GST)")
       "unit_price_ex_gst"
 
-      iex> Refract.Clean.digits("+61 (0)4 1234 5678")
-      "610412345678"
+      iex> Refract.Clean.digits("(02) 9876 5432")
+      "0298765432"
   """
 
   @spec normalise_whitespace(term()) :: term()
@@ -40,9 +40,10 @@ defmodule Refract.Clean do
   def slug(value) when is_binary(value) do
     value
     |> String.normalize(:nfd)
-    |> String.replace(~r/\p{Mn}/u, "")
+    |> String.replace(~r/(?<=\p{Latin})\p{Mn}+/u, "")
+    |> String.normalize(:nfc)
     |> String.downcase()
-    |> String.replace(~r/[^a-z0-9]+/, "_")
+    |> String.replace(~r/[^\p{L}\p{M}\p{N}]+/u, "_")
     |> String.trim("_")
   end
 
@@ -50,7 +51,7 @@ defmodule Refract.Clean do
 
   @spec digits(term()) :: term()
 
-  def digits(value) when is_binary(value), do: String.replace(value, ~r/\D+/u, "")
+  def digits(value) when is_binary(value), do: String.replace(value, ~r/[^0-9]+/, "")
 
   def digits(value), do: value
 end

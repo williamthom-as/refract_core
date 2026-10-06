@@ -5,7 +5,8 @@ defmodule Refract.Parse do
   sign or code and accounting parentheses)
   - dates try iso first, day or month first never guessed, custom patterns supported
   via `formats:`
-  - datetimes take same `formats:` for the date component with a time trailing after
+  - datetimes take same `formats:` for the date component with a time trailing after, 12 hour
+  clocks and fractions of a second; an offset other than utc is an error unless `offset: :utc`
 
   note: each version comes with optional bang version that raises on failure.
 
@@ -39,7 +40,9 @@ defmodule Refract.Parse do
 
   @type number_opt :: {:locale, locale()} | {:currency, boolean()}
 
-  @currency_symbols ["$", "£", "€", "¥"]
+  @leading_currency ~r/^(?:[A-Z]{3}\s+|[A-Z]{0,2}\p{Sc}\s*)/u
+
+  @trailing_currency ~r/(?:\s*\p{Sc}|\s+[A-Z]{3})$/u
 
   # number
 
@@ -78,51 +81,15 @@ defmodule Refract.Parse do
     {sign, amount} = value |> String.trim() |> accounting_sign()
     {lead, amount} = leading_sign(amount)
 
-    sign <> lead <> (amount |> strip_leading_currency() |> strip_trailing_currency())
+    amount =
+      amount
+      |> String.replace(@leading_currency, "")
+      |> String.replace(@trailing_currency, "")
+
+    sign <> lead <> amount
   end
 
   defp strip_currency(value, _currency), do: value
-
-  defp strip_leading_currency(amount) do
-    {code, rest} = String.split_at(amount, code_length(amount))
-
-    cond do
-      String.starts_with?(rest, @currency_symbols) ->
-        rest |> String.slice(1..-1//1) |> String.trim()
-
-      code != "" and String.starts_with?(rest, " ") ->
-        String.trim(rest)
-
-      true ->
-        amount
-    end
-  end
-
-  defp strip_trailing_currency(amount) do
-    {rest, tail} = String.split_at(amount, -4)
-
-    cond do
-      String.ends_with?(amount, @currency_symbols) ->
-        amount |> String.slice(0..-2//1) |> String.trim()
-
-      currency_code?(tail) ->
-        String.trim(rest)
-
-      true ->
-        amount
-    end
-  end
-
-  defp currency_code?(" " <> code), do: code_length(code) == 3 and byte_size(code) == 3
-  defp currency_code?(_tail), do: false
-
-  defp code_length(string) do
-    string
-    |> String.to_charlist()
-    |> Enum.take_while(&(&1 in ?A..?Z))
-    |> length()
-    |> min(3)
-  end
 
   defp accounting_sign("(" <> rest) do
     if String.ends_with?(rest, ")") do
@@ -189,12 +156,12 @@ defmodule Refract.Parse do
     end
   end
 
-  @spec datetime(term(), [DateParser.opt()]) ::
-          {:ok, NaiveDateTime.t()} | {:error, {:not_a_datetime, term()}}
+  @spec datetime(term(), [DateParser.datetime_opt()]) ::
+          {:ok, NaiveDateTime.t()} | {:error, DateParser.datetime_error()}
 
   def datetime(value, opts \\ []), do: DateParser.parse_datetime(value, opts)
 
-  @spec datetime!(term(), [DateParser.opt()]) :: NaiveDateTime.t()
+  @spec datetime!(term(), [DateParser.datetime_opt()]) :: NaiveDateTime.t()
 
   def datetime!(value, opts \\ []) do
     case datetime(value, opts) do

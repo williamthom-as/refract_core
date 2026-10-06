@@ -68,6 +68,22 @@ defmodule Refract.ParseTest do
       assert Parse.number("AUD 12.50", currency: true) == ok("12.50")
     end
 
+    test "currency: true takes any currency sign" do
+      assert Parse.number("₹1,234", currency: true) == ok("1234")
+      assert Parse.number("₩1,234", currency: true) == ok("1234")
+      assert Parse.number("R$ 9.90", currency: true) == ok("9.90")
+      assert Parse.number("US$5", currency: true) == ok("5")
+      assert Parse.number("12 ₺", currency: true) == ok("12")
+    end
+
+    test "currency: true takes a code of exactly three capitals" do
+      assert Parse.number("X 5", currency: true) == {:error, {:not_a_number, "X 5"}}
+      assert Parse.number("AB 12", currency: true) == {:error, {:not_a_number, "AB 12"}}
+      assert Parse.number("AUDD 12", currency: true) == {:error, {:not_a_number, "AUDD 12"}}
+      assert Parse.number("12 AB", currency: true) == {:error, {:not_a_number, "12 AB"}}
+      assert Parse.number("aud 12", currency: true) == {:error, {:not_a_number, "aud 12"}}
+    end
+
     test "currency: true takes a trailing sign or code" do
       assert Parse.number("12.50 AUD", currency: true) == ok("12.50")
       assert Parse.number("12,50€", currency: true, locale: :de) == ok("12.50")
@@ -166,6 +182,11 @@ defmodule Refract.ParseTest do
       assert Parse.date("02 Oct 2026 9:30", formats: ["dd MMM yyyy"]) == {:ok, ~D[2026-10-02]}
     end
 
+    test "the written date is kept whatever the offset or clock" do
+      assert Parse.date("2026-10-02T23:30:00-05:00") == {:ok, ~D[2026-10-02]}
+      assert Parse.date("10/2/2026 9:30 PM", formats: [:mdy]) == {:ok, ~D[2026-10-02]}
+    end
+
     test "text after the date that is not a time is an error" do
       assert Parse.date("2026-10-02 noon") == {:error, {:not_a_date, "2026-10-02 noon"}}
       assert Parse.date("2026-10-02 25:00") == {:error, {:not_a_date, "2026-10-02 25:00"}}
@@ -221,6 +242,10 @@ defmodule Refract.ParseTest do
 
     test "unknown format raises" do
       assert_raise ArgumentError, fn -> Parse.date("2026-10-02", formats: [:ydm]) end
+    end
+
+    test "offset is a datetime option only" do
+      assert_raise ArgumentError, fn -> Parse.date("2026-10-02", offset: :utc) end
     end
 
     test "unknown option raises" do
@@ -327,9 +352,61 @@ defmodule Refract.ParseTest do
       assert Parse.datetime("2026-10-02 09:30:00") == {:ok, ~N[2026-10-02 09:30:00]}
     end
 
-    test "offsets and fractions are dropped" do
+    test "z and zero offsets are utc" do
       assert Parse.datetime("2026-10-02T09:30:00Z") == {:ok, ~N[2026-10-02 09:30:00]}
-      assert Parse.datetime("2026-10-02T09:30:00.123+10:00") == {:ok, ~N[2026-10-02 09:30:00]}
+      assert Parse.datetime("2026-10-02T09:30:00+00:00") == {:ok, ~N[2026-10-02 09:30:00]}
+    end
+
+    test "any other offset is an error by default" do
+      assert Parse.datetime("2026-10-02T09:30:00+10:00") ==
+               {:error, {:has_offset, "2026-10-02T09:30:00+10:00"}}
+
+      assert Parse.datetime("2026-10-02T23:30:00-0500") ==
+               {:error, {:has_offset, "2026-10-02T23:30:00-0500"}}
+    end
+
+    test "offset: :utc converts to utc" do
+      assert Parse.datetime("2026-10-02T09:30:00+10:00", offset: :utc) ==
+               {:ok, ~N[2026-10-01 23:30:00]}
+
+      assert Parse.datetime("2026-10-02T23:30:00-05:00", offset: :utc) ==
+               {:ok, ~N[2026-10-03 04:30:00]}
+
+      assert Parse.datetime("2026-10-02T09:30:00+05:30", offset: :utc) ==
+               {:ok, ~N[2026-10-02 04:00:00]}
+    end
+
+    test "unknown offset option raises" do
+      assert_raise ArgumentError, fn ->
+        Parse.datetime("2026-10-02T09:30:00+10:00", offset: :drop)
+      end
+    end
+
+    test "fractions of a second are kept" do
+      assert Parse.datetime("2026-10-02 09:30:00.987") == {:ok, ~N[2026-10-02 09:30:00.987]}
+      assert Parse.datetime("2026-10-02T09:30:00.5Z") == {:ok, ~N[2026-10-02 09:30:00.5]}
+
+      assert Parse.datetime("2026-10-02 09:30:00.123456789") ==
+               {:ok, ~N[2026-10-02 09:30:00.123456]}
+    end
+
+    test "12 hour clock" do
+      assert Parse.datetime("10/2/2026 9:30 PM", formats: [:mdy]) ==
+               {:ok, ~N[2026-10-02 21:30:00]}
+
+      assert Parse.datetime("2026-10-02 9:30:15am") == {:ok, ~N[2026-10-02 09:30:15]}
+      assert Parse.datetime("2026-10-02 12:05 a.m.") == {:ok, ~N[2026-10-02 00:05:00]}
+      assert Parse.datetime("2026-10-02 12:05 PM") == {:ok, ~N[2026-10-02 12:05:00]}
+    end
+
+    test "12 hour clock rejects hours outside 1 to 12 and a meridiem without a time" do
+      assert Parse.datetime("2026-10-02 13:05 PM") ==
+               {:error, {:not_a_datetime, "2026-10-02 13:05 PM"}}
+
+      assert Parse.datetime("2026-10-02 0:05 AM") ==
+               {:error, {:not_a_datetime, "2026-10-02 0:05 AM"}}
+
+      assert Parse.datetime("2026-10-02 PM") == {:error, {:not_a_datetime, "2026-10-02 PM"}}
     end
 
     test "year first with slash by default" do

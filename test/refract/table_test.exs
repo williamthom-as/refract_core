@@ -266,6 +266,11 @@ defmodule Refract.TableTest do
       refute passes?(:datetime, "not a time")
     end
 
+    test ":datetime accepts any offset, so offset rows still match" do
+      assert passes?(:datetime, "2010-01-01T09:30:00+10:00")
+      assert passes?(:datetime, "2010-01-01T09:30:00Z")
+    end
+
     test "regex rules match the cell" do
       assert passes?(~r/^[A-Z]{3}\d{3}$/, "ABC123")
       refute passes?(~r/^[A-Z]{3}\d{3}$/, "Subtotal")

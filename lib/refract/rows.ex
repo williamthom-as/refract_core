@@ -12,7 +12,7 @@ defmodule Refract.Rows do
       |> Refract.Rows.rename(%{"col_0" => "date"})
       |> Refract.Rows.update("cost", &Refract.Parse.number!/1)
       |> Refract.Rows.put("year", &(&1["date"] |> String.split(" ") |> List.last()))
-      |> Refract.Rows.drop_blank()
+      |> Refract.Rows.reject_blank()
   """
 
   import Refract.Utils, only: [truthy?: 1]
@@ -70,24 +70,22 @@ defmodule Refract.Rows do
           Enumerable.t()
 
   def rename(rows, fun) when is_function(fun, 1) do
-    Stream.map(rows, fn row ->
-      Enum.reduce(row, %{}, fn {old, value}, acc ->
-        new = fun.(old)
+    Stream.transform(rows, %{}, fn row, names ->
+      names = remember(names, row, fun)
 
-        if Map.has_key?(acc, new) do
-          raise ArgumentError,
-                "renaming #{inspect(old)} to #{inspect(new)} clashes with another column"
-        end
+      renamed =
+        Enum.reduce(row, %{}, fn {old, value}, acc ->
+          put_renamed(acc, old, Map.fetch!(names, old), value)
+        end)
 
-        Map.put(acc, new, value)
-      end)
+      {[renamed], names}
     end)
   end
 
   def rename(rows, rename_columns) do
     Stream.map(rows, fn row ->
       Enum.reduce(rename_columns, Map.drop(row, Map.keys(rename_columns)), fn {old, new}, acc ->
-        Map.put(acc, new, Map.fetch!(row, old))
+        put_renamed(acc, old, new, Map.fetch!(row, old))
       end)
     end)
   end
@@ -96,8 +94,10 @@ defmodule Refract.Rows do
           Enumerable.t()
 
   def drop(rows, fun) when is_function(fun, 1) do
-    Stream.map(rows, fn row ->
-      Map.reject(row, fn {col, _value} -> truthy?(fun.(col)) end)
+    Stream.transform(rows, %{}, fn row, dropped ->
+      dropped = remember(dropped, row, &truthy?(fun.(&1)))
+
+      {[Map.reject(row, fn {col, _value} -> Map.fetch!(dropped, col) end)], dropped}
     end)
   end
 
@@ -113,8 +113,11 @@ defmodule Refract.Rows do
           Enumerable.t()
 
   def take(rows, fun) when is_function(fun, 1) do
-    Stream.map(rows, fn row ->
-      for {col, value} <- row, truthy?(fun.(col)), into: %{}, do: {col, detach(value)}
+    Stream.transform(rows, %{}, fn row, kept ->
+      kept = remember(kept, row, &truthy?(fun.(&1)))
+      taken = for {col, value} <- row, Map.fetch!(kept, col), into: %{}, do: {col, detach(value)}
+
+      {[taken], kept}
     end)
   end
 
@@ -147,22 +150,17 @@ defmodule Refract.Rows do
     |> Enum.all?(fn col -> row |> Map.fetch!(col) |> Utils.blank?() end)
   end
 
-  @spec drop_blank(Enumerable.t()) :: Enumerable.t()
+  @spec reject_blank(Enumerable.t()) :: Enumerable.t()
 
-  def drop_blank(rows), do: Stream.reject(rows, &blank?/1)
+  def reject_blank(rows), do: Stream.reject(rows, &blank?/1)
 
-  @spec drop_blank(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
+  @spec reject_blank(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
 
-  def drop_blank(rows, column), do: Stream.reject(rows, &blank?(&1, column))
+  def reject_blank(rows, column), do: Stream.reject(rows, &blank?(&1, column))
 
   @spec distinct(Enumerable.t(), String.t()) :: Enumerable.t()
 
-  def distinct(rows, column) do
-    rows
-    |> drop_blank(column)
-    |> Stream.map(&Map.fetch!(&1, column))
-    |> Stream.uniq()
-  end
+  def distinct(rows, column), do: Stream.uniq_by(rows, &Map.fetch!(&1, column))
 
   @spec fill_down(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
 
@@ -274,6 +272,21 @@ defmodule Refract.Rows do
   end
 
   defp detach(value), do: value
+
+  defp remember(cache, row, fun) do
+    Enum.reduce(row, cache, fn {col, _value}, acc ->
+      Map.put_new_lazy(acc, col, fn -> fun.(col) end)
+    end)
+  end
+
+  defp put_renamed(row, old, new, value) do
+    if Map.has_key?(row, new) do
+      raise ArgumentError,
+            "renaming #{inspect(old)} to #{inspect(new)} clashes with another column"
+    end
+
+    Map.put(row, new, value)
+  end
 
   defp validate_into(fun) when is_function(fun, 1), do: :ok
 

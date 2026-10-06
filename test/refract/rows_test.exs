@@ -10,6 +10,17 @@ defmodule Refract.RowsTest do
     %{"id" => "2", "name" => "bob", "note" => nil}
   ]
 
+  defp counting(fun) do
+    counter = :counters.new(1, [])
+
+    {fn col ->
+       :counters.add(counter, 1, 1)
+       fun.(col)
+     end, fn -> :counters.get(counter, 1) end}
+  end
+
+  @repeated List.duplicate(%{"Id" => "1", "Name" => "alice", "Note" => ""}, 4)
+
   describe "update/4" do
     test "applies the function to one column" do
       assert @rows |> Rows.update("name", &String.upcase/1) |> Enum.to_list() == [
@@ -145,6 +156,13 @@ defmodule Refract.RowsTest do
              ]
     end
 
+    test "a function runs once per column name, not per row" do
+      {fun, calls} = counting(&(&1 == "Id"))
+
+      assert @repeated |> Rows.take(fun) |> Enum.to_list() == List.duplicate(%{"Id" => "1"}, 4)
+      assert calls.() == 3
+    end
+
     test "a function matching nothing gives empty rows" do
       assert @rows |> Rows.take(&String.starts_with?(&1, "x")) |> Enum.to_list() == [%{}, %{}]
     end
@@ -232,6 +250,31 @@ defmodule Refract.RowsTest do
              ]
     end
 
+    test "a map renaming onto a column that stays raises" do
+      rows = [%{"a" => 1, "b" => 2}]
+
+      assert_raise ArgumentError, ~r/clashes/, fn ->
+        rows |> Rows.rename(%{"a" => "b"}) |> Enum.to_list()
+      end
+    end
+
+    test "a map sending two columns to one name raises" do
+      rows = [%{"a" => 1, "b" => 2}]
+
+      assert_raise ArgumentError, ~r/clashes/, fn ->
+        rows |> Rows.rename(%{"a" => "c", "b" => "c"}) |> Enum.to_list()
+      end
+    end
+
+    test "a function runs once per column name, not per row" do
+      {fun, calls} = counting(&String.downcase/1)
+
+      assert @repeated |> Rows.rename(fun) |> Enum.to_list() ==
+               List.duplicate(%{"id" => "1", "name" => "alice", "note" => ""}, 4)
+
+      assert calls.() == 3
+    end
+
     test "a function that sends two columns to one name raises" do
       rows = [%{"a" => 1, "A" => 2}]
 
@@ -268,6 +311,15 @@ defmodule Refract.RowsTest do
       assert rows |> Rows.drop(&String.starts_with?(&1, "col_")) |> Enum.to_list() == [
                %{"id" => "1"}
              ]
+    end
+
+    test "a function runs once per column name, not per row" do
+      {fun, calls} = counting(&(&1 == "Note"))
+
+      assert @repeated |> Rows.drop(fun) |> Enum.to_list() ==
+               List.duplicate(%{"Id" => "1", "Name" => "alice"}, 4)
+
+      assert calls.() == 3
     end
 
     test "a function matching nothing leaves the rows alone" do
@@ -365,7 +417,7 @@ defmodule Refract.RowsTest do
     end
   end
 
-  describe "drop_blank/2" do
+  describe "reject_blank/2" do
     @padded [
       %{"id" => "1", "name" => "alice"},
       %{"id" => "", "name" => "  "},
@@ -374,26 +426,26 @@ defmodule Refract.RowsTest do
     ]
 
     test "drops rows that are blank in every column" do
-      assert @padded |> Rows.drop_blank() |> Enum.map(& &1["id"]) == ["1", "2"]
+      assert @padded |> Rows.reject_blank() |> Enum.map(& &1["id"]) == ["1", "2"]
     end
 
     test "drops rows that are blank in the named column" do
-      assert @padded |> Rows.drop_blank("name") |> Enum.map(& &1["id"]) == ["1"]
+      assert @padded |> Rows.reject_blank("name") |> Enum.map(& &1["id"]) == ["1"]
     end
 
     test "drops rows that are blank in all of several columns" do
-      assert @padded |> Rows.drop_blank(["id", "name"]) |> Enum.map(& &1["id"]) == ["1", "2"]
+      assert @padded |> Rows.reject_blank(["id", "name"]) |> Enum.map(& &1["id"]) == ["1", "2"]
     end
 
     test "unknown column raises" do
-      assert_raise KeyError, fn -> @padded |> Rows.drop_blank("nmae") |> Enum.to_list() end
+      assert_raise KeyError, fn -> @padded |> Rows.reject_blank("nmae") |> Enum.to_list() end
     end
 
     test "is lazy" do
       rows = Stream.map(@padded, fn _ -> raise "read too early" end)
 
-      _stream = Rows.drop_blank(rows)
-      _stream = Rows.drop_blank(rows, "id")
+      _stream = Rows.reject_blank(rows)
+      _stream = Rows.reject_blank(rows, "id")
     end
   end
 
@@ -473,29 +525,43 @@ defmodule Refract.RowsTest do
       %{"id" => "a", "trait" => "teeth"},
       %{"id" => "b", "trait" => ""},
       %{"id" => "b", "trait" => "weight"},
-      %{"id" => "c", "trait" => nil}
+      %{"id" => "c", "trait" => nil},
+      %{"id" => "d", "trait" => ""}
     ]
 
-    test "each value once, in the order first seen" do
-      assert @traits |> Rows.distinct("trait") |> Enum.to_list() == ["weight", "teeth"]
+    test "keeps the first row for each value, in order" do
+      assert @traits |> Rows.distinct("trait") |> Enum.map(& &1["id"]) == ["a", "a", "b", "c"]
     end
 
-    test "blanks are left out" do
-      refute "" in Enum.to_list(Rows.distinct(@traits, "trait"))
-      refute nil in Enum.to_list(Rows.distinct(@traits, "trait"))
+    test "returns whole rows" do
+      assert @traits |> Rows.distinct("trait") |> Enum.take(1) == [
+               %{"id" => "a", "trait" => "weight"}
+             ]
+    end
+
+    test "blank values count as values" do
+      assert @traits |> Rows.distinct("trait") |> Enum.map(& &1["trait"]) ==
+               ["weight", "teeth", "", nil]
+    end
+
+    test "blanks can be rejected first" do
+      assert @traits
+             |> Rows.reject_blank("trait")
+             |> Rows.distinct("trait")
+             |> Enum.map(& &1["trait"]) == ["weight", "teeth"]
     end
 
     test "values that are not strings are kept apart from their text" do
       rows = [%{"n" => 1}, %{"n" => "1"}, %{"n" => 1}]
 
-      assert rows |> Rows.distinct("n") |> Enum.to_list() == [1, "1"]
+      assert rows |> Rows.distinct("n") |> Enum.to_list() == [%{"n" => 1}, %{"n" => "1"}]
     end
 
     test "unknown column raises" do
       assert_raise KeyError, fn -> @traits |> Rows.distinct("tarit") |> Enum.to_list() end
     end
 
-    test "no rows gives no values" do
+    test "no rows gives no rows" do
       assert [] |> Rows.distinct("trait") |> Enum.to_list() == []
     end
 
