@@ -11,7 +11,7 @@ defmodule Refract.E2E.InvoiceTest do
   alias Refract.Table
 
   @golden Golden.path("invoice", "input.csv")
-  @messy Path.expand("../../fixtures/shapes/messy_invoice.csv", __DIR__)
+  @messy Path.expand("../../fixtures/layouts/messy_invoice.csv", __DIR__)
 
   @golden_rows [
     %{

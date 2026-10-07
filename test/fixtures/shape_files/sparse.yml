@@ -1,0 +1,11 @@
+name: ids
+version:
+markers:
+header:
+  columns:
+    id: [id]
+  required:
+  min_matches:
+row:
+stop:
+max_misses:

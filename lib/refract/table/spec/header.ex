@@ -31,6 +31,7 @@ defmodule Refract.Table.Spec.Header do
     required = Keyword.get(opts, :required)
     min_matches = Keyword.get(opts, :min_matches, map_size(columns))
 
+    validate_columns(columns)
     validate_min_matches(columns, min_matches)
 
     validate_required(columns, required)
@@ -40,6 +41,18 @@ defmodule Refract.Table.Spec.Header do
       required: required,
       min_matches: min_matches
     }
+  end
+
+  defp validate_columns(columns) when map_size(columns) == 0 do
+    raise ArgumentError, "header needs at least one column"
+  end
+
+  defp validate_columns(columns) do
+    Enum.each(columns, fn {column, patterns} ->
+      if patterns == [] do
+        raise ArgumentError, "header column #{column} has no aliases"
+      end
+    end)
   end
 
   defp validate_min_matches(columns, min_matches) do

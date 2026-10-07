@@ -5,7 +5,7 @@ defmodule Refract.MixProject do
     [
       app: :refract,
       version: "0.1.0",
-      elixir: "~> 1.16",
+      elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -38,6 +38,7 @@ defmodule Refract.MixProject do
     [
       {:nimble_csv, "~> 1.3"},
       {:decimal, "~> 2.0 or ~> 3.0"},
+      {:yaml_elixir, "~> 2.12", optional: true},
       {:stream_data, "~> 1.4", only: [:dev, :test]},
       {:benchee, "~> 1.5", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
