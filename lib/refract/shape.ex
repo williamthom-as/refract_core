@@ -46,6 +46,37 @@ defmodule Refract.Shape do
           | {:invalid_yaml, String.t()}
           | {:missing_dependency, :yaml_elixir}
 
+  @callback shape() :: t()
+
+  defmacro __using__(_opts) do
+    quote do
+      @behaviour Refract.Shape
+    end
+  end
+
+  @spec resolve(t() | module()) :: t()
+
+  def resolve(%__MODULE__{} = shape), do: shape
+
+  def resolve(module) when is_atom(module) do
+    if shape_module?(module) do
+      module.shape()
+    else
+      raise ArgumentError, "module #{inspect(module)} does not implement Refract.Shape"
+    end
+  end
+
+  def resolve(other) do
+    raise ArgumentError, "cannot resolve shape from #{inspect(other)}"
+  end
+
+  defp shape_module?(module) do
+    Code.ensure_loaded?(module) and
+      __MODULE__ in (module.module_info(:attributes)
+                     |> Keyword.get_values(:behaviour)
+                     |> List.flatten())
+  end
+
   @spec new([opt()]) :: t()
 
   def new(opts) do
