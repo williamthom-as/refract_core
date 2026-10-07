@@ -72,6 +72,18 @@ defmodule Refract.TableTest do
       assert {:ok, %{"id" => 0}} = Table.match_header(spec, ["id"])
     end
 
+    test "no header columns raises" do
+      assert_raise ArgumentError, ~r/at least one column/, fn ->
+        Table.spec(header: [columns: %{}])
+      end
+    end
+
+    test "a column with no aliases raises" do
+      assert_raise ArgumentError, ~r/id/, fn ->
+        Table.spec(header: [columns: %{"id" => [], "sku" => ["sku"]}])
+      end
+    end
+
     test "min_matches defaults to every column" do
       spec = Table.spec(header: [columns: %{"id" => ["id"], "name" => ["name"]}])
 

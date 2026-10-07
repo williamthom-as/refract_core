@@ -7,7 +7,7 @@ defmodule Refract.Grid.ClassifyTest do
   alias Refract.Grid
   alias Refract.Table
 
-  @shapes Path.expand("../../fixtures/shapes", __DIR__)
+  @layouts Path.expand("../../fixtures/layouts", __DIR__)
 
   @columns %{
     "vendor" => ["vendor", "supplier"],
@@ -27,7 +27,7 @@ defmodule Refract.Grid.ClassifyTest do
     "total" => 7
   }
 
-  defp shape(name), do: Path.join(@shapes, name)
+  defp layout(name), do: Path.join(@layouts, name)
 
   defp load!(source) do
     {:ok, grid} = CSV.load(source)
@@ -55,7 +55,7 @@ defmodule Refract.Grid.ClassifyTest do
 
   describe "classify/2" do
     test "gives every line a class in order" do
-      lines = Grid.classify(load!(shape("messy_invoice.csv")), invoice_spec())
+      lines = Grid.classify(load!(layout("messy_invoice.csv")), invoice_spec())
 
       assert classes(lines) ==
                Enum.map(1..9, &{:other, &1}) ++
@@ -71,13 +71,13 @@ defmodule Refract.Grid.ClassifyTest do
     end
 
     test "a header carries its column positions" do
-      lines = Grid.classify(load!(shape("messy_invoice.csv")), invoice_spec())
+      lines = Grid.classify(load!(layout("messy_invoice.csv")), invoice_spec())
 
       assert {:header, 10, @positions} in lines
     end
 
     test "a row carries its canonical map" do
-      lines = Grid.classify(load!(shape("messy_invoice.csv")), invoice_spec())
+      lines = Grid.classify(load!(layout("messy_invoice.csv")), invoice_spec())
 
       row = %{
         "vendor" => "ABC123",
@@ -92,13 +92,13 @@ defmodule Refract.Grid.ClassifyTest do
     end
 
     test "other carries the raw cells" do
-      lines = Grid.classify(load!(shape("messy_invoice.csv")), invoice_spec())
+      lines = Grid.classify(load!(layout("messy_invoice.csv")), invoice_spec())
 
       assert {:other, 13, ["", "", "", "", "Subtotal", "", "", "8"]} in lines
     end
 
     test "stop conditions do not end classification" do
-      lines = Grid.classify(load!(shape("repeated_header.csv")), invoice_spec())
+      lines = Grid.classify(load!(layout("repeated_header.csv")), invoice_spec())
 
       assert classes(lines) |> Enum.filter(&match?({:header, _}, &1)) == [
                {:header, 10},
@@ -129,7 +129,7 @@ defmodule Refract.Grid.ClassifyTest do
     end
 
     test "rows match locate on the messy invoice" do
-      grid = load!(shape("messy_invoice.csv"))
+      grid = load!(layout("messy_invoice.csv"))
 
       {:ok, table} = Grid.locate(grid, invoice_spec())
 
@@ -160,7 +160,7 @@ defmodule Refract.Grid.ClassifyTest do
     end
 
     test "a header miss says what the line lacked" do
-      lines = Grid.explain(load!(shape("messy_invoice.csv")), invoice_spec())
+      lines = Grid.explain(load!(layout("messy_invoice.csv")), invoice_spec())
 
       assert %{line: 1, class: :other, why: {:header_miss, miss}} = hd(lines)
       assert miss.matched == []
@@ -168,7 +168,7 @@ defmodule Refract.Grid.ClassifyTest do
     end
 
     test "a row miss says which rules failed" do
-      lines = Grid.explain(load!(shape("messy_invoice.csv")), invoice_spec())
+      lines = Grid.explain(load!(layout("messy_invoice.csv")), invoice_spec())
 
       assert %{line: 13, class: :other, why: {:row_miss, %{score: 0.5, failed: failed}}} =
                Enum.at(lines, 12)
@@ -177,7 +177,7 @@ defmodule Refract.Grid.ClassifyTest do
     end
 
     test "classes agree with classify" do
-      grid = load!(shape("repeated_header.csv"))
+      grid = load!(layout("repeated_header.csv"))
 
       explained =
         for %{line: line, class: class} <- Grid.explain(grid, invoice_spec()), do: {class, line}

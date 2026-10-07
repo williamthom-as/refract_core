@@ -7,7 +7,7 @@ defmodule Refract.Grid.LocateTest do
   alias Refract.Grid
   alias Refract.Table
 
-  @shapes Path.expand("../../fixtures/shapes", __DIR__)
+  @layouts Path.expand("../../fixtures/layouts", __DIR__)
 
   @columns %{
     "vendor" => ["vendor", "supplier"],
@@ -18,7 +18,7 @@ defmodule Refract.Grid.LocateTest do
     "total" => ["line total", "amount"]
   }
 
-  defp shape(name), do: Path.join(@shapes, name)
+  defp layout(name), do: Path.join(@layouts, name)
 
   defp load!(source) do
     {:ok, grid} = CSV.load(source)
@@ -38,8 +38,8 @@ defmodule Refract.Grid.LocateTest do
   end
 
   defp same_table!(name, opts \\ []) do
-    assert {:ok, from_grid} = Grid.locate(load!(shape(name)), invoice_spec(), opts)
-    assert {:ok, from_csv} = CSV.locate(shape(name), invoice_spec(), opts)
+    assert {:ok, from_grid} = Grid.locate(load!(layout(name)), invoice_spec(), opts)
+    assert {:ok, from_csv} = CSV.locate(layout(name), invoice_spec(), opts)
 
     assert is_struct(from_grid, Table)
 
@@ -89,12 +89,12 @@ defmodule Refract.Grid.LocateTest do
 
     test "within: still limits the search" do
       assert {:error, {:header_not_found, _}} =
-               Grid.locate(load!(shape("messy_invoice.csv")), invoice_spec(), within: 9)
+               Grid.locate(load!(layout("messy_invoice.csv")), invoice_spec(), within: 9)
     end
 
     test "a grid with no table reports the closest row" do
       assert {:error, {:header_not_found, best}} =
-               Grid.locate(load!(shape("no_table.csv")), invoice_spec())
+               Grid.locate(load!(layout("no_table.csv")), invoice_spec())
 
       assert best.matched == []
       assert Enum.sort(best.missing) == ["sku", "total"]
@@ -106,7 +106,7 @@ defmodule Refract.Grid.LocateTest do
 
     test "raises on an unknown on_miss" do
       assert_raise ArgumentError, fn ->
-        Grid.locate(load!(shape("messy_invoice.csv")), invoice_spec(), on_miss: :ignore)
+        Grid.locate(load!(layout("messy_invoice.csv")), invoice_spec(), on_miss: :ignore)
       end
     end
   end

@@ -1,0 +1,19 @@
+name: invoice
+version: 2
+markers:
+  file: /invoice/i
+  title: /tax invoice/
+header:
+  columns:
+    vendor: [vendor, supplier]
+    sku: [sku, product code, /^item\s*no/i]
+    total: [line total, amount]
+  required: [sku, total]
+  min_matches: 2
+row:
+  match:
+    sku: integer
+    total: number
+  min_score: 0.5
+stop: [blank, contains: /^total/i]
+max_misses: 1

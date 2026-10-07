@@ -6,7 +6,7 @@ defmodule Refract.CSV.LocateTest do
   alias Refract.CSV
   alias Refract.Table
 
-  @shapes Path.expand("../../fixtures/shapes", __DIR__)
+  @layouts Path.expand("../../fixtures/layouts", __DIR__)
 
   @columns %{
     "vendor" => ["vendor", "supplier"],
@@ -53,7 +53,7 @@ defmodule Refract.CSV.LocateTest do
     "total" => "8"
   }
 
-  defp shape(name), do: Path.join(@shapes, name)
+  defp layout(name), do: Path.join(@layouts, name)
 
   defp invoice_spec(opts \\ []) do
     defaults = [
@@ -68,7 +68,7 @@ defmodule Refract.CSV.LocateTest do
 
   describe "locate/3" do
     test "finds a shifted header and streams the rows under it" do
-      assert {:ok, table} = CSV.locate(shape("messy_invoice.csv"), invoice_spec())
+      assert {:ok, table} = CSV.locate(layout("messy_invoice.csv"), invoice_spec())
       assert is_struct(table, Table)
 
       assert table.header_row == 10
@@ -87,39 +87,39 @@ defmodule Refract.CSV.LocateTest do
     end
 
     test "renamed vendor headers give the same table" do
-      assert {:ok, table} = CSV.locate(shape("messy_invoice_renamed.csv"), invoice_spec())
+      assert {:ok, table} = CSV.locate(layout("messy_invoice_renamed.csv"), invoice_spec())
 
       assert table.header_row == 10
       assert Enum.to_list(table.rows) == @rows
     end
 
     test "a decoy row is not taken for the header" do
-      assert {:ok, table} = CSV.locate(shape("messy_invoice_decoy.csv"), invoice_spec())
+      assert {:ok, table} = CSV.locate(layout("messy_invoice_decoy.csv"), invoice_spec())
 
       assert table.header_row == 10
     end
 
     test "the blank line ends a table even with a repeated header below it" do
-      assert {:ok, table} = CSV.locate(shape("repeated_header.csv"), invoice_spec())
+      assert {:ok, table} = CSV.locate(layout("repeated_header.csv"), invoice_spec())
 
       assert Enum.to_list(table.rows) == Enum.take(@rows, 2)
     end
 
     test "open errors pass through" do
-      assert {:error, :enoent} = CSV.locate(shape("missing.csv"), invoice_spec())
+      assert {:error, :enoent} = CSV.locate(layout("missing.csv"), invoice_spec())
     end
   end
 
   describe "locate/3 misses" do
     test "on_miss: :skip drops miss rows by default" do
-      assert {:ok, table} = CSV.locate(shape("messy_invoice.csv"), invoice_spec())
+      assert {:ok, table} = CSV.locate(layout("messy_invoice.csv"), invoice_spec())
 
       refute @subtotal in Enum.to_list(table.rows)
     end
 
     test "on_miss: :keep keeps miss rows" do
       assert {:ok, table} =
-               CSV.locate(shape("messy_invoice.csv"), invoice_spec(), on_miss: :keep)
+               CSV.locate(layout("messy_invoice.csv"), invoice_spec(), on_miss: :keep)
 
       assert Enum.to_list(table.rows) == [
                Enum.at(@rows, 0),
@@ -130,24 +130,24 @@ defmodule Refract.CSV.LocateTest do
     end
 
     test "max_misses: 0 ends the table at the first miss" do
-      assert {:ok, table} = CSV.locate(shape("messy_invoice.csv"), invoice_spec(max_misses: 0))
+      assert {:ok, table} = CSV.locate(layout("messy_invoice.csv"), invoice_spec(max_misses: 0))
 
       assert Enum.to_list(table.rows) == Enum.take(@rows, 2)
     end
 
     test "raises on an unknown on_miss" do
       assert_raise ArgumentError, fn ->
-        CSV.locate(shape("messy_invoice.csv"), invoice_spec(), on_miss: :ignore)
+        CSV.locate(layout("messy_invoice.csv"), invoice_spec(), on_miss: :ignore)
       end
     end
 
     test "checks locate options before opening the source" do
       assert_raise ArgumentError, fn ->
-        CSV.locate(shape("missing.csv"), invoice_spec(), on_miss: :ignore)
+        CSV.locate(layout("missing.csv"), invoice_spec(), on_miss: :ignore)
       end
 
       assert_raise ArgumentError, fn ->
-        CSV.locate(shape("missing.csv"), invoice_spec(), within: -1)
+        CSV.locate(layout("missing.csv"), invoice_spec(), within: -1)
       end
     end
   end
@@ -164,7 +164,7 @@ defmodule Refract.CSV.LocateTest do
 
     test "a file with no table is an error" do
       assert {:error, {:header_not_found, best}} =
-               CSV.locate(shape("no_table.csv"), invoice_spec())
+               CSV.locate(layout("no_table.csv"), invoice_spec())
 
       assert best.matched == []
       assert Enum.sort(best.missing) == ["sku", "total"]
@@ -172,9 +172,9 @@ defmodule Refract.CSV.LocateTest do
 
     test "only searches the first within: lines" do
       assert {:error, {:header_not_found, _}} =
-               CSV.locate(shape("messy_invoice.csv"), invoice_spec(), within: 9)
+               CSV.locate(layout("messy_invoice.csv"), invoice_spec(), within: 9)
 
-      assert {:ok, _} = CSV.locate(shape("messy_invoice.csv"), invoice_spec(), within: 10)
+      assert {:ok, _} = CSV.locate(layout("messy_invoice.csv"), invoice_spec(), within: 10)
     end
   end
 

@@ -6,7 +6,7 @@ defmodule Refract.Grid.LookupTest do
   alias Refract.CSV
   alias Refract.Grid
 
-  @invoice Path.expand("../../fixtures/shapes/messy_invoice.csv", __DIR__)
+  @invoice Path.expand("../../fixtures/layouts/messy_invoice.csv", __DIR__)
 
   defp invoice do
     {:ok, grid} = CSV.load(@invoice)

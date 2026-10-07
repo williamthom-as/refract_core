@@ -7,6 +7,10 @@ defmodule Refract.ShapeTest do
   alias Refract.Shape
   alias Refract.Table
 
+  @shape_files Path.expand("../fixtures/shape_files", __DIR__)
+
+  defp shape_file(name), do: Path.join(@shape_files, name)
+
   @columns %{
     "vendor" => ["vendor", "supplier"],
     "sku" => ["sku", "product code", ~r/^item\s*no/i],
@@ -228,6 +232,45 @@ defmodule Refract.ShapeTest do
       assert message =~ "nope"
     end
 
+    test "no columns is a spec problem" do
+      map = put_in_map(minimal_map(), ["header", "columns"], %{})
+
+      assert {:error, {:invalid_spec, message}} = Shape.from_map(map)
+      assert message =~ "column"
+    end
+
+    test "a column with no aliases is named" do
+      map = put_in_map(minimal_map(), ["header", "columns", "id"], [])
+
+      assert {:error, {:invalid_spec, message}} = Shape.from_map(map)
+      assert message =~ "id"
+    end
+
+    test "a column with a null alias is named" do
+      map = put_in_map(minimal_map(), ["header", "columns", "id"], nil)
+
+      assert {:error, {:invalid_value, {"header.columns.id", nil}}} = Shape.from_map(map)
+    end
+
+    test "empty optional sections take the defaults" do
+      map =
+        minimal_map()
+        |> Map.merge(%{"version" => nil, "markers" => nil, "row" => nil, "stop" => nil})
+        |> put_in_map(["header", "required"], nil)
+
+      assert {:ok, shape} = Shape.from_map(map)
+      assert {:ok, expected} = Shape.from_map(minimal_map())
+      assert Comparable.of(shape) == Comparable.of(expected)
+    end
+
+    test "empty required sections are missing" do
+      assert {:error, {:missing_key, "name"}} =
+               Shape.from_map(Map.put(minimal_map(), "name", nil))
+
+      assert {:error, {:missing_key, "header.columns"}} =
+               Shape.from_map(put_in_map(minimal_map(), ["header", "columns"], nil))
+    end
+
     test "not a map" do
       assert {:error, {:not_a_map, nil}} = Shape.from_map(nil)
     end
@@ -241,6 +284,58 @@ defmodule Refract.ShapeTest do
     test "raises naming the key" do
       assert_raise ArgumentError, ~r/header\.colums/, fn ->
         Shape.from_map!(put_in_map(minimal_map(), ["header", "colums"], %{}))
+      end
+    end
+  end
+
+  describe "load/1" do
+    test "a yaml file builds the same shape as its map" do
+      assert {:ok, shape} = Shape.load(shape_file("invoice.yml"))
+      assert {:ok, expected} = Shape.from_map(invoice_map())
+      assert Comparable.of(shape) == Comparable.of(expected)
+    end
+
+    test "empty yaml sections take the defaults" do
+      assert {:ok, shape} = Shape.load(shape_file("sparse.yml"))
+      assert {:ok, expected} = Shape.from_map(minimal_map())
+      assert Comparable.of(shape) == Comparable.of(expected)
+    end
+
+    test "missing file" do
+      assert {:error, {:file_read_error, :enoent}} = Shape.load(shape_file("missing.yml"))
+    end
+
+    test "broken yaml" do
+      assert {:error, {:invalid_yaml, message}} = Shape.load(shape_file("broken.yml"))
+      assert is_binary(message)
+    end
+
+    test "an empty file has no name" do
+      assert {:error, {:missing_key, "name"}} = Shape.load(shape_file("empty.yml"))
+    end
+
+    test "a top level list is not a map" do
+      assert {:error, {:not_a_map, ["just", "a list"]}} = Shape.load(shape_file("list.yml"))
+    end
+
+    test "yes and no stay strings and a float alias is named" do
+      assert {:error, {:invalid_value, {"header.columns.rate", 1.0}}} =
+               Shape.load(shape_file("typed.yml"))
+    end
+  end
+
+  describe "load!/1" do
+    test "returns the shape" do
+      assert %Shape{name: "invoice"} = Shape.load!(shape_file("invoice.yml"))
+    end
+
+    test "raises naming the file and the reason" do
+      assert_raise ArgumentError, ~r/missing\.yml.*file_read_error/, fn ->
+        Shape.load!(shape_file("missing.yml"))
+      end
+
+      assert_raise ArgumentError, ~r/typed\.yml.*header\.columns\.rate/, fn ->
+        Shape.load!(shape_file("typed.yml"))
       end
     end
   end

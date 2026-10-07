@@ -1,0 +1,5 @@
+name: flags
+header:
+  columns:
+    active: [yes, no]
+    rate: [1.0]
