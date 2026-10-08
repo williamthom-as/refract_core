@@ -1,9 +1,14 @@
 defmodule Refract.TableTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   @moduletag timeout: 5_000
 
   alias Refract.Table
+  alias Refract.Table.Report.Column
+  alias Refract.Table.Report.Line
+  alias Refract.Table.Report.Rule
+  alias Refract.Table.Spec.Row
 
   @columns %{
     "vendor" => ["vendor", "supplier"],
@@ -181,6 +186,166 @@ defmodule Refract.TableTest do
     end
   end
 
+  describe "scan/2" do
+    @header_line ["", "Vendor", "Line", "SKU", "Item", "Cost/kg", "Kg", "Line Total"]
+    @decoy_line ["Summary", "SKU", "", "Line Total"]
+
+    defp positions(report) do
+      for {column, %{passed: true, index: index}} <- report.columns,
+          into: %{},
+          do: {column, index}
+    end
+
+    defp rule(report, name), do: Enum.find(report.rules, &(&1.rule == name))
+
+    test "one report per line, numbered from 1" do
+      assert [%Line{row: 1, check: :header}, %Line{row: 2}, %Line{row: 3}] =
+               Table.scan([@blank_line, @header_line, @raw_line], invoice_spec())
+    end
+
+    test "a header line passes and says where and how each column matched" do
+      assert [_blank, header] = Table.scan([@blank_line, @header_line], invoice_spec())
+
+      assert header.passed
+
+      assert header.columns["sku"] == %Column{passed: true, index: 3, cell: "SKU", rule: "sku"}
+
+      assert header.columns["total"] == %Column{
+               passed: true,
+               index: 7,
+               cell: "Line Total",
+               rule: "line total"
+             }
+
+      assert positions(header) == %{
+               "vendor" => 1,
+               "sku" => 3,
+               "item" => 4,
+               "cost_per_kg" => 5,
+               "kg" => 6,
+               "total" => 7
+             }
+    end
+
+    test "a passing line reports every rule it passed" do
+      assert [header] = Table.scan([@header_line], invoice_spec())
+
+      assert header.rules == [
+               %Rule{rule: :min_matches, passed: true, expected: 4, actual: 6},
+               %Rule{rule: :required, passed: true, expected: ["sku", "total"], missing: []}
+             ]
+    end
+
+    test "a failed line reports every column, matched or not" do
+      assert [line] = Table.scan([@decoy_line], invoice_spec())
+
+      refute line.passed
+      assert positions(line) == %{"sku" => 1, "total" => 3}
+
+      for column <- ["vendor", "item", "cost_per_kg", "kg"] do
+        assert line.columns[column] == %Column{passed: false}
+      end
+    end
+
+    test "a failed line says which rule failed, expected against actual" do
+      assert [line] = Table.scan([@decoy_line], invoice_spec())
+
+      assert rule(line, :min_matches) == %Rule{
+               rule: :min_matches,
+               passed: false,
+               expected: 4,
+               actual: 2
+             }
+
+      assert rule(line, :required).passed
+    end
+
+    test "a missing required column is named" do
+      spec = invoice_spec(min_matches: 2)
+
+      assert [line] = Table.scan([["SKU", "Kg", "Item"]], spec)
+
+      refute line.passed
+      assert rule(line, :min_matches).passed
+
+      assert rule(line, :required) == %Rule{
+               rule: :required,
+               passed: false,
+               expected: ["sku", "total"],
+               missing: ["total"]
+             }
+    end
+
+    test "a decoy line scores below the real header" do
+      assert [decoy, header] = Table.scan([@decoy_line, @header_line], invoice_spec())
+      assert rule(decoy, :min_matches).actual < rule(header, :min_matches).actual
+    end
+
+    test "a regex alias is the rule that matched" do
+      line = ["Supplier", "Item No", "Description", "Unit Price", "Qty", "Amount"]
+
+      assert [%{passed: true} = report] = Table.scan([line], invoice_spec())
+
+      assert %Column{passed: true, index: 1, cell: "Item No", rule: %Regex{} = regex} =
+               report.columns["sku"]
+
+      assert Regex.source(regex) == "^item\\s*no"
+
+      assert report.columns["vendor"] == %Column{
+               passed: true,
+               index: 0,
+               cell: "Supplier",
+               rule: "supplier"
+             }
+    end
+
+    test "cells that are not strings never match" do
+      assert [report] = Table.scan([[nil, 7, "SKU"]], invoice_spec())
+      assert positions(report) == %{"sku" => 2}
+    end
+
+    test "the first cell matching a column wins" do
+      assert [report] = Table.scan([["SKU", "Product Code"]], invoice_spec())
+      assert report.columns["sku"] == %Column{passed: true, index: 0, cell: "SKU", rule: "sku"}
+    end
+
+    test "no lines gives no reports" do
+      assert Table.scan([], invoice_spec()) == []
+    end
+
+    property "agrees with match_header on every line" do
+      cells =
+        member_of([
+          "Vendor",
+          "SKU",
+          "Item No",
+          "Description",
+          "Kg",
+          "Qty",
+          "Line Total",
+          "Amount",
+          "",
+          "junk",
+          nil,
+          7
+        ])
+
+      check all(
+              lines <- list_of(list_of(cells, max_length: 8), max_length: 5),
+              min_matches <- integer(0..6)
+            ) do
+        spec = invoice_spec(min_matches: min_matches)
+
+        for {line, report} <- Enum.zip(lines, Table.scan(lines, spec)) do
+          case Table.match_header(spec, line) do
+            {:ok, matched} -> assert report.passed and positions(report) == matched
+            {:error, _miss} -> refute report.passed
+          end
+        end
+      end
+    end
+  end
+
   describe "spec/1 row:" do
     test "raises on an unknown row option" do
       assert_raise ArgumentError, fn -> row_spec(match: @rules, bogus: 1) end
@@ -291,6 +456,113 @@ defmodule Refract.TableTest do
     test "function rules pass on a truthy result" do
       assert passes?(&(&1 == "apple"), "apple")
       refute passes?(&(&1 == "apple"), "pear")
+    end
+  end
+
+  describe "row report" do
+    defp row_report(row_opts, row, opts \\ []) do
+      Row.report(row_spec(row_opts).row, row, opts)
+    end
+
+    test "a passing row reports each rule and the score" do
+      report = row_report([match: @rules], @line)
+
+      assert %Line{check: :row, row: nil, passed: true} = report
+      assert report.columns["sku"] == %Column{passed: true, rule: :integer}
+      assert report.columns["total"] == %Column{passed: true, rule: :number}
+
+      assert report.rules == [%Rule{rule: :min_score, passed: true, expected: 1.0, actual: 1.0}]
+    end
+
+    test "a failing row names the column and rule that failed" do
+      report = row_report([match: @rules], @subtotal)
+
+      refute report.passed
+      assert report.columns["sku"] == %Column{passed: false, rule: :integer}
+      assert report.columns["total"] == %Column{passed: true, rule: :number}
+
+      assert report.rules == [%Rule{rule: :min_score, passed: false, expected: 1.0, actual: 0.5}]
+    end
+
+    test "min_score lets a row pass and still shows what failed" do
+      report = row_report([match: @rules, min_score: 0.5], @subtotal)
+
+      assert report.passed
+      assert report.columns["sku"].passed == false
+      assert [%Rule{rule: :min_score, passed: true, expected: 0.5, actual: 0.5}] = report.rules
+    end
+
+    test "only the columns with rules are reported" do
+      report = row_report([match: @rules], @line)
+
+      assert Map.keys(report.columns) == ["sku", "total"]
+    end
+
+    test "cells are left out by default" do
+      report = row_report([match: @rules], @subtotal)
+
+      assert Enum.all?(report.columns, fn {_column, column} -> column.cell == nil end)
+    end
+
+    test "values: true keeps the cells, passed or not" do
+      report = row_report([match: @rules], @subtotal, values: true)
+
+      assert report.columns["sku"] == %Column{passed: false, rule: :integer, cell: ""}
+      assert report.columns["total"] == %Column{passed: true, rule: :number, cell: "8"}
+    end
+
+    test "a missing cell fails its rule" do
+      report = row_report([match: @rules], Map.delete(@line, "sku"), values: true)
+
+      assert report.columns["sku"] == %Column{passed: false, rule: :integer, cell: nil}
+    end
+
+    test "no rules passes with nothing to report" do
+      assert %Line{check: :row, passed: true, columns: columns, rules: []} =
+               row_report([], @subtotal)
+
+      assert columns == %{}
+    end
+
+    test "unknown option raises" do
+      assert_raise ArgumentError, fn -> row_report([match: @rules], @line, vaules: true) end
+    end
+
+    test "values must be a boolean" do
+      assert_raise ArgumentError, ~r/values/, fn ->
+        row_report([match: @rules], @line, values: "yes")
+      end
+
+      assert_raise ArgumentError, ~r/values/, fn -> row_report([], @line, values: "yes") end
+    end
+
+    property "agrees with match_row" do
+      cells = member_of(["1", "-3", "1.5", "abc", "", nil, "2010-01-01"])
+
+      check all(
+              sku <- cells,
+              total <- cells,
+              min_score <- member_of([0.0, 0.5, 1.0])
+            ) do
+        spec = row_spec(match: @rules, min_score: min_score)
+        row = %{@line | "sku" => sku, "total" => total}
+        report = Row.report(spec.row, row)
+
+        case Table.match_row(spec, row) do
+          :ok ->
+            assert report.passed
+
+          {:error, %{score: score, failed: failed}} ->
+            refute report.passed
+            assert [%Rule{actual: ^score}] = report.rules
+
+            assert Enum.sort(failed) ==
+                     for(
+                       {column, %Column{passed: false, rule: rule}} <- report.columns,
+                       do: {column, rule}
+                     )
+        end
+      end
     end
   end
 

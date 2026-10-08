@@ -20,6 +20,9 @@ defmodule Refract.Table do
   """
 
   alias Refract.Table.Locate
+  alias Refract.Table.Report
+  alias Refract.Table.Scan
+
   alias Refract.Table.Spec
   alias Refract.Table.Spec.Header
   alias Refract.Table.Spec.Row
@@ -83,4 +86,8 @@ defmodule Refract.Table do
           {:ok, t()} | {:error, {:header_not_found, Locate.header_miss()}}
 
   def locate(raw, %Spec{} = spec, opts \\ []), do: Locate.run(raw, spec, opts)
+
+  @spec scan([Refract.raw_row()], Spec.t()) :: [Report.Line.t()]
+
+  def scan(lines, %Spec{} = spec), do: Scan.run(lines, spec)
 end

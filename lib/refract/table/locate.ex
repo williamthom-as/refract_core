@@ -3,6 +3,7 @@ defmodule Refract.Table.Locate do
 
   alias Refract.Table
   alias Refract.Table.Spec
+  alias Refract.Table.Spec.Header
 
   @type header_miss :: %{row: pos_integer(), matched: [String.t()], missing: [String.t()]} | nil
 
@@ -56,25 +57,27 @@ defmodule Refract.Table.Locate do
   end
 
   defp find_header(raw, spec, within) do
-    results =
+    scanned =
       raw
       |> Enum.take(within)
-      |> Enum.with_index(1)
-      |> Enum.map(fn {row, index} -> {index, Table.match_header(spec, row)} end)
+      |> Table.scan(spec)
 
-    case Enum.find(results, &match?({_index, {:ok, _positions}}, &1)) do
-      {index, {:ok, positions}} -> {:ok, index, positions}
-      nil -> {:error, best_miss(results)}
+    case Enum.find(scanned, & &1.passed) do
+      nil -> {:error, best_miss(scanned)}
+      report -> {:ok, report.row, Header.positions(report)}
     end
   end
 
   defp best_miss([]), do: nil
 
   defp best_miss(results) do
-    {index, {:error, miss}} =
-      Enum.max_by(results, fn {_index, {:error, miss}} -> length(miss.matched) end)
+    best = Enum.max_by(results, &map_size(Header.positions(&1)))
 
-    Map.put(miss, :row, index)
+    %{
+      row: best.row,
+      matched: Map.keys(Header.positions(best)),
+      missing: Header.required_missing(best)
+    }
   end
 
   defp header_names(positions) do

@@ -1,0 +1,14 @@
+name: invoice
+header:
+  columns:
+    sku: [sku, product code, /^item\s*no/i]
+    item: [item, description]
+    kg: [kg, qty]
+    total: [line total, amount]
+  required: [sku, total]
+  min_matches: 3
+row:
+  match:
+    sku: integer
+    total: number
+stop: [blank]

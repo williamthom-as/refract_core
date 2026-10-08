@@ -4,6 +4,7 @@ defmodule Refract.Table.Spec.Row do
   import Refract.Utils, only: [truthy?: 1]
 
   alias Refract.Parse
+  alias Refract.Table.Report
 
   defstruct [:match, :min_score]
 
@@ -67,29 +68,20 @@ defmodule Refract.Table.Spec.Row do
 
   @spec matches(t(), Refract.row()) :: :ok | {:error, miss()}
 
-  def matches(%__MODULE__{match: match}, _row) when map_size(match) == 0 do
-    :ok
-  end
+  def matches(%__MODULE__{} = row_spec, row) do
+    report = report(row_spec, row)
 
-  def matches(%__MODULE__{match: rules, min_score: min_score}, row) do
-    {passed_count, failed} =
-      Enum.reduce(rules, {0, []}, fn {column, rule}, {passed_count, failed} ->
-        value = Map.get(row, column)
-
-        if passes?(rule, value) do
-          {passed_count + 1, failed}
-        else
-          {passed_count, [{column, rule} | failed]}
-        end
-      end)
-
-    score = passed_count / map_size(rules)
-
-    if score >= min_score do
+    if report.passed do
       :ok
     else
-      {:error, %{score: score, failed: failed}}
+      [%Report.Rule{actual: score}] = report.rules
+
+      {:error, %{score: score, failed: failed(report)}}
     end
+  end
+
+  defp failed(%Report.Line{columns: columns}) do
+    for {column, %Report.Column{passed: false, rule: rule}} <- columns, do: {column, rule}
   end
 
   defp passes?(_, nil), do: false
@@ -111,4 +103,64 @@ defmodule Refract.Table.Spec.Row do
   end
 
   defp passes?(_, _), do: false
+
+  @type report_opt :: {:values, boolean()}
+
+  @type report :: Report.Line.t()
+
+  @spec report(t(), Refract.row(), [report_opt()]) :: report()
+
+  def report(row_spec, row, opts \\ [])
+
+  def report(%__MODULE__{match: rules}, _row, opts) when map_size(rules) == 0 do
+    opts = Keyword.validate!(opts, values: false)
+
+    validate_values(Keyword.fetch!(opts, :values))
+
+    Report.Line.for_row(nil, true, %{}, [])
+  end
+
+  def report(%__MODULE__{match: rules} = row_spec, row, opts) do
+    opts = Keyword.validate!(opts, values: false)
+
+    values = Keyword.fetch!(opts, :values)
+
+    validate_values(values)
+
+    column_reports =
+      Map.new(rules, fn {column, rule} ->
+        {column, column_report(row, column, rule, values)}
+      end)
+
+    rules = [min_score_rule(row_spec, column_reports)]
+
+    Report.Line.for_row(nil, Enum.all?(rules, & &1.passed), column_reports, rules)
+  end
+
+  defp column_report(row, column, rule, values) do
+    value = Map.get(row, column)
+
+    %Report.Column{
+      passed: passes?(rule, value),
+      rule: rule,
+      cell: cell(value, values)
+    }
+  end
+
+  defp validate_values(values) when is_boolean(values), do: :ok
+
+  defp validate_values(values) do
+    raise ArgumentError, "values must be true or false, got: #{inspect(values)}"
+  end
+
+  defp cell(value, true), do: value
+
+  defp cell(_value, false), do: nil
+
+  defp min_score_rule(%__MODULE__{min_score: min_score}, column_reports) do
+    passed = Enum.count(column_reports, fn {_column, column} -> column.passed end)
+    score = passed / map_size(column_reports)
+
+    Report.Rule.for_min_score(score >= min_score, min_score, score)
+  end
 end

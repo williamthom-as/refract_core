@@ -5,6 +5,8 @@ defmodule Refract.Table.Spec.Header do
 
   import Refract.String.Utils, only: [normalise: 1]
 
+  alias Refract.Table.Report
+
   @type t :: %__MODULE__{
           columns: %{String.t() => [String.t() | Regex.t()]},
           required: [String.t()],
@@ -73,45 +75,88 @@ defmodule Refract.Table.Spec.Header do
 
   @type miss :: %{matched: [String.t()], missing: [String.t()]}
 
-  @spec matches(t(), [String.t()]) :: {:ok, positions()} | {:error, miss()}
+  @type report :: Report.Line.t()
 
-  def matches(
-        %__MODULE__{columns: columns, required: required, min_matches: min_matches},
-        header
-      ) do
-    matched_columns = extract_matched_columns(columns, header)
-    matched_keys = Map.keys(matched_columns)
+  @spec matches(t(), Refract.raw_row()) :: {:ok, positions()} | {:error, miss()}
 
-    minimum_matches = length(matched_keys) >= min_matches
-    all_required = Enum.all?(required, &(&1 in matched_keys))
+  def matches(%__MODULE__{} = header, line) do
+    report = report(header, line)
+    positions = positions(report)
 
-    if minimum_matches and all_required do
-      {:ok, matched_columns}
+    if report.passed do
+      {:ok, positions}
     else
-      missing_required = Enum.filter(required, &(&1 not in matched_keys))
-
-      {:error, %{matched: matched_keys, missing: missing_required}}
+      {:error, %{matched: Map.keys(positions), missing: required_missing(report)}}
     end
   end
 
-  defp extract_matched_columns(columns, header) do
-    Enum.reduce(columns, %{}, fn {key, patterns}, acc ->
-      case Enum.find_index(header, &cell_matches?(&1, patterns)) do
-        nil -> acc
-        idx -> Map.put(acc, key, idx)
-      end
-    end)
+  @spec positions(report()) :: positions()
+
+  def positions(%Report.Line{columns: columns}) do
+    for {column, %Report.Column{passed: true, index: index}} <- columns,
+        into: %{},
+        do: {column, index}
   end
 
-  defp cell_matches?(col, patterns) when is_binary(col) do
-    normalised_col = normalise(col)
+  @spec required_missing(report()) :: [String.t()]
 
-    Enum.any?(patterns, &pattern_matches?(&1, col, normalised_col))
+  def required_missing(%Report.Line{rules: rules}) do
+    %Report.Rule{missing: missing} = Enum.find(rules, &(&1.rule == :required))
+
+    missing
   end
-
-  defp cell_matches?(_col, _patterns), do: false
 
   defp pattern_matches?(%Regex{} = pattern, col, _normalised_col), do: Regex.match?(pattern, col)
 
   defp pattern_matches?(pattern, _col, normalised_col), do: normalised_col == pattern
+
+  @spec report(t(), Refract.raw_row()) :: report()
+
+  def report(%__MODULE__{columns: columns} = header, line) do
+    column_reports =
+      Map.new(columns, fn {column, patterns} ->
+        {column, column_report(line, patterns)}
+      end)
+
+    matched = for {column, %Report.Column{passed: true}} <- column_reports, do: column
+    rules = [min_matches_rule(header, matched), required_rule(header, matched)]
+
+    passed = Enum.all?(rules, & &1.passed)
+
+    Report.Line.for_header(nil, passed, column_reports, rules)
+  end
+
+  defp column_report(line, patterns) do
+    line
+    |> Enum.with_index()
+    |> Enum.find_value(%Report.Column{}, fn {cell, index} ->
+      cell_report(cell, index, patterns)
+    end)
+  end
+
+  defp cell_report(cell, index, patterns) when is_binary(cell) do
+    normalised_cell = normalise(cell)
+
+    case Enum.find(patterns, &pattern_matches?(&1, cell, normalised_cell)) do
+      nil ->
+        nil
+
+      matched_pattern ->
+        %Report.Column{passed: true, index: index, cell: cell, rule: matched_pattern}
+    end
+  end
+
+  defp cell_report(_cell, _index, _patterns), do: nil
+
+  defp min_matches_rule(%__MODULE__{min_matches: min_matches}, matched) do
+    actual = length(matched)
+
+    Report.Rule.for_min_matches(actual >= min_matches, min_matches, actual)
+  end
+
+  defp required_rule(%__MODULE__{required: required}, matched) do
+    missing = Enum.reject(required, &(&1 in matched))
+
+    Report.Rule.for_required(missing == [], required, missing)
+  end
 end

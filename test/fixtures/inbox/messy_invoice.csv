@@ -1,0 +1,16 @@
+ACME Produce Pty Ltd,,,,,,,
+"12 Market St, Sydney",,,,,,,
+,,,,,,,
+Invoice No,INV-0042,,,,,,
+Date,2010-01-01,,,,,,
+Bill To,,,,,,,
+Lean Davis,,,,,,,
+"4 Farm Rd, Orange",,,,,,,
+,,,,,,,
+,Vendor,Line,SKU,Item,Cost/kg,Kg,Line Total
+,ABC123,1,78632478,apple,1.5,2,3
+,DEF567,2,12319082,oarnge,2.5,2,5
+,,,,Subtotal,,,8
+,DEF567,3,90834222,pear,0.5,3,1.5
+,,,,,,,
+,,,,,,Invoice Total,9.5
