@@ -150,7 +150,7 @@ defmodule Refract.Table.Spec.Header do
 
     passed = Enum.all?(rules, & &1.passed)
 
-    Report.Line.for_header(nil, passed, column_reports, rules)
+    %Report.Line{check: :header, passed: passed, columns: column_reports, rules: rules}
   end
 
   defp normalise_cell(cell) when is_binary(cell), do: normalise(cell)

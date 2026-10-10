@@ -117,7 +117,7 @@ defmodule Refract.Table.Spec.Row do
 
     validate_values(Keyword.fetch!(opts, :values))
 
-    Report.Line.for_row(nil, true, %{}, [])
+    %Report.Line{check: :row, passed: true}
   end
 
   def report(%__MODULE__{match: rules} = row_spec, row, opts) do
@@ -134,7 +134,12 @@ defmodule Refract.Table.Spec.Row do
 
     rules = [min_score_rule(row_spec, column_reports)]
 
-    Report.Line.for_row(nil, Enum.all?(rules, & &1.passed), column_reports, rules)
+    %Report.Line{
+      check: :row,
+      passed: Enum.all?(rules, & &1.passed),
+      columns: column_reports,
+      rules: rules
+    }
   end
 
   defp column_report(row, column, rule, values) do

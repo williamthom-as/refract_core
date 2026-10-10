@@ -15,14 +15,4 @@ defmodule Refract.Classify.Candidate do
         }
 
   defstruct [:shape, :status, :score, :header, rows: []]
-
-  def new(shape, status, score, header, rows) do
-    %__MODULE__{
-      shape: shape,
-      status: status,
-      score: score,
-      header: header,
-      rows: rows
-    }
-  end
 end
