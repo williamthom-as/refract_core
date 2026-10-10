@@ -1,5 +1,5 @@
-layout fixtures m2
-==================
+layout fixtures
+===============
 
 row numbers 1 based as in explain
 

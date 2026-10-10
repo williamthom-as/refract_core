@@ -1,7 +1,7 @@
 defmodule Refract.Reader do
   @moduledoc """
   behaviour for tabular readers. to use, implement `open/2` and return arrays of cells
-  `use Refract.Reader` injects `stream/2`, `locate/3` and `load/2`.
+  `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3` and `load/2`.
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
 
@@ -18,6 +18,8 @@ defmodule Refract.Reader do
 
   alias Refract.Reader.Header
 
+  alias Refract.Classify
+  alias Refract.Classify.Score
   alias Refract.Grid
   alias Refract.Table
   alias Refract.Table.Locate
@@ -38,6 +40,12 @@ defmodule Refract.Reader do
 
       def locate(source, spec, opts \\ []),
         do: Refract.Reader.locate(__MODULE__, source, spec, opts)
+
+      @spec classify(Refract.source(), [Refract.Shape.t() | module()], keyword()) ::
+              {:ok, Refract.Classify.Result.t()} | {:error, term()}
+
+      def classify(source, shapes, opts \\ []),
+        do: Refract.Reader.classify(__MODULE__, source, shapes, opts)
 
       @spec load(Refract.source(), keyword()) :: {:ok, Refract.Grid.t()} | {:error, term()}
 
@@ -78,6 +86,21 @@ defmodule Refract.Reader do
 
     case reader.open(source, open_opts) do
       {:ok, raw} -> Table.locate(raw, spec, locate_opts)
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @spec classify(reader :: module(), Refract.source(), [Refract.Shape.t() | module()], keyword()) ::
+          {:ok, Classify.Result.t()} | {:error, term()}
+
+  def classify(reader, source, shapes, opts) do
+    {classify_opts, open_opts} =
+      Keyword.split(opts, [:within, :min_score, :margin, :values, :pick])
+
+    classify_opts = Score.validate_opts!(classify_opts)
+
+    case reader.open(source, open_opts) do
+      {:ok, raw} -> {:ok, Classify.lines(raw, shapes, classify_opts)}
       {:error, _reason} = error -> error
     end
   end

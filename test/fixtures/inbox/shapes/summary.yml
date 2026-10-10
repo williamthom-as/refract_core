@@ -1,0 +1,10 @@
+name: summary
+header:
+  columns:
+    sku: [sku]
+    total: [total, line total]
+row:
+  match:
+    sku: integer
+    total: number
+stop: [blank]

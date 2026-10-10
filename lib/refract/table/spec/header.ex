@@ -1,14 +1,18 @@
 defmodule Refract.Table.Spec.Header do
   @moduledoc false
 
-  defstruct [:columns, :required, :min_matches]
+  defstruct [:columns, :required, :min_matches, :lookup, :regexes]
 
   import Refract.String.Utils, only: [normalise: 1]
+
+  alias Refract.Table.Report
 
   @type t :: %__MODULE__{
           columns: %{String.t() => [String.t() | Regex.t()]},
           required: [String.t()],
-          min_matches: non_neg_integer()
+          min_matches: non_neg_integer(),
+          lookup: %{String.t() => [String.t()]},
+          regexes: %{String.t() => [Regex.t()]}
         }
 
   def new(opts) do
@@ -39,8 +43,24 @@ defmodule Refract.Table.Spec.Header do
     %__MODULE__{
       columns: columns,
       required: required,
-      min_matches: min_matches
+      min_matches: min_matches,
+      lookup: lookup(columns),
+      regexes: regexes(columns)
     }
+  end
+
+  defp lookup(columns) do
+    for {column, patterns} <- columns, pattern when is_binary(pattern) <- patterns, reduce: %{} do
+      acc -> Map.update(acc, pattern, [column], &[column | &1])
+    end
+  end
+
+  defp regexes(columns) do
+    for {column, patterns} <- columns,
+        regexes = Enum.filter(patterns, &is_struct(&1, Regex)),
+        regexes != [],
+        into: %{},
+        do: {column, regexes}
   end
 
   defp validate_columns(columns) when map_size(columns) == 0 do
@@ -73,45 +93,122 @@ defmodule Refract.Table.Spec.Header do
 
   @type miss :: %{matched: [String.t()], missing: [String.t()]}
 
-  @spec matches(t(), [String.t()]) :: {:ok, positions()} | {:error, miss()}
+  @type report :: Report.Line.t()
 
-  def matches(
-        %__MODULE__{columns: columns, required: required, min_matches: min_matches},
-        header
-      ) do
-    matched_columns = extract_matched_columns(columns, header)
-    matched_keys = Map.keys(matched_columns)
+  @spec matches(t(), Refract.raw_row()) :: {:ok, positions()} | {:error, miss()}
 
-    minimum_matches = length(matched_keys) >= min_matches
-    all_required = Enum.all?(required, &(&1 in matched_keys))
+  def matches(%__MODULE__{} = header, line) do
+    report = report(header, line)
+    positions = positions(report)
 
-    if minimum_matches and all_required do
-      {:ok, matched_columns}
+    if report.passed do
+      {:ok, positions}
     else
-      missing_required = Enum.filter(required, &(&1 not in matched_keys))
-
-      {:error, %{matched: matched_keys, missing: missing_required}}
+      {:error, %{matched: Map.keys(positions), missing: required_missing(report)}}
     end
   end
 
-  defp extract_matched_columns(columns, header) do
-    Enum.reduce(columns, %{}, fn {key, patterns}, acc ->
-      case Enum.find_index(header, &cell_matches?(&1, patterns)) do
+  @spec positions(report()) :: positions()
+
+  def positions(%Report.Line{columns: columns}) do
+    for {column, %Report.Column{passed: true, index: index}} <- columns,
+        into: %{},
+        do: {column, index}
+  end
+
+  @spec required_missing(report()) :: [String.t()]
+
+  def required_missing(%Report.Line{rules: rules}) do
+    %Report.Rule{missing: missing} = Enum.find(rules, &(&1.rule == :required))
+
+    missing
+  end
+
+  @spec normalise_line(Refract.raw_row()) :: [String.t() | nil]
+
+  def normalise_line(line), do: Enum.map(line, &normalise_cell/1)
+
+  @spec report(t(), Refract.raw_row()) :: report()
+
+  def report(%__MODULE__{} = header, line), do: report(header, line, normalise_line(line))
+
+  @spec report(t(), Refract.raw_row(), [String.t() | nil]) :: report()
+
+  def report(%__MODULE__{columns: columns} = header, line, normalised_line) do
+    found =
+      header
+      |> plain_matches(line, normalised_line)
+      |> regex_matches(header, line)
+
+    column_reports =
+      Map.new(columns, fn {column, _patterns} ->
+        {column, Map.get(found, column, %Report.Column{})}
+      end)
+
+    matched = Map.keys(found)
+    rules = [min_matches_rule(header, matched), required_rule(header, matched)]
+
+    passed = Enum.all?(rules, & &1.passed)
+
+    %Report.Line{check: :header, passed: passed, columns: column_reports, rules: rules}
+  end
+
+  defp normalise_cell(cell) when is_binary(cell), do: normalise(cell)
+  defp normalise_cell(_cell), do: nil
+
+  defp plain_matches(%__MODULE__{lookup: lookup}, line, normalised_line) do
+    line
+    |> Enum.zip(normalised_line)
+    |> Enum.with_index()
+    |> Enum.reduce(%{}, fn {{cell, normalised}, index}, found ->
+      lookup
+      |> Map.get(normalised, [])
+      |> Enum.reduce(found, fn column, acc ->
+        Map.put_new(acc, column, %Report.Column{
+          passed: true,
+          index: index,
+          cell: cell,
+          rule: normalised
+        })
+      end)
+    end)
+  end
+
+  defp regex_matches(found, %__MODULE__{regexes: regexes}, line) do
+    regexes
+    |> Map.drop(Map.keys(found))
+    |> Enum.reduce(found, fn {column, column_regexes}, acc ->
+      case regex_column(line, column_regexes) do
         nil -> acc
-        idx -> Map.put(acc, key, idx)
+        column_report -> Map.put(acc, column, column_report)
       end
     end)
   end
 
-  defp cell_matches?(col, patterns) when is_binary(col) do
-    normalised_col = normalise(col)
-
-    Enum.any?(patterns, &pattern_matches?(&1, col, normalised_col))
+  defp regex_column(line, regexes) do
+    line
+    |> Enum.with_index()
+    |> Enum.find_value(fn {cell, index} -> regex_cell(cell, index, regexes) end)
   end
 
-  defp cell_matches?(_col, _patterns), do: false
+  defp regex_cell(cell, index, regexes) when is_binary(cell) do
+    case Enum.find(regexes, &Regex.match?(&1, cell)) do
+      nil -> nil
+      regex -> %Report.Column{passed: true, index: index, cell: cell, rule: regex}
+    end
+  end
 
-  defp pattern_matches?(%Regex{} = pattern, col, _normalised_col), do: Regex.match?(pattern, col)
+  defp regex_cell(_cell, _index, _regexes), do: nil
 
-  defp pattern_matches?(pattern, _col, normalised_col), do: normalised_col == pattern
+  defp min_matches_rule(%__MODULE__{min_matches: min_matches}, matched) do
+    actual = length(matched)
+
+    Report.Rule.for_min_matches(actual >= min_matches, min_matches, actual)
+  end
+
+  defp required_rule(%__MODULE__{required: required}, matched) do
+    missing = Enum.reject(required, &(&1 in matched))
+
+    Report.Rule.for_required(missing == [], required, missing)
+  end
 end

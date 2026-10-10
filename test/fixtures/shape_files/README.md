@@ -1,5 +1,5 @@
-shape files p1
-==============
+shape files
+===========
 
 yaml shapes for Refract.Shape.load
 

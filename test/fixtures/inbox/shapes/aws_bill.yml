@@ -1,0 +1,14 @@
+name: aws_bill
+header:
+  columns:
+    account: [lineitem/usageaccountid, usage account id]
+    service: [lineitem/productcode, service]
+    usage_start: [lineitem/usagestartdate, usage start date]
+    cost: [lineitem/unblendedcost, unblended cost]
+  required: [account, cost]
+row:
+  match:
+    account: /^\d{12}$/
+    usage_start: datetime
+    cost: number
+stop: [blank]

@@ -1,0 +1,8 @@
+name: invoice_loose
+header:
+  columns:
+    sku: [sku, product code]
+    item: [item, description]
+    total: [line total, amount]
+  required: [sku, total]
+stop: [blank]
