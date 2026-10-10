@@ -17,6 +17,7 @@ defmodule Refract.ClassifyTest do
   alias Refract.ClassifyTest.Invoice
   alias Refract.CSV
   alias Refract.Shape
+  alias Refract.Table
   alias Refract.Table.Report.Line
   alias Refract.Table.Spec.Header
 
@@ -60,7 +61,7 @@ defmodule Refract.ClassifyTest do
 
       invoice = candidate(result, "invoice")
 
-      assert %Candidate{status: :rows_failed, score: 0.0} = invoice
+      assert %Candidate{status: :rows_failed, score: +0.0} = invoice
       assert invoice.header.passed
       assert Enum.map(invoice.rows, & &1.passed) == [false, false, false]
     end
@@ -90,7 +91,7 @@ defmodule Refract.ClassifyTest do
       assert %Result{verdict: :unknown, reason: :no_header, shape: nil} = result
 
       for candidate <- result.candidates do
-        assert %Candidate{status: :no_header, score: 0.0, header: nil, rows: []} = candidate
+        assert %Candidate{status: :no_header, score: +0.0, header: nil, rows: []} = candidate
       end
     end
 
@@ -146,6 +147,18 @@ defmodule Refract.ClassifyTest do
 
       assert %Result{verdict: :match} = result
       assert %Candidate{status: :matched, score: 1.0, rows: []} = candidate(result, "invoice")
+    end
+
+    test "the header line with the best rows wins over an earlier one" do
+      result = classify("bad_table_then_good.csv", ["invoice"])
+
+      assert %Result{verdict: :match} = result
+
+      invoice = candidate(result, "invoice")
+
+      assert %Candidate{status: :matched, score: 1.0} = invoice
+      assert invoice.header.row == 5
+      assert Enum.map(invoice.rows, & &1.row) == [6, 7]
     end
 
     test "a shape with no row rules scores on the header alone" do
@@ -216,6 +229,73 @@ defmodule Refract.ClassifyTest do
 
     test "no shapes raises" do
       assert_raise ArgumentError, ~r/shape/, fn -> CSV.classify(path("invoice.csv"), []) end
+    end
+  end
+
+  describe "pick" do
+    test "best is ambiguous when two tables each fit a shape" do
+      assert %Result{verdict: :ambiguous} =
+               classify("summary_then_invoice.csv", ["invoice", "summary"])
+    end
+
+    test "first takes the first line where a shape matches" do
+      result = classify("summary_then_invoice.csv", ["invoice", "summary"], pick: :first)
+
+      assert %Result{verdict: :match, reason: nil, shape: %Shape{name: "summary"}} = result
+      assert candidate(result, "summary").header.row == 1
+    end
+
+    test "first walks past a header whose rows fail" do
+      result = classify("bad_table_then_good.csv", ["invoice"], pick: :first)
+
+      assert %Result{verdict: :match} = result
+      assert candidate(result, "invoice").header.row == 5
+    end
+
+    test "first is never ambiguous, a tie goes to the shape listed first" do
+      assert %Result{verdict: :match, shape: %Shape{name: "invoice"}} =
+               classify("invoice.csv", ["invoice", "invoice_loose"], pick: :first)
+
+      assert %Result{verdict: :match, shape: %Shape{name: "invoice_loose"}} =
+               classify("invoice.csv", ["invoice_loose", "invoice"], pick: :first)
+    end
+
+    test "first with no match gives the same result as best" do
+      shapes = [shape("invoice"), shape("aws_bill")]
+
+      for file <- ["bad_rows.csv", "stock_list.csv", "unknown.csv", "empty.csv"] do
+        assert CSV.classify(path(file), shapes, pick: :first) == CSV.classify(path(file), shapes)
+      end
+    end
+
+    test "first stops checking once a shape matches" do
+      test_pid = self()
+
+      spy =
+        Shape.new(
+          name: "spy",
+          spec:
+            Table.spec(
+              header: [columns: %{"sku" => ["sku"], "item" => ["item"]}],
+              row: [match: %{"sku" => fn value -> send(test_pid, {:checked, value}) end}]
+            )
+        )
+
+      shapes = [shape("summary"), spy]
+
+      assert {:ok, %Result{shape: %Shape{name: "summary"}}} =
+               CSV.classify(path("summary_then_invoice.csv"), shapes, pick: :first)
+
+      refute_received {:checked, _value}
+
+      assert {:ok, _result} = CSV.classify(path("summary_then_invoice.csv"), shapes)
+      assert_received {:checked, "78632478"}
+    end
+
+    test "unknown pick raises" do
+      assert_raise ArgumentError, ~r/pick/, fn ->
+        CSV.classify(path("invoice.csv"), [shape("invoice")], pick: :last)
+      end
     end
   end
 

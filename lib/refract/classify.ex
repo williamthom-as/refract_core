@@ -7,7 +7,7 @@ defmodule Refract.Classify do
   - score is header share times row pass rate; under `min_score:` is `:rows_failed`
   - row cells are left out of reports unless `values: true`
 
-      {:ok, result} = Refract.CSV.classify("bill.csv", [MyApp.Shapes.AwsBill, invoice])
+      {:ok, result} = Refract.CSV.classify("bill.csv", [MyApp.Shapes.Bill, invoice])
       Refract.Classify.lines(lines, [invoice])
   """
 

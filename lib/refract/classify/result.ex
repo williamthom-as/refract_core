@@ -1,12 +1,18 @@
 defmodule Refract.Classify.Result do
+  @moduledoc false
+
   alias Refract.Classify.Candidate
   alias Refract.Shape
 
+  @type verdict :: :match | :ambiguous | :unknown
+
+  @type reason :: :rows_failed | :no_header | :within_margin
+
   @type t :: %__MODULE__{
-          verdict: :match | :unknown | :mismatch,
-          reason: nil | :rows_failed | :header_failed,
-          shape: Shape.t(),
-          file: String.t(),
+          verdict: verdict(),
+          reason: reason() | nil,
+          shape: Shape.t() | nil,
+          file: map() | nil,
           candidates: [Candidate.t()]
         }
 

@@ -1,5 +1,5 @@
-inbox fixtures p1
-=================
+inbox fixtures
+==============
 
 mixed files for Refract.Classify with shapes in shapes/
 
@@ -7,6 +7,7 @@ shape           columns                                       rows
 invoice         sku item kg total required sku total min 3     sku integer total number
 invoice_loose   sku item total required sku total             no row rules
 aws_bill        account service usage_start cost              account 12 digits usage_start datetime cost number
+summary         sku total                                     sku integer total number
 
 file                     tests                                         expected
 invoice.csv              exact columns                                 match invoice score 1.0
@@ -21,4 +22,8 @@ header_only.csv          invoice header no rows                        match inv
 empty.csv                empty file                                    unknown no header no closest shape
 messy_invoice.csv        copy of layouts messy invoice                 match invoice header row 10
                          title block above subtotal row inside         rows 11 to 14 row 13 fails score 0.75
+bad_table_then_good.csv  invoice header over failing rows then a     match invoice header row 5
+                         blank then the same header over good rows    best line is the best score not the first
+summary_then_invoice.csv summary table then invoice table             best ambiguous both 1.0
+                                                                      first picks summary at row 1
 invoice vs invoice_loose both score 1.0 on invoice.csv                 ambiguous within margin

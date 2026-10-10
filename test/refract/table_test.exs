@@ -309,6 +309,35 @@ defmodule Refract.TableTest do
       assert report.columns["sku"] == %Column{passed: true, index: 0, cell: "SKU", rule: "sku"}
     end
 
+    test "a plain alias beats a regex alias in the same column" do
+      spec = Table.spec(header: [columns: %{"code" => [~r/^item/i, "item no"]}])
+
+      assert [report] = Table.scan([["Item Code", "Item No"]], spec)
+
+      assert report.columns["code"] == %Column{
+               passed: true,
+               index: 1,
+               cell: "Item No",
+               rule: "item no"
+             }
+    end
+
+    test "a regex alias matches when no plain alias does" do
+      spec = Table.spec(header: [columns: %{"code" => [~r/^item/i, "item no"]}])
+
+      assert [report] = Table.scan([["Item Code", "Other"]], spec)
+
+      assert %Column{passed: true, index: 0, cell: "Item Code", rule: %Regex{}} =
+               report.columns["code"]
+    end
+
+    test "a cell matched by one column can still match another column" do
+      spec = Table.spec(header: [columns: %{"sku" => ["sku"], "code" => [~r/^s/i]}])
+
+      assert [report] = Table.scan([["SKU"]], spec)
+      assert positions(report) == %{"sku" => 0, "code" => 0}
+    end
+
     test "no lines gives no reports" do
       assert Table.scan([], invoice_spec()) == []
     end
