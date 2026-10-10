@@ -94,7 +94,9 @@ defmodule Refract.Reader do
           {:ok, Classify.Result.t()} | {:error, term()}
 
   def classify(reader, source, shapes, opts) do
-    {classify_opts, open_opts} = Keyword.split(opts, [:within, :min_score, :margin, :values])
+    {classify_opts, open_opts} =
+      Keyword.split(opts, [:within, :min_score, :margin, :values, :pick])
+
     classify_opts = Score.validate_opts!(classify_opts)
 
     case reader.open(source, open_opts) do
