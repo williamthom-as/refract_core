@@ -11,6 +11,7 @@ defmodule Refract.CSV do
   use Refract.Reader
   use Refract.Writer
 
+  alias Refract.CSV.Facts
   alias Refract.CSV.Parsers
   alias Refract.CSV.Source
 
@@ -21,7 +22,8 @@ defmodule Refract.CSV do
 
   @impl true
   def open(source, opts) do
-    with {:ok, parser} <- Parsers.for_separator(Keyword.get(opts, :separator, ",")),
+    with {:ok, separator} <- separator(source, Keyword.get(opts, :separator, ",")),
+         {:ok, parser} <- Parsers.for_separator(separator),
          {:ok, content} <- Source.open(source, opts) do
       {:ok,
        content
@@ -41,6 +43,27 @@ defmodule Refract.CSV do
     |> to_cells(Keyword.get(opts, :header))
     |> parser.dump_to_stream()
   end
+
+  @spec facts(source :: Refract.source(), keyword()) :: {:ok, map()} | {:error, term()}
+
+  @impl true
+  def facts(source, opts \\ []), do: Facts.run(source, opts)
+
+  @spec classify(Refract.source(), [Refract.Shape.t() | module()], keyword()) ::
+          {:ok, Refract.Classify.Result.t()} | {:error, term()}
+
+  def classify(source, shapes, opts \\ []),
+    do:
+      Refract.Reader.classify(
+        __MODULE__,
+        source,
+        shapes,
+        Keyword.put_new(opts, :separator, :detect)
+      )
+
+  defp separator({:stream, _chunks}, :detect), do: {:ok, ","}
+  defp separator(source, :detect), do: Facts.separator(source)
+  defp separator(_source, separator), do: {:ok, separator}
 
   defp to_cells(rows, nil) do
     Stream.transform(rows, nil, fn

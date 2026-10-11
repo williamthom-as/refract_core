@@ -25,7 +25,6 @@ defmodule Refract.Reader do
 
   alias Refract.Classify
   alias Refract.Classify.Facts
-  alias Refract.Classify.Result
   alias Refract.Classify.Score
   alias Refract.Grid
   alias Refract.Table
@@ -57,6 +56,8 @@ defmodule Refract.Reader do
       @spec load(Refract.source(), keyword()) :: {:ok, Refract.Grid.t()} | {:error, term()}
 
       def load(source, opts \\ []), do: Refract.Reader.load(__MODULE__, source, opts)
+
+      defoverridable classify: 2, classify: 3
     end
   end
 
@@ -108,22 +109,11 @@ defmodule Refract.Reader do
 
     case reader.open(source, open_opts) do
       {:ok, raw} ->
-        %Result{file: facts} = result = Classify.lines(raw, shapes, classify_opts)
+        {:ok,
+         raw
+         |> Classify.lines(shapes, classify_opts)
+         |> Facts.Source.add(reader, source, open_opts)}
 
-        {:ok, size} = Refract.File.Utils.size(source)
-
-
-        new_facts = Map.merge(
-          facts,
-          %{
-            path: source,
-            size: size,
-            format: %{}
-          })
-
-        result = %{result | file: new_facts}
-
-        {:ok, result}
       {:error, _reason} = error ->
         error
     end
@@ -143,7 +133,4 @@ defmodule Refract.Reader do
       {:ok, Grid.new(rows)}
     end
   end
-
-
-
 end
