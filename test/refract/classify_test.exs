@@ -13,6 +13,7 @@ defmodule Refract.ClassifyTest do
 
   alias Refract.Classify
   alias Refract.Classify.Candidate
+  alias Refract.Classify.Facts
   alias Refract.Classify.Result
   alias Refract.ClassifyTest.Invoice
   alias Refract.CSV
@@ -100,10 +101,6 @@ defmodule Refract.ClassifyTest do
 
       assert %Result{verdict: :ambiguous, reason: :within_margin, shape: nil} = result
       assert Enum.map(result.candidates, & &1.status) == [:matched, :matched]
-    end
-
-    test "file facts are not filled in yet" do
-      assert %Result{file: nil} = classify("invoice.csv", ["invoice"])
     end
   end
 
@@ -229,6 +226,78 @@ defmodule Refract.ClassifyTest do
 
     test "no shapes raises" do
       assert_raise ArgumentError, ~r/shape/, fn -> CSV.classify(path("invoice.csv"), []) end
+    end
+  end
+
+  describe "facts" do
+    test "a file reports what refract can tell about it" do
+      result = classify("invoice.csv", ["invoice"])
+
+      assert %Facts{
+               path: path,
+               size: size,
+               lines_sampled: 4,
+               above_header: 0,
+               blank_lines: 0,
+               widths: %{4 => 4},
+               format: %{delimiter: ",", line_endings: :lf, bom: false, trailing_newline: true}
+             } = result.file
+
+      assert path == path("invoice.csv")
+      assert size == File.stat!(path("invoice.csv")).size
+    end
+
+    test "lines above the header and blank lines are counted" do
+      assert %Facts{above_header: 9, blank_lines: 3, widths: %{8 => 16}} =
+               classify("messy_invoice.csv", ["invoice"]).file
+    end
+
+    test "no header found means nothing above it" do
+      assert %Facts{above_header: nil} = classify("unknown.csv", ["invoice"]).file
+    end
+
+    test "ragged lines show in the widths" do
+      result = classify("../csv/ragged_rows.csv", ["invoice"])
+
+      assert result.file.widths == %{3 => 2, 2 => 1, 4 => 1}
+    end
+
+    test "an empty file" do
+      assert %Facts{lines_sampled: 0, blank_lines: 0, widths: widths, above_header: nil} =
+               classify("empty.csv", ["invoice"]).file
+
+      assert widths == %{}
+    end
+
+    test "the delimiter is detected when not given" do
+      result = classify("invoice_semicolon.csv", ["invoice"])
+
+      assert %Result{verdict: :match} = result
+      assert %{delimiter: ";", delimiter_source: :detected} = result.file.format
+    end
+
+    test "a stream has no path or size" do
+      assert {:ok, %Result{file: %Facts{path: nil, size: :unknown}}} =
+               CSV.classify({:stream, ["SKU,Item,Kg,Line Total\n"]}, [shape("invoice")])
+    end
+
+    test "a stream is never read ahead to detect the delimiter" do
+      lines = ["SKU;Item;Kg;Line Total\n", "78632478;apple;2;3\n"]
+
+      assert {:ok, %Result{verdict: :unknown, file: %Facts{format: format}}} =
+               CSV.classify({:stream, lines}, [shape("invoice")])
+
+      assert format == %{}
+
+      assert {:ok, %Result{verdict: :match}} =
+               CSV.classify({:stream, lines}, [shape("invoice")], separator: ";")
+    end
+
+    test "lines alone have no path, size or format" do
+      result = Classify.lines([["SKU", "Item", "Kg", "Line Total"]], [shape("invoice")])
+
+      assert %Facts{path: nil, size: nil, lines_sampled: 1, format: format} = result.file
+      assert format == %{}
     end
   end
 

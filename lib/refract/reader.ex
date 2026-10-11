@@ -16,9 +16,15 @@ defmodule Refract.Reader do
   @callback open(source :: Refract.source(), opts :: keyword()) ::
               {:ok, Enumerable.t()} | {:error, term()}
 
+  @callback facts(source :: Refract.source(), opts :: keyword()) ::
+              {:ok, map()} | {:error, term()}
+
+  @optional_callbacks facts: 2
+
   alias Refract.Reader.Header
 
   alias Refract.Classify
+  alias Refract.Classify.Facts
   alias Refract.Classify.Score
   alias Refract.Grid
   alias Refract.Table
@@ -50,6 +56,8 @@ defmodule Refract.Reader do
       @spec load(Refract.source(), keyword()) :: {:ok, Refract.Grid.t()} | {:error, term()}
 
       def load(source, opts \\ []), do: Refract.Reader.load(__MODULE__, source, opts)
+
+      defoverridable classify: 2, classify: 3
     end
   end
 
@@ -100,8 +108,14 @@ defmodule Refract.Reader do
     classify_opts = Score.validate_opts!(classify_opts)
 
     case reader.open(source, open_opts) do
-      {:ok, raw} -> {:ok, Classify.lines(raw, shapes, classify_opts)}
-      {:error, _reason} = error -> error
+      {:ok, raw} ->
+        {:ok,
+         raw
+         |> Classify.lines(shapes, classify_opts)
+         |> Facts.Source.add(reader, source, open_opts)}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 

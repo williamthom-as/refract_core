@@ -2,6 +2,7 @@ defmodule Refract.Classify.Result do
   @moduledoc false
 
   alias Refract.Classify.Candidate
+  alias Refract.Classify.Facts
   alias Refract.Shape
 
   @type verdict :: :match | :ambiguous | :unknown
@@ -12,7 +13,7 @@ defmodule Refract.Classify.Result do
           verdict: verdict(),
           reason: reason() | nil,
           shape: Shape.t() | nil,
-          file: map() | nil,
+          file: Facts.t() | nil,
           candidates: [Candidate.t()]
         }
 

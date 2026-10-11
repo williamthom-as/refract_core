@@ -2,7 +2,7 @@ nasty csv fixtures
 ==================
 
 raw means bare nimble csv 1 3 0 rfc4180 parse stream line mode
-open means settle during build in m1
+open means not decided yet
 
 file                        hazard                                  raw                              refract
 quoted_newline              newline inside quoted field             ok                               same
@@ -24,6 +24,10 @@ ragged_rows                 short row and long row                  as is       
 semicolon                   semicolon separator comma decimal       ok with semicolon parser         same via separator
 tab                         tab separator quoted tab                ok with tab parser               same via separator
 stray_quote                 quote mid field not rfc4180             raises parse error               default error with line number liberal later accepts
+mixed_line_endings          crlf and lf in one file                 ok                               facts line endings mixed crlf 2 lf 1
+cr_only                     old mac cr line endings                 one line                         facts line endings cr parsing not supported yet
+pipe                        pipe separator                          ok with pipe parser              detect finds pipe
+single_column               one column no separator to find         ok                               detect falls back to comma default
 
 reader implications
 ===================
