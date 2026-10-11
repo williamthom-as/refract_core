@@ -12,6 +12,8 @@ defmodule Refract.Classify.Score do
   alias Refract.Table.Spec.Header
   alias Refract.Table.Spec.Row
 
+  import Refract.String.Utils, only: [blank?: 1]
+
   @type pick :: :best | :first
 
   @type opt ::
@@ -61,7 +63,23 @@ defmodule Refract.Classify.Score do
       values: Keyword.fetch!(opts, :values)
     }
 
-    pick(pick, resolved_shapes, ctx)
+    %Result{candidates: candidates} = result = pick(pick, resolved_shapes, ctx)
+
+    facts = %Refract.Classify.Facts{
+      lines_sampled: length(sample),
+      blank_lines: blank_lines(sample),
+      widths: Enum.frequencies_by(sample, &length/1),
+      above_header: above_header(candidates)
+    }
+
+    %{result | file: facts}
+  end
+
+  defp above_header([%Candidate{header: %Report.Line{passed: true, row: row}} | _]), do: row - 1
+  defp above_header(_), do: nil
+
+  defp blank_lines(sample) do
+    Enum.count(sample, fn line -> Enum.all?(line, &blank?/1) end)
   end
 
   defp pick(:best, shapes, %Ctx{margin: margin} = ctx) do

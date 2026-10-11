@@ -13,9 +13,8 @@ defmodule Refract.Classify.Result do
           verdict: verdict(),
           reason: reason() | nil,
           shape: Shape.t() | nil,
-          file: map() | nil,
-          candidates: [Candidate.t()],
-          file: Facts.t() | nil
+          file: Facts.t() | nil,
+          candidates: [Candidate.t()]
         }
 
   defstruct [:verdict, :reason, :shape, :file, candidates: []]

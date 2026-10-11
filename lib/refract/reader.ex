@@ -16,9 +16,16 @@ defmodule Refract.Reader do
   @callback open(source :: Refract.source(), opts :: keyword()) ::
               {:ok, Enumerable.t()} | {:error, term()}
 
+  @callback facts(source :: Refract.source(), opts :: keyword()) ::
+              {:ok, map()} | {:error, term()}
+
+  @optional_callbacks facts: 2
+
   alias Refract.Reader.Header
 
   alias Refract.Classify
+  alias Refract.Classify.Facts
+  alias Refract.Classify.Result
   alias Refract.Classify.Score
   alias Refract.Grid
   alias Refract.Table
@@ -100,8 +107,25 @@ defmodule Refract.Reader do
     classify_opts = Score.validate_opts!(classify_opts)
 
     case reader.open(source, open_opts) do
-      {:ok, raw} -> {:ok, Classify.lines(raw, shapes, classify_opts)}
-      {:error, _reason} = error -> error
+      {:ok, raw} ->
+        %Result{file: facts} = result = Classify.lines(raw, shapes, classify_opts)
+
+        {:ok, size} = Refract.File.Utils.size(source)
+
+
+        new_facts = Map.merge(
+          facts,
+          %{
+            path: source,
+            size: size,
+            format: %{}
+          })
+
+        result = %{result | file: new_facts}
+
+        {:ok, result}
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -119,4 +143,7 @@ defmodule Refract.Reader do
       {:ok, Grid.new(rows)}
     end
   end
+
+
+
 end

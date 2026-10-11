@@ -1,4 +1,5 @@
 defmodule Refract.Classify.Facts do
+  @moduledoc false
 
   defstruct [
     :path,
@@ -11,13 +12,12 @@ defmodule Refract.Classify.Facts do
   ]
 
   @type t :: %__MODULE__{
-    path: String.t(),
-    size: non_neg_integer(),
-    lines_sampled: non_neg_integer(),
-    above_header: non_neg_integer(),
-    blank_lines: non_neg_integer(),
-    widths: %{optional(non_neg_integer()) => non_neg_integer()},
-    format: %{optional(non_neg_integer()) => %{optional(non_neg_integer()) => String.t()}}
-  }
-
+          path: String.t() | nil,
+          size: non_neg_integer() | :unknown | nil,
+          lines_sampled: non_neg_integer(),
+          above_header: non_neg_integer() | nil,
+          blank_lines: non_neg_integer(),
+          widths: %{optional(non_neg_integer()) => non_neg_integer()},
+          format: %{optional(atom()) => term()}
+        }
 end
