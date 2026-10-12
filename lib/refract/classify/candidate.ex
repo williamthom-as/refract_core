@@ -1,6 +1,7 @@
 defmodule Refract.Classify.Candidate do
   @moduledoc false
 
+  alias Refract.Classify.Marker
   alias Refract.Shape
   alias Refract.Table.Report.Line
 
@@ -11,8 +12,9 @@ defmodule Refract.Classify.Candidate do
           status: status(),
           score: float(),
           header: Line.t() | nil,
-          rows: [Line.t()]
+          rows: [Line.t()],
+          markers: [Marker.t()]
         }
 
-  defstruct [:shape, :status, :score, :header, rows: []]
+  defstruct [:shape, :status, :score, :header, rows: [], markers: []]
 end

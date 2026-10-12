@@ -3,6 +3,7 @@ defmodule Refract.Classify.Score do
 
   alias Refract.Classify.Candidate
   alias Refract.Classify.Ctx
+  alias Refract.Classify.Markers
   alias Refract.Classify.Result
   alias Refract.Classify.Verdict
   alias Refract.Shape
@@ -12,7 +13,7 @@ defmodule Refract.Classify.Score do
   alias Refract.Table.Spec.Header
   alias Refract.Table.Spec.Row
 
-  import Refract.String.Utils, only: [blank?: 1]
+  import Refract.String.Utils, only: [blank_line?: 1]
 
   @type pick :: :best | :first
 
@@ -22,6 +23,7 @@ defmodule Refract.Classify.Score do
           | {:margin, number()}
           | {:values, boolean()}
           | {:pick, pick()}
+          | {:name, String.t() | nil}
 
   @spec validate_opts!(keyword()) :: keyword()
 
@@ -32,7 +34,8 @@ defmodule Refract.Classify.Score do
         min_score: 0.5,
         margin: 0.1,
         values: false,
-        pick: :best
+        pick: :best,
+        name: nil
       )
 
     validate_within(Keyword.fetch!(opts, :within))
@@ -40,6 +43,7 @@ defmodule Refract.Classify.Score do
     validate_fraction(Keyword.fetch!(opts, :margin), :margin)
     validate_values(Keyword.fetch!(opts, :values))
     validate_pick(Keyword.fetch!(opts, :pick))
+    validate_name(Keyword.fetch!(opts, :name))
 
     opts
   end
@@ -52,7 +56,7 @@ defmodule Refract.Classify.Score do
     within = Keyword.fetch!(opts, :within)
     pick = Keyword.fetch!(opts, :pick)
 
-    resolved_shapes = resolve_shapes(shapes)
+    resolved_shapes = Shape.resolve_all(shapes)
     sample = Enum.take(raw, within)
 
     ctx = %Ctx{
@@ -60,7 +64,8 @@ defmodule Refract.Classify.Score do
       prepared: Scan.prepare(sample),
       min_score: Keyword.fetch!(opts, :min_score),
       margin: Keyword.fetch!(opts, :margin),
-      values: Keyword.fetch!(opts, :values)
+      values: Keyword.fetch!(opts, :values),
+      name: Keyword.fetch!(opts, :name)
     }
 
     %Result{candidates: candidates} = result = pick(pick, resolved_shapes, ctx)
@@ -78,13 +83,12 @@ defmodule Refract.Classify.Score do
   defp above_header([%Candidate{header: %Report.Line{passed: true, row: row}} | _]), do: row - 1
   defp above_header(_), do: nil
 
-  defp blank_lines(sample) do
-    Enum.count(sample, fn line -> Enum.all?(line, &blank?/1) end)
-  end
+  defp blank_lines(sample), do: Enum.count(sample, &blank_line?/1)
 
   defp pick(:best, shapes, %Ctx{margin: margin} = ctx) do
     shapes
     |> Enum.map(&candidate(&1, ctx))
+    |> Enum.map(&Markers.add(&1, ctx))
     |> Verdict.best(margin)
   end
 
@@ -97,7 +101,10 @@ defmodule Refract.Classify.Score do
         seen = %{ctx | sample: Enum.take(ctx.sample, row), prepared: Enum.take(ctx.prepared, row)}
         others = for shape <- shapes, shape != winner.shape, do: candidate(shape, seen)
 
-        Verdict.first(winner, others)
+        Verdict.first(
+          Markers.add(winner, ctx),
+          Enum.map(others, &Markers.add(&1, ctx))
+        )
     end
   end
 
@@ -133,7 +140,7 @@ defmodule Refract.Classify.Score do
 
   defp best_candidate([], reports, shape, ctx) do
     reports
-    |> Enum.max_by(&map_size(Header.positions(&1)))
+    |> Enum.max_by(&Header.matched_count/1)
     |> scored(shape, ctx)
   end
 
@@ -170,6 +177,7 @@ defmodule Refract.Classify.Score do
     |> Enum.with_index(1)
     |> Enum.drop(header.row)
     |> Enum.take_while(fn {line, _row} -> Table.match_stop(spec, line) == :continue end)
+    |> Enum.reject(fn {line, _row} -> blank_line?(line) end)
     |> Enum.map(fn {line, row} -> row_report(spec, line, row, positions, values) end)
   end
 
@@ -178,19 +186,11 @@ defmodule Refract.Classify.Score do
   end
 
   defp share(header, %Shape{spec: spec}) do
-    map_size(Header.positions(header)) / map_size(spec.header.columns)
+    Header.matched_count(header) / map_size(spec.header.columns)
   end
 
   defp pass_rate([]), do: 1.0
   defp pass_rate(rows), do: Enum.count(rows, & &1.passed) / length(rows)
-
-  defp resolve_shapes(shapes) when is_list(shapes) and shapes != [] do
-    Enum.map(shapes, &Shape.resolve/1)
-  end
-
-  defp resolve_shapes(shapes) do
-    raise ArgumentError, "shapes must be a list of at least one shape, got: #{inspect(shapes)}"
-  end
 
   defp validate_within(within) when is_integer(within) and within >= 0, do: :ok
 
@@ -215,5 +215,11 @@ defmodule Refract.Classify.Score do
 
   defp validate_pick(pick) do
     raise ArgumentError, "pick must be :best or :first, got: #{inspect(pick)}"
+  end
+
+  defp validate_name(name) when is_binary(name) or is_nil(name), do: :ok
+
+  defp validate_name(name) do
+    raise ArgumentError, "name must be a string or nil, got: #{inspect(name)}"
   end
 end

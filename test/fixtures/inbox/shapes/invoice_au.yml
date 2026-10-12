@@ -1,0 +1,17 @@
+name: invoice_au
+markers:
+  file: /au/i
+  content: /tax invoice/i
+header:
+  columns:
+    sku: [sku, product code]
+    item: [item, description]
+    kg: [kg, qty]
+    total: [line total, amount]
+  required: [sku, total]
+  min_matches: 3
+row:
+  match:
+    sku: integer
+    total: number
+stop: [blank]

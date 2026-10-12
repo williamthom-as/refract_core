@@ -7,7 +7,7 @@ defmodule Refract.Classify.Result do
 
   @type verdict :: :match | :ambiguous | :unknown
 
-  @type reason :: :rows_failed | :no_header | :within_margin
+  @type reason :: :rows_failed | :no_header | :within_margin | :markers | :most_columns
 
   @type t :: %__MODULE__{
           verdict: verdict(),

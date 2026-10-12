@@ -27,6 +27,7 @@ defmodule Refract.Reader do
   alias Refract.Classify.Facts
   alias Refract.Classify.Score
   alias Refract.Grid
+  alias Refract.Source
   alias Refract.Table
   alias Refract.Table.Locate
   alias Refract.Table.Spec
@@ -103,9 +104,12 @@ defmodule Refract.Reader do
 
   def classify(reader, source, shapes, opts) do
     {classify_opts, open_opts} =
-      Keyword.split(opts, [:within, :min_score, :margin, :values, :pick])
+      Keyword.split(opts, [:within, :min_score, :margin, :values, :pick, :name])
 
-    classify_opts = Score.validate_opts!(classify_opts)
+    classify_opts =
+      classify_opts
+      |> Keyword.put_new(:name, Source.name(source))
+      |> Score.validate_opts!()
 
     case reader.open(source, open_opts) do
       {:ok, raw} ->
@@ -117,6 +121,28 @@ defmodule Refract.Reader do
       {:error, _reason} = error ->
         error
     end
+  end
+
+  @type reader_entry :: module() | {module(), keyword()}
+
+  @spec for_path(Path.t(), %{String.t() => reader_entry()}) ::
+          {:ok, {module(), keyword()}} | {:error, {:unsupported, String.t()}}
+
+  def for_path(path, readers \\ %{}) do
+    extension = Source.extension(path)
+
+    %{"csv" => Refract.CSV, "tsv" => {Refract.CSV, separator: "\t"}}
+    |> Map.merge(readers)
+    |> Map.fetch(extension)
+    |> reader_entry(extension)
+  end
+
+  @spec validate_readers!(term()) :: :ok
+
+  def validate_readers!(readers) when is_map(readers), do: Enum.each(readers, &validate_reader/1)
+
+  def validate_readers!(readers) do
+    raise ArgumentError, "readers must be a map of extension to reader, got: #{inspect(readers)}"
   end
 
   @spec load(reader :: module(), Refract.source(), keyword()) ::
@@ -131,6 +157,31 @@ defmodule Refract.Reader do
          {:ok, raw} <- reader.open(source, open_opts),
          rows <- Enum.to_list(raw) do
       {:ok, Grid.new(rows)}
+    end
+  end
+
+  defp reader_entry({:ok, {reader, opts}}, _extension), do: {:ok, {reader, opts}}
+
+  defp reader_entry({:ok, reader}, _extension), do: {:ok, {reader, []}}
+
+  defp reader_entry(:error, extension), do: {:error, {:unsupported, extension}}
+
+  defp validate_reader({extension, {reader, opts}}) when is_binary(extension) and is_list(opts),
+    do: validate_reader_module(extension, reader)
+
+  defp validate_reader({extension, reader}) when is_binary(extension) and is_atom(reader),
+    do: validate_reader_module(extension, reader)
+
+  defp validate_reader({extension, reader}) do
+    raise ArgumentError,
+          "reader for #{inspect(extension)} must be a module or {module, opts}, got: #{inspect(reader)}"
+  end
+
+  defp validate_reader_module(extension, reader) do
+    if not (is_atom(reader) and Code.ensure_loaded?(reader) and
+              function_exported?(reader, :classify, 3)) do
+      raise ArgumentError,
+            "reader #{inspect(reader)} for #{inspect(extension)} must use Refract.Reader"
     end
   end
 end

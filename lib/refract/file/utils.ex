@@ -1,23 +1,7 @@
 defmodule Refract.File.Utils do
   @moduledoc false
 
-  @spec size(source :: Refract.source()) ::
-          {:ok, non_neg_integer()} | {:ok, :unknown} | {:error, term()}
-
-  def size({:string, string}) do
-    {:ok, byte_size(string)}
-  end
-
-  def size({:stream, _stream}) do
-    {:ok, :unknown}
-  end
-
-  def size(path) when is_binary(path) do
-    case File.stat(path) do
-      {:ok, %File.Stat{size: size}} -> {:ok, size}
-      {:error, reason} -> {:error, reason}
-    end
-  end
+  import Refract.Source, only: [size: 1]
 
   @spec size_check(source :: Refract.source(), max_size :: non_neg_integer(), opts :: keyword()) ::
           :ok | {:error, term()}

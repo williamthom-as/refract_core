@@ -16,7 +16,7 @@ defmodule Refract.Shape do
 
   import Refract.String.Utils, only: [blank?: 1]
 
-  @type marker :: {:file, Regex.t()} | {:title, Regex.t()}
+  @type marker :: {:file, Regex.t()} | {:content, Regex.t()}
 
   @type t :: %__MODULE__{
           name: String.t(),
@@ -70,6 +70,14 @@ defmodule Refract.Shape do
     raise ArgumentError, "cannot resolve shape from #{inspect(other)}"
   end
 
+  @spec resolve_all([t() | module()]) :: [t()]
+
+  def resolve_all(shapes) when is_list(shapes) and shapes != [], do: Enum.map(shapes, &resolve/1)
+
+  def resolve_all(shapes) do
+    raise ArgumentError, "shapes must be a list of at least one shape, got: #{inspect(shapes)}"
+  end
+
   defp shape_module?(module) do
     Code.ensure_loaded?(module) and
       __MODULE__ in (module.module_info(:attributes)
@@ -100,34 +108,6 @@ defmodule Refract.Shape do
       markers: markers
     }
   end
-
-  defp validate_name(name) when is_binary(name) do
-    if blank?(name) do
-      raise ArgumentError, "name must not be blank"
-    end
-  end
-
-  defp validate_name(_), do: raise(ArgumentError, "name must be a string")
-
-  defp validate_spec(%Spec{}), do: :ok
-
-  defp validate_spec(_), do: raise(ArgumentError, "spec must be a Refract.Table.Spec")
-
-  defp validate_version(version) when is_integer(version) and version > 0, do: :ok
-
-  defp validate_version(_), do: raise(ArgumentError, "version must be a positive integer")
-
-  @markers_validation_error "markers must be a list of {:file, Regex.t()} or {:title, Regex.t()}"
-
-  defp validate_markers(markers) when is_list(markers) do
-    Enum.each(markers, fn
-      {:file, regex} when is_struct(regex, Regex) -> :ok
-      {:title, regex} when is_struct(regex, Regex) -> :ok
-      _ -> raise ArgumentError, @markers_validation_error
-    end)
-  end
-
-  defp validate_markers(_), do: raise(ArgumentError, @markers_validation_error)
 
   @spec from_map(term()) :: {:ok, t()} | {:error, error()}
 
@@ -166,4 +146,32 @@ defmodule Refract.Shape do
   defp describe_error({reason, detail}) when is_binary(detail), do: "#{reason} #{detail}"
 
   defp describe_error({reason, _detail}), do: "#{reason}"
+
+  defp validate_name(name) when is_binary(name) do
+    if blank?(name) do
+      raise ArgumentError, "name must not be blank"
+    end
+  end
+
+  defp validate_name(_), do: raise(ArgumentError, "name must be a string")
+
+  defp validate_spec(%Spec{}), do: :ok
+
+  defp validate_spec(_), do: raise(ArgumentError, "spec must be a Refract.Table.Spec")
+
+  defp validate_version(version) when is_integer(version) and version > 0, do: :ok
+
+  defp validate_version(_), do: raise(ArgumentError, "version must be a positive integer")
+
+  @markers_validation_error "markers must be a list of {:file, Regex.t()} or {:content, Regex.t()}"
+
+  defp validate_markers(markers) when is_list(markers) do
+    Enum.each(markers, fn
+      {:file, regex} when is_struct(regex, Regex) -> :ok
+      {:content, regex} when is_struct(regex, Regex) -> :ok
+      _ -> raise ArgumentError, @markers_validation_error
+    end)
+  end
+
+  defp validate_markers(_), do: raise(ArgumentError, @markers_validation_error)
 end

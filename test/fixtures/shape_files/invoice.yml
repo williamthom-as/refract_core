@@ -2,7 +2,7 @@ name: invoice
 version: 2
 markers:
   file: /invoice/i
-  title: /tax invoice/
+  content: /tax invoice/
 header:
   columns:
     vendor: [vendor, supplier]

@@ -71,7 +71,7 @@ defmodule Refract.Table.Locate do
   defp best_miss([]), do: nil
 
   defp best_miss(results) do
-    best = Enum.max_by(results, &map_size(Header.positions(&1)))
+    best = Enum.max_by(results, &Header.matched_count/1)
 
     %{
       row: best.row,

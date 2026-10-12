@@ -155,6 +155,25 @@ defmodule Refract.TableTest do
                {:ok, %{"sku" => 0, "item" => 1, "total" => 2}}
     end
 
+    test "ignores literal wrapping quotes" do
+      row = ["\"SKU\"", "\"Line Total\"", " \"Vendor\" ", "\"Item\""]
+
+      assert Table.match_header(invoice_spec(), row) ==
+               {:ok, %{"sku" => 0, "total" => 1, "vendor" => 2, "item" => 3}}
+    end
+
+    test "regex aliases ignore surrounding whitespace and literal wrapping quotes" do
+      row = ["  Item No. ", "\"Item No\"", "Description", "Amount"]
+
+      assert Table.match_header(invoice_spec(min_matches: 3), row) ==
+               {:ok, %{"sku" => 0, "item" => 2, "total" => 3}}
+
+      row = ["\"Item No\"", "Description", "Amount"]
+
+      assert Table.match_header(invoice_spec(min_matches: 3), row) ==
+               {:ok, %{"sku" => 0, "item" => 1, "total" => 2}}
+    end
+
     test "missing a required column says what matched and what was missing" do
       row = ["Vendor", "SKU", "Item", "Cost/kg", "Kg"]
 
