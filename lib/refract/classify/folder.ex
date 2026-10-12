@@ -73,7 +73,7 @@ defmodule Refract.Classify.Folder do
   end
 
   defp classify_with({:ok, {reader, reader_opts}}, file, shapes, opts),
-    do: reader.classify(file, shapes, Keyword.merge(opts, reader_opts))
+    do: reader.classify(file, shapes, Keyword.merge(reader_opts, opts))
 
   defp classify_with({:error, _reason} = error, _file, _shapes, _opts), do: error
 end

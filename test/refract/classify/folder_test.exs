@@ -151,6 +151,14 @@ defmodule Refract.Classify.FolderTest do
       end
     end
 
+    test "classify options win over the same options on a reader", %{tmp_dir: dir} do
+      copy(dir, "bad_rows.csv")
+
+      assert dir
+             |> folder(["invoice"], min_score: 0.0, readers: [{CSV, min_score: 1.0}])
+             |> verdicts() == [{"bad_rows.csv", :match, "invoice"}]
+    end
+
     test "classify options apply to every file", %{tmp_dir: dir} do
       copy(dir, "bad_rows.csv")
 
