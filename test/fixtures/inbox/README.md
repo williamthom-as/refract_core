@@ -18,13 +18,16 @@ quoted_header.csv        header cells wrapped in literal quotes        match inv
 invoice_short.csv        kg missing 3 of 4 columns                     match invoice score 0.75
 invoice_semicolon.csv    semicolon separated                           match invoice with separator
 bad_rows.csv             invoice header over rows failing every rule   unknown rows failed closest invoice score 0.0
+                                                                       the first failing row ends the table
 stock_list.csv           shares sku and item only                      unknown no header closest invoice missing total
 aws_bill.csv             aws cost and usage columns                    match aws bill
+aws_bill_october.csv     next month, shares an account with aws_bill    match aws bill
 unknown.csv              unrelated columns                             unknown no header no closest shape
 header_only.csv          invoice header no rows                        match invoice on the header alone rows empty
 empty.csv                empty file                                    unknown no header no closest shape
 messy_invoice.csv        copy of layouts messy invoice                 match invoice header row 10
-                         title block above subtotal row inside         rows 11 to 14 row 13 fails score 0.75
+                         title block above subtotal row inside         rows 11 to 13 row 13 fails and ends the table
+                                                                       score 2 / 3
 bad_table_then_good.csv  invoice header over failing rows then a     match invoice header row 5
                          blank then the same header over good rows    best line is the best score not the first
 summary_then_invoice.csv summary table then invoice table             best ambiguous both 1.0
@@ -33,4 +36,4 @@ acme_au.csv              tax invoice title au in the name             invoice au
 acme_nz.csv              gst invoice footer after the table           invoice nz by markers file and content
 acme_q3.csv              tax invoice title neutral name                invoice au by the content marker alone
 acme_plain.csv           no title no name hint                        ambiguous invoice au and invoice nz
-invoice vs invoice_loose both score 1.0 on invoice.csv                 invoice by most columns on the same header
+invoice vs invoice_loose both score 1.0 on invoice.csv                 invoice by wider header, invoice_loose matches part of the same header

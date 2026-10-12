@@ -9,10 +9,12 @@ defmodule Refract.Classify.Verdict do
 
   def best(candidates, margin) do
     ranked = rank(candidates)
+    matched = Enum.filter(ranked, &match?(%Candidate{status: :matched}, &1))
+    {narrower, kept} = Enum.split_with(matched, &narrower?(&1, matched))
 
-    ranked
-    |> Enum.filter(&match?(%Candidate{status: :matched}, &1))
+    kept
     |> decide(ranked, margin)
+    |> wider_header(narrower, margin)
   end
 
   @spec first(Candidate.t(), [Candidate.t()]) :: Result.t()
@@ -82,6 +84,41 @@ defmodule Refract.Classify.Verdict do
   defp column_break(_most_columns, candidates) do
     %Result{verdict: :ambiguous, reason: :within_margin, candidates: candidates}
   end
+
+  defp narrower?(candidate, matched), do: Enum.any?(matched, &wider?(&1, candidate))
+
+  defp wider?(%Candidate{header: %{row: row}} = wide, %Candidate{header: %{row: row}} = narrow) do
+    narrow_cells = cells(narrow)
+    wide_cells = cells(wide)
+
+    marker_hits(wide) >= marker_hits(narrow) and MapSet.subset?(narrow_cells, wide_cells) and
+      narrow_cells != wide_cells
+  end
+
+  defp wider?(_wide, _narrow), do: false
+
+  defp cells(%Candidate{header: header}) do
+    header
+    |> Header.positions()
+    |> Map.values()
+    |> MapSet.new()
+  end
+
+  defp wider_header(
+         %Result{verdict: :match, reason: nil, shape: shape} = result,
+         narrower,
+         margin
+       ) do
+    %Candidate{score: score} = Enum.find(result.candidates, &(&1.shape == shape))
+
+    if Enum.any?(narrower, &(score - &1.score < margin)) do
+      %{result | reason: :wider_header}
+    else
+      result
+    end
+  end
+
+  defp wider_header(result, _narrower, _margin), do: result
 
   defp most(tied, count) do
     tied

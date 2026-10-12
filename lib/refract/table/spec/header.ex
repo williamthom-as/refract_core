@@ -50,9 +50,14 @@ defmodule Refract.Table.Spec.Header do
   end
 
   defp lookup(columns) do
-    for {column, patterns} <- columns, pattern when is_binary(pattern) <- patterns, reduce: %{} do
+    for {column, patterns} <- columns, pattern <- plain_aliases(column, patterns), reduce: %{} do
       acc -> Map.update(acc, pattern, [column], &[column | &1])
     end
+  end
+
+  defp plain_aliases(column, patterns) do
+    [normalise(column) | Enum.filter(patterns, &is_binary/1)]
+    |> Enum.uniq()
   end
 
   defp regexes(columns) do

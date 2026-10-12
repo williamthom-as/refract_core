@@ -26,7 +26,9 @@ defmodule Refract.CSV do
 
   @impl true
   def open(source, opts) do
-    with {:ok, separator} <- separator(source, Keyword.get(opts, :separator, :detect)),
+    opts = Keyword.validate!(opts, separator: :detect)
+
+    with {:ok, separator} <- separator(source, Keyword.fetch!(opts, :separator)),
          {:ok, parser} <- Parsers.for_separator(separator),
          {:ok, content} <- Source.open(source, opts) do
       {:ok,

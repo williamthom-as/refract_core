@@ -68,9 +68,11 @@ defmodule Refract.Reader do
   @spec stream(module(), Refract.source(), keyword()) :: {:ok, Enumerable.t()} | {:error, term()}
 
   def stream(reader, source, opts) do
-    case reader.open(source, opts) do
+    {stream_opts, open_opts} = Keyword.split(opts, [:skip])
+    skip = Keyword.get(stream_opts, :skip, 0)
+
+    case reader.open(source, open_opts) do
       {:ok, raw} ->
-        skip = Keyword.get(opts, :skip, 0)
         content = Stream.drop(raw, skip)
 
         {:ok,
@@ -93,7 +95,7 @@ defmodule Refract.Reader do
           | {:error, term()}
 
   def locate(reader, source, %Spec{} = spec, opts) do
-    {locate_opts, open_opts} = Keyword.split(opts, [:within, :on_miss])
+    {locate_opts, open_opts} = Keyword.split(opts, [:within, :on_miss, :header_row])
     locate_opts = Locate.validate_opts!(locate_opts)
 
     case reader.open(source, open_opts) do

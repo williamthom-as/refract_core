@@ -174,6 +174,13 @@ defmodule Refract.TableTest do
                {:ok, %{"sku" => 0, "item" => 1, "total" => 2}}
     end
 
+    test "a column matches its own name" do
+      row = ["Total", "SKU", "cost_per_kg"]
+
+      assert Table.match_header(invoice_spec(min_matches: 3), row) ==
+               {:ok, %{"total" => 0, "sku" => 1, "cost_per_kg" => 2}}
+    end
+
     test "missing a required column says what matched and what was missing" do
       row = ["Vendor", "SKU", "Item", "Cost/kg", "Kg"]
 

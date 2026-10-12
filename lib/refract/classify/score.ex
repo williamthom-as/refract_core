@@ -7,11 +7,10 @@ defmodule Refract.Classify.Score do
   alias Refract.Classify.Result
   alias Refract.Classify.Verdict
   alias Refract.Shape
-  alias Refract.Table
+  alias Refract.Table.Body
   alias Refract.Table.Report
   alias Refract.Table.Scan
   alias Refract.Table.Spec.Header
-  alias Refract.Table.Spec.Row
 
   import Refract.String.Utils, only: [blank_line?: 1]
 
@@ -171,18 +170,11 @@ defmodule Refract.Classify.Score do
   defp status(_score, _min_score), do: :rows_failed
 
   defp rows(header, %Shape{spec: spec}, %Ctx{sample: sample, values: values}) do
-    positions = Header.positions(header)
-
     sample
     |> Enum.with_index(1)
     |> Enum.drop(header.row)
-    |> Enum.take_while(fn {line, _row} -> Table.match_stop(spec, line) == :continue end)
-    |> Enum.reject(fn {line, _row} -> blank_line?(line) end)
-    |> Enum.map(fn {line, row} -> row_report(spec, line, row, positions, values) end)
-  end
-
-  defp row_report(spec, line, row, positions, values) do
-    %{Row.report(spec.row, Table.ordered_row(line, positions), values: values) | row: row}
+    |> Body.run(spec, Header.positions(header), values)
+    |> Enum.map(fn {_step, _row, report} -> report end)
   end
 
   defp share(header, %Shape{spec: spec}) do

@@ -155,6 +155,12 @@ defmodule Refract.CSV.StreamTest do
       assert rows!({:string, "a;b\n1;2\n"}, separator: ",") == [%{"a;b" => "1;2"}]
     end
 
+    test "unknown options raise" do
+      assert_raise ArgumentError, ~r/colour/, fn ->
+        Refract.CSV.stream(fixture("crlf.csv"), colour: :blue)
+      end
+    end
+
     test "unsupported separator is an error, not a crash" do
       assert {:error, {:unsupported_separator, "~"}} =
                Refract.CSV.stream({:string, "a~b\n1~2\n"}, separator: "~")

@@ -28,6 +28,10 @@ defmodule Refract.Grid.LookupTest do
       assert Grid.cell(load!({:string, "a;b\n1;2\n"}), "B2") == "2"
     end
 
+    test "unknown options raise" do
+      assert_raise ArgumentError, ~r/colour/, fn -> CSV.load(@invoice, colour: :blue) end
+    end
+
     test "a malformed source is a parse error" do
       assert {:error, {:parse_error, message}} = CSV.load({:string, "id,name\n1,\"john\n"})
       assert message =~ "escape character"
