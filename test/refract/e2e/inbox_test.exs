@@ -27,7 +27,12 @@ defmodule Refract.E2E.InboxTest do
   defp run(inbox, out) do
     {:ok, results} = Classify.folder(inbox, shapes())
 
-    Map.new(results, fn {path, result} -> {Path.basename(path), route(path, result, out)} end)
+    results
+    |> Task.async_stream(fn {path, result} -> {Path.basename(path), route(path, result, out)} end,
+      ordered: false,
+      timeout: :infinity
+    )
+    |> Map.new(fn {:ok, item} -> item end)
   end
 
   defp route(path, {:ok, %Result{verdict: :match} = result}, out), do: write(path, result, out)
