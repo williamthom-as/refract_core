@@ -590,6 +590,10 @@ defmodule Refract.ClassifyTest do
       assert {:error, :enoent} = CSV.classify(path("missing.csv"), [shape("invoice")])
     end
 
+    test "an unsupported source is an error" do
+      assert {:error, {:unsupported_source, :bills}} = CSV.classify(:bills, [shape("invoice")])
+    end
+
     property "never reads past within: lines" do
       check all(within <- integer(1..10)) do
         lines =

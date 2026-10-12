@@ -42,6 +42,12 @@ defmodule Refract.CSV.StreamTest do
     test "missing file fails fast, before any stream" do
       assert {:error, :enoent} = Refract.CSV.stream(fixture("does_not_exist.csv"))
     end
+
+    test "an unsupported source is an error" do
+      for source <- [~c"bills.csv", :bills, {:file, "bills.csv"}] do
+        assert {:error, {:unsupported_source, ^source}} = Refract.CSV.stream(source)
+      end
+    end
   end
 
   describe "parsing hazards" do

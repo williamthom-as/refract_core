@@ -17,8 +17,7 @@ defmodule Refract.Classify.Folder do
           {:ok, Enumerable.t(item())} | {:error, term()}
 
   def run(dir, shapes, opts) do
-    {classify_opts, folder_opts} =
-      Keyword.split(opts, [:within, :min_score, :margin, :values, :pick])
+    {folder_opts, classify_opts} = Keyword.split(opts, [:readers, :max_concurrency])
 
     folder_opts =
       Keyword.validate!(folder_opts, readers: [], max_concurrency: System.schedulers_online())

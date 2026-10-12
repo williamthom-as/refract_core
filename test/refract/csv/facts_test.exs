@@ -107,5 +107,9 @@ defmodule Refract.CSV.FactsTest do
     test "a missing file is an error" do
       assert {:error, :enoent} = CSV.facts(Path.join(@csv, "missing.csv"))
     end
+
+    test "an unsupported source is an error" do
+      assert {:error, {:unsupported_source, :bills}} = CSV.facts(:bills)
+    end
   end
 end

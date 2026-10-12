@@ -38,6 +38,26 @@ defmodule Refract.TestReaders.Crashing do
   def extensions, do: ["boom"]
 end
 
+defmodule Refract.TestReaders.Exiting do
+  use Refract.Reader
+
+  @impl Refract.Reader
+  def open(_source, _opts), do: exit(:reader_down)
+
+  @impl Refract.Reader
+  def extensions, do: ["exit"]
+end
+
+defmodule Refract.TestReaders.Throwing do
+  use Refract.Reader
+
+  @impl Refract.Reader
+  def open(_source, _opts), do: throw(:reader_bail)
+
+  @impl Refract.Reader
+  def extensions, do: ["throw"]
+end
+
 defmodule Refract.TestReaders.UpperCase do
   use Refract.Reader
 

@@ -35,6 +35,7 @@ defmodule Refract.Table.Locate do
       |> Stream.with_index(1)
       |> Stream.drop(header_row)
       |> Body.run(spec, positions, false)
+      |> Stream.take_while(&in_table?/1)
       |> Stream.flat_map(&kept(&1, on_miss))
       |> Stream.map(&Map.merge(&1, absent))
 
@@ -119,6 +120,9 @@ defmodule Refract.Table.Locate do
     |> Enum.sort_by(fn {_name, pos} -> pos end)
     |> Enum.map(fn {name, _pos} -> name end)
   end
+
+  defp in_table?({:end, _row, _report}), do: false
+  defp in_table?(_step), do: true
 
   defp kept({:hit, row, _report}, _on_miss), do: [row]
   defp kept({:miss, row, _report}, :keep), do: [row]

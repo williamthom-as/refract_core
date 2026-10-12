@@ -74,11 +74,22 @@ defmodule Refract.Table.Spec.Header do
 
   defp validate_columns(columns) do
     Enum.each(columns, fn {column, patterns} ->
-      if patterns == [] do
-        raise ArgumentError, "header column #{column} has no aliases"
-      end
+      validate_column_name(column)
+      validate_aliases(column, patterns)
     end)
   end
+
+  defp validate_column_name(column) when is_binary(column), do: :ok
+
+  defp validate_column_name(column) do
+    raise ArgumentError, "header column name must be a string, got: #{inspect(column)}"
+  end
+
+  defp validate_aliases(column, []) do
+    raise ArgumentError, "header column #{column} has no aliases"
+  end
+
+  defp validate_aliases(_column, _aliases), do: :ok
 
   defp validate_min_matches(columns, min_matches) do
     if min_matches > map_size(columns) do
