@@ -139,6 +139,22 @@ defmodule Refract.CSV.StreamTest do
              ]
     end
 
+    test "the separator is detected when not given" do
+      assert rows!(fixture("semicolon.csv")) == [
+               %{"id" => "1", "name" => "alice", "amount" => "1,5"},
+               %{"id" => "2", "name" => "bob", "amount" => "2;5"}
+             ]
+
+      assert rows!(fixture("tab.tsv")) == [
+               %{"id" => "1", "name" => "alice"},
+               %{"id" => "2", "name" => "bob\tjr"}
+             ]
+    end
+
+    test "a given separator wins over detection" do
+      assert rows!({:string, "a;b\n1;2\n"}, separator: ",") == [%{"a;b" => "1;2"}]
+    end
+
     test "unsupported separator is an error, not a crash" do
       assert {:error, {:unsupported_separator, "~"}} =
                Refract.CSV.stream({:string, "a~b\n1~2\n"}, separator: "~")

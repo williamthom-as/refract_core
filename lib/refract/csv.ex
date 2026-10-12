@@ -1,7 +1,7 @@
 defmodule Refract.CSV do
   @moduledoc """
   csv reader and writer impls, providing `stream`, `locate`, `load`, `write`, `write_chunks`
-  supports different separators like comma, semicolon, tab, pipe via `separator:`
+  detects the separator (comma, semicolon, tab, pipe) unless given via `separator:`
   will strip utf8 bom by default, and fail fast on a missing file.
 
       {:ok, rows} = Refract.CSV.stream("bills.csv", skip: 1)
@@ -19,11 +19,14 @@ defmodule Refract.CSV do
   @impl Refract.Writer
   def extension, do: "csv"
 
+  @impl Refract.Reader
+  def extensions, do: ["csv", "tsv"]
+
   @spec open(source :: Refract.source(), keyword()) :: {:ok, Enumerable.t()} | {:error, term()}
 
   @impl true
   def open(source, opts) do
-    with {:ok, separator} <- separator(source, Keyword.get(opts, :separator, ",")),
+    with {:ok, separator} <- separator(source, Keyword.get(opts, :separator, :detect)),
          {:ok, parser} <- Parsers.for_separator(separator),
          {:ok, content} <- Source.open(source, opts) do
       {:ok,
@@ -50,18 +53,6 @@ defmodule Refract.CSV do
 
   @impl true
   def facts(source, opts \\ []), do: Facts.run(source, opts)
-
-  @spec classify(Refract.source(), [Refract.Shape.t() | module()], keyword()) ::
-          {:ok, Refract.Classify.Result.t()} | {:error, term()}
-
-  def classify(source, shapes, opts \\ []),
-    do:
-      Refract.Reader.classify(
-        __MODULE__,
-        source,
-        shapes,
-        Keyword.put_new(opts, :separator, :detect)
-      )
 
   defp separator({:stream, _chunks}, :detect), do: {:ok, ","}
   defp separator(source, :detect), do: Facts.separator(source)

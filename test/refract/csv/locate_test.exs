@@ -105,6 +105,13 @@ defmodule Refract.CSV.LocateTest do
       assert Enum.to_list(table.rows) == Enum.take(@rows, 2)
     end
 
+    test "the separator is detected when not given" do
+      source = {:string, "Vendor;SKU;Item;Kg;Line Total\nABC123;78632478;apple;2;3\n"}
+
+      assert {:ok, table} = CSV.locate(source, invoice_spec())
+      assert [%{"sku" => "78632478", "total" => "3"}] = Enum.to_list(table.rows)
+    end
+
     test "a malformed line in the header search is a parse error" do
       assert {:error, {:parse_error, message}} =
                CSV.locate({:string, "SKU,Line Total\n\"unclosed\n"}, invoice_spec())

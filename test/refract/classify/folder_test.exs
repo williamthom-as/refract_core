@@ -9,13 +9,6 @@ defmodule Refract.Classify.FolderTest.CountedInvoice do
   end
 end
 
-defmodule Refract.Classify.FolderTest.CrashingReader do
-  use Refract.Reader
-
-  @impl Refract.Reader
-  def open(_source, _opts), do: raise("reader bug")
-end
-
 defmodule Refract.Classify.FolderTest do
   use ExUnit.Case, async: true
 
@@ -24,11 +17,11 @@ defmodule Refract.Classify.FolderTest do
 
   alias Refract.Classify
   alias Refract.Classify.FolderTest.CountedInvoice
-  alias Refract.Classify.FolderTest.CrashingReader
 
   alias Refract.Classify.Result
   alias Refract.CSV
   alias Refract.Shape
+  alias Refract.TestReaders
 
   @inbox Path.expand("../../fixtures/inbox", __DIR__)
 
@@ -109,14 +102,14 @@ defmodule Refract.Classify.FolderTest do
       File.write!(tsv, "SKU\tItem\tKg\tLine Total\n78632478\tapple\t2\t3\n")
 
       assert [{^tsv, {:ok, %Result{verdict: :match} = result}}] = folder(dir, ["invoice"])
-      assert %{delimiter: "\t", delimiter_source: :given} = result.file.format
+      assert %{delimiter: "\t", delimiter_source: :detected} = result.file.format
     end
 
-    test "readers: adds a reader for another extension", %{tmp_dir: dir} do
+    test "readers: adds a reader for the extensions it declares", %{tmp_dir: dir} do
       copy(dir, "invoice.csv", "invoice.txt")
       copy(dir, "invoice.csv")
 
-      assert dir |> folder(["invoice"], readers: %{"txt" => CSV}) |> verdicts() == [
+      assert dir |> folder(["invoice"], readers: [TestReaders.Txt]) |> verdicts() == [
                {"invoice.csv", :match, "invoice"},
                {"invoice.txt", :match, "invoice"}
              ]
@@ -126,9 +119,36 @@ defmodule Refract.Classify.FolderTest do
       copy(dir, "invoice_semicolon.csv")
 
       assert [{_path, {:ok, %Result{verdict: :match} = result}}] =
-               folder(dir, ["invoice"], readers: %{"csv" => {CSV, separator: ";"}})
+               folder(dir, ["invoice"], readers: [{CSV, separator: ";"}])
 
       assert %{delimiter: ";", delimiter_source: :given} = result.file.format
+    end
+
+    test "a caller reader overrides the default for its extensions", %{tmp_dir: dir} do
+      invoice = copy(dir, "invoice.csv")
+
+      assert [{^invoice, {:error, :refused}}] =
+               folder(dir, ["invoice"], readers: [TestReaders.RefusesCsv])
+    end
+
+    test "a reader extension must be lowercase with no dot", %{tmp_dir: dir} do
+      for reader <- [TestReaders.UpperCase, TestReaders.Dotted] do
+        assert_raise ArgumentError, ~r/extension/, fn ->
+          Classify.folder(dir, [shape("invoice")], readers: [reader])
+        end
+      end
+    end
+
+    test "two readers claiming one extension raise", %{tmp_dir: dir} do
+      assert_raise ArgumentError, ~r/"txt"/, fn ->
+        Classify.folder(dir, [shape("invoice")], readers: [TestReaders.Txt, TestReaders.AlsoTxt])
+      end
+    end
+
+    test "a reader that declares no extensions raises", %{tmp_dir: dir} do
+      assert_raise ArgumentError, ~r/extensions/, fn ->
+        Classify.folder(dir, [shape("invoice")], readers: [TestReaders.NoExtensions])
+      end
     end
 
     test "classify options apply to every file", %{tmp_dir: dir} do
@@ -171,7 +191,7 @@ defmodule Refract.Classify.FolderTest do
       assert [
                {^crashing, {:error, {:crashed, %RuntimeError{message: "reader bug"}}}},
                {_invoice, {:ok, %Result{verdict: :match}}}
-             ] = folder(dir, ["invoice"], readers: %{"boom" => CrashingReader})
+             ] = folder(dir, ["invoice"], readers: [TestReaders.Crashing])
     end
 
     test "dot files are skipped", %{tmp_dir: dir} do
@@ -227,8 +247,9 @@ defmodule Refract.Classify.FolderTest do
     test "bad options raise", %{tmp_dir: dir} do
       for opts <- [
             [max_concurrency: 0],
-            [readers: [csv: CSV]],
-            [readers: %{"csv" => "CSV"}],
+            [readers: %{"csv" => CSV}],
+            [readers: ["CSV"]],
+            [readers: [{CSV, :semicolon}]],
             [min_score: 2],
             [colour: :blue]
           ] do

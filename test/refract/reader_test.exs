@@ -79,6 +79,25 @@ defmodule Refract.ReaderTest do
     end
   end
 
+  describe "for_path/2" do
+    test "csv and tsv go to the csv reader whatever their case" do
+      assert Refract.Reader.for_path("bills.csv") == {:ok, {Refract.CSV, []}}
+      assert Refract.Reader.for_path("BILLS.TSV") == {:ok, {Refract.CSV, []}}
+    end
+
+    test "a caller reader adds its extensions, with its options" do
+      readers = [{Refract.TestReaders.Txt, separator: "|"}]
+
+      assert Refract.Reader.for_path("bills.txt", readers) ==
+               {:ok, {Refract.TestReaders.Txt, [separator: "|"]}}
+    end
+
+    test "anything else is unsupported" do
+      assert Refract.Reader.for_path("notes.md") == {:error, {:unsupported, "md"}}
+      assert Refract.Reader.for_path("README") == {:error, {:unsupported, ""}}
+    end
+  end
+
   describe "use Refract.Reader" do
     test "injects stream/2 delegating to Reader.stream/3" do
       raw = [["id"], ["1"]]

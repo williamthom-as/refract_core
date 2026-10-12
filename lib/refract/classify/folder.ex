@@ -10,7 +10,7 @@ defmodule Refract.Classify.Folder do
 
   @type opt ::
           Score.opt()
-          | {:readers, %{String.t() => Reader.reader_entry()}}
+          | {:readers, [Reader.reader_entry()]}
           | {:max_concurrency, pos_integer()}
 
   @spec run(Path.t(), [Shape.t() | module()], [opt()]) ::
@@ -21,7 +21,7 @@ defmodule Refract.Classify.Folder do
       Keyword.split(opts, [:within, :min_score, :margin, :values, :pick])
 
     folder_opts =
-      Keyword.validate!(folder_opts, readers: %{}, max_concurrency: System.schedulers_online())
+      Keyword.validate!(folder_opts, readers: [], max_concurrency: System.schedulers_online())
 
     readers = Keyword.fetch!(folder_opts, :readers)
     max_concurrency = Keyword.fetch!(folder_opts, :max_concurrency)

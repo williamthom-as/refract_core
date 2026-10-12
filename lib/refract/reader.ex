@@ -2,6 +2,7 @@ defmodule Refract.Reader do
   @moduledoc """
   behaviour for tabular readers. to use, implement `open/2` and return arrays of cells
   `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3` and `load/2`.
+  implement `extensions/0` to be picked by file extension in `Refract.Classify.folder/3`.
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
 
@@ -19,9 +20,12 @@ defmodule Refract.Reader do
   @callback facts(source :: Refract.source(), opts :: keyword()) ::
               {:ok, map()} | {:error, term()}
 
-  @optional_callbacks facts: 2
+  @callback extensions() :: [String.t()]
+
+  @optional_callbacks facts: 2, extensions: 0
 
   alias Refract.Reader.Header
+  alias Refract.Reader.Lookup
 
   alias Refract.Classify
   alias Refract.Classify.Facts
@@ -58,8 +62,6 @@ defmodule Refract.Reader do
       @spec load(Refract.source(), keyword()) :: {:ok, Refract.Grid.t()} | {:error, term()}
 
       def load(source, opts \\ []), do: Refract.Reader.load(__MODULE__, source, opts)
-
-      defoverridable classify: 2, classify: 3
     end
   end
 
@@ -126,27 +128,16 @@ defmodule Refract.Reader do
     end
   end
 
-  @type reader_entry :: module() | {module(), keyword()}
+  @type reader_entry :: Lookup.reader_entry()
 
-  @spec for_path(Path.t(), %{String.t() => reader_entry()}) ::
+  @spec for_path(Path.t(), [reader_entry()]) ::
           {:ok, {module(), keyword()}} | {:error, {:unsupported, String.t()}}
 
-  def for_path(path, readers \\ %{}) do
-    extension = Source.extension(path)
-
-    %{"csv" => Refract.CSV, "tsv" => {Refract.CSV, separator: "\t"}}
-    |> Map.merge(readers)
-    |> Map.fetch(extension)
-    |> reader_entry(extension)
-  end
+  def for_path(path, readers \\ []), do: Lookup.for_path(path, readers)
 
   @spec validate_readers!(term()) :: :ok
 
-  def validate_readers!(readers) when is_map(readers), do: Enum.each(readers, &validate_reader/1)
-
-  def validate_readers!(readers) do
-    raise ArgumentError, "readers must be a map of extension to reader, got: #{inspect(readers)}"
-  end
+  def validate_readers!(readers), do: Lookup.validate!(readers)
 
   @spec load(reader :: module(), Refract.source(), keyword()) ::
           {:ok, Grid.t()} | {:error, term()}
@@ -166,30 +157,5 @@ defmodule Refract.Reader do
     read.()
   rescue
     error in ParseError -> {:error, {:parse_error, Exception.message(error)}}
-  end
-
-  defp reader_entry({:ok, {reader, opts}}, _extension), do: {:ok, {reader, opts}}
-
-  defp reader_entry({:ok, reader}, _extension), do: {:ok, {reader, []}}
-
-  defp reader_entry(:error, extension), do: {:error, {:unsupported, extension}}
-
-  defp validate_reader({extension, {reader, opts}}) when is_binary(extension) and is_list(opts),
-    do: validate_reader_module(extension, reader)
-
-  defp validate_reader({extension, reader}) when is_binary(extension) and is_atom(reader),
-    do: validate_reader_module(extension, reader)
-
-  defp validate_reader({extension, reader}) do
-    raise ArgumentError,
-          "reader for #{inspect(extension)} must be a module or {module, opts}, got: #{inspect(reader)}"
-  end
-
-  defp validate_reader_module(extension, reader) do
-    if not (is_atom(reader) and Code.ensure_loaded?(reader) and
-              function_exported?(reader, :classify, 3)) do
-      raise ArgumentError,
-            "reader #{inspect(reader)} for #{inspect(extension)} must use Refract.Reader"
-    end
   end
 end
