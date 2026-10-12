@@ -69,6 +69,8 @@ defmodule Refract.Classify.Folder do
     {file, classify_with(Reader.for_path(file, readers), file, shapes, opts)}
   rescue
     error -> {file, {:error, {:crashed, error}}}
+  catch
+    kind, reason -> {file, {:error, {:crashed, {kind, reason}}}}
   end
 
   defp classify_with({:ok, {reader, reader_opts}}, file, shapes, opts),

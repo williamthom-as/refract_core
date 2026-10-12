@@ -4,6 +4,12 @@ defmodule Refract.Reader do
   `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3` and `load/2`.
   implement `extensions/0` to be picked by file extension in `Refract.Classify.folder/3`.
 
+  options go to `open/2`, bar the names refract keeps for itself, so a reader picks other names:
+  - `stream`: `skip`
+  - `locate`: `within`, `on_miss`, `header_row`
+  - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
+  - `load`: `max_bytes`
+
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
 
       defmodule MyReader do
