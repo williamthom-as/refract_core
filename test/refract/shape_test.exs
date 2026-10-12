@@ -30,7 +30,7 @@ defmodule Refract.ShapeTest do
     %{
       "name" => "invoice",
       "version" => 2,
-      "markers" => %{"file" => "/invoice/i", "title" => "/tax invoice/"},
+      "markers" => %{"file" => "/invoice/i", "content" => "/tax invoice/"},
       "header" => %{
         "columns" => %{
           "vendor" => ["vendor", "supplier"],
@@ -63,13 +63,13 @@ defmodule Refract.ShapeTest do
           name: "invoice",
           version: 2,
           spec: spec,
-          markers: [file: ~r/invoice/i, title: ~r/tax invoice/]
+          markers: [file: ~r/invoice/i, content: ~r/tax invoice/]
         )
 
       assert %Shape{name: "invoice", version: 2, spec: ^spec} = shape
 
       assert Comparable.of(shape.markers) ==
-               Comparable.of(file: ~r/invoice/i, title: ~r/tax invoice/)
+               Comparable.of(file: ~r/invoice/i, content: ~r/tax invoice/)
     end
 
     test "version defaults to 1 and markers to none" do
@@ -103,13 +103,17 @@ defmodule Refract.ShapeTest do
       end
     end
 
-    test "markers are file and title regexes" do
+    test "markers are file and content regexes" do
       assert_raise ArgumentError, ~r/marker/, fn ->
         Shape.new(name: "ids", spec: invoice_spec(), markers: [sheet: ~r/x/])
       end
 
       assert_raise ArgumentError, ~r/marker/, fn ->
         Shape.new(name: "ids", spec: invoice_spec(), markers: [file: "invoice"])
+      end
+
+      assert_raise ArgumentError, ~r/marker/, fn ->
+        Shape.new(name: "ids", spec: invoice_spec(), markers: [title: ~r/invoice/])
       end
     end
 
@@ -127,7 +131,7 @@ defmodule Refract.ShapeTest do
           name: "invoice",
           version: 2,
           spec: invoice_spec(),
-          markers: [file: ~r/invoice/i, title: ~r/tax invoice/]
+          markers: [file: ~r/invoice/i, content: ~r/tax invoice/]
         )
 
       assert {:ok, shape} = Shape.from_map(invoice_map())
@@ -218,6 +222,12 @@ defmodule Refract.ShapeTest do
       map = Map.put(minimal_map(), "markers", %{"file" => "invoice"})
 
       assert {:error, {:invalid_value, {"markers.file", "invoice"}}} = Shape.from_map(map)
+    end
+
+    test "markers only take file and content" do
+      map = Map.put(minimal_map(), "markers", %{"title" => "/invoice/i"})
+
+      assert {:error, {:unknown_key, "markers.title"}} = Shape.from_map(map)
     end
 
     test "name must be a string" do

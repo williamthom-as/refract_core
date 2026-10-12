@@ -24,6 +24,19 @@ defmodule Refract.Grid.LookupTest do
       assert is_struct(grid, Grid)
     end
 
+    test "the separator is detected when not given" do
+      assert Grid.cell(load!({:string, "a;b\n1;2\n"}), "B2") == "2"
+    end
+
+    test "unknown options raise" do
+      assert_raise ArgumentError, ~r/colour/, fn -> CSV.load(@invoice, colour: :blue) end
+    end
+
+    test "a malformed source is a parse error" do
+      assert {:error, {:parse_error, message}} = CSV.load({:string, "id,name\n1,\"john\n"})
+      assert message =~ "escape character"
+    end
+
     test "loads string sources" do
       assert {:ok, grid} = CSV.load({:string, "id,name\n1,alice\n"})
       assert Grid.cell(grid, "B2") == "alice"

@@ -47,7 +47,7 @@ defmodule Refract.Table.Spec.Stop do
     end
   end
 
-  defp stop_condition_met?(:blank, row), do: Enum.all?(row, &Utils.blank?/1)
+  defp stop_condition_met?(:blank, row), do: Utils.blank_line?(row)
 
   defp stop_condition_met?({:contains, regex}, row),
     do: Enum.any?(row, &(is_binary(&1) and Regex.match?(regex, &1)))

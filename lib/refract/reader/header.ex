@@ -1,13 +1,15 @@
 defmodule Refract.Reader.Header do
   @moduledoc false
 
+  import Refract.String.Utils, only: [header_cell: 1]
+
   @nil_col_prefix "col"
 
   @spec normalise([Refract.cell()], [String.t()]) :: [String.t()]
 
   def normalise(header, _opts \\ []) do
     normalised_header =
-      Enum.map(header, &normalise_cell/1)
+      Enum.map(header, &header_cell/1)
 
     reserved =
       Enum.reject(normalised_header, &is_nil/1)
@@ -41,28 +43,6 @@ defmodule Refract.Reader.Header do
   end
 
   # privates
-
-  defp normalise_cell(cell) when is_nil(cell), do: nil
-
-  defp normalise_cell(cell) do
-    cell
-    |> to_string()
-    |> String.trim()
-    |> handle_quoted_cell()
-    |> handle_empty_cell()
-  end
-
-  defp handle_empty_cell(""), do: nil
-
-  defp handle_empty_cell(cell), do: cell
-
-  defp handle_quoted_cell(cell) do
-    if String.starts_with?(cell, "\"") and String.ends_with?(cell, "\"") do
-      String.slice(cell, 1..-2//1)
-    else
-      cell
-    end
-  end
 
   # the complexities here come from forced renaming duplicate col headers
   # that could be existing already [a,a,a_2] becomes [a,a_3,a_2] not [a,a_2,a_3]

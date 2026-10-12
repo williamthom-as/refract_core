@@ -4,7 +4,7 @@ defmodule Refract.Classify.Facts.Source do
   alias Refract.Classify.Facts
   alias Refract.Classify.Result
 
-  import Refract.File.Utils, only: [size: 1]
+  import Refract.Source, only: [path: 1, size: 1]
 
   @spec add(Result.t(), module(), Refract.source(), keyword()) :: Result.t()
 
@@ -16,9 +16,6 @@ defmodule Refract.Classify.Facts.Source do
       | file: %Facts{facts | path: path(source), size: size, format: format(reader, source, opts)}
     }
   end
-
-  defp path(path) when is_binary(path), do: path
-  defp path(_source), do: nil
 
   defp format(_reader, {:stream, _chunks}, _opts), do: %{}
 

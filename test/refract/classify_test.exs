@@ -14,6 +14,7 @@ defmodule Refract.ClassifyTest do
   alias Refract.Classify
   alias Refract.Classify.Candidate
   alias Refract.Classify.Facts
+  alias Refract.Classify.Marker
   alias Refract.Classify.Result
   alias Refract.ClassifyTest.Invoice
   alias Refract.CSV
@@ -44,6 +45,11 @@ defmodule Refract.ClassifyTest do
       assert %Result{verdict: :match, reason: nil, shape: %Shape{name: "invoice"}} = result
     end
 
+    test "header cells wrapped in literal quotes match" do
+      assert %Result{verdict: :match, shape: %Shape{name: "invoice"}} =
+               classify("quoted_header.csv", ["invoice", "aws_bill"])
+    end
+
     test "renamed columns match through aliases" do
       assert %Result{verdict: :match, shape: %Shape{name: "invoice"}} =
                classify("invoice_renamed.csv", ["invoice", "aws_bill"])
@@ -64,7 +70,7 @@ defmodule Refract.ClassifyTest do
 
       assert %Candidate{status: :rows_failed, score: +0.0} = invoice
       assert invoice.header.passed
-      assert Enum.map(invoice.rows, & &1.passed) == [false, false, false]
+      assert [%Line{row: 2, passed: false}] = invoice.rows
     end
 
     test "a file sharing some columns names the closest shape and what it lacks" do
@@ -96,11 +102,57 @@ defmodule Refract.ClassifyTest do
       end
     end
 
-    test "two near equal shapes are ambiguous" do
-      result = classify("invoice.csv", ["invoice", "invoice_loose"])
+    test "a shape matching part of another shape's header gives way to it" do
+      result = classify("invoice.csv", ["invoice_loose", "invoice"])
 
-      assert %Result{verdict: :ambiguous, reason: :within_margin, shape: nil} = result
+      assert %Result{verdict: :match, reason: :wider_header, shape: %Shape{name: "invoice"}} =
+               result
+
       assert Enum.map(result.candidates, & &1.status) == [:matched, :matched]
+    end
+
+    test "a narrower shape with the higher score still gives way on the same header" do
+      assert %Result{verdict: :match, reason: :wider_header, shape: %Shape{name: "invoice"}} =
+               classify("invoice_short.csv", ["summary", "invoice"])
+    end
+
+    test "a wider header that wins clearly anyway needs no reason" do
+      narrow =
+        Shape.from_map!(%{
+          "name" => "narrow",
+          "header" => %{"columns" => %{"sku" => ["sku"], "total" => ["line total"]}},
+          "row" => %{"match" => %{"total" => "integer"}}
+        })
+
+      assert {:ok, %Result{verdict: :match, reason: nil, shape: %Shape{name: "invoice"}}} =
+               CSV.classify(path("invoice.csv"), [narrow, shape("invoice")])
+    end
+
+    test "a tie between overlapping shapes on the same header goes to more columns" do
+      overlapping = fn name, columns ->
+        Shape.from_map!(%{"name" => name, "header" => %{"columns" => columns}})
+      end
+
+      item = overlapping.("item", %{"sku" => ["sku"], "item" => ["item"]})
+      kg = overlapping.("kg", %{"sku" => ["sku"], "kg" => ["kg"], "total" => ["line total"]})
+
+      assert {:ok, %Result{verdict: :match, reason: :most_columns, shape: %Shape{name: "kg"}}} =
+               CSV.classify(path("invoice.csv"), [item, kg])
+    end
+
+    test "a later version adding columns wins over the earlier version" do
+      columns = %{"sku" => ["sku"], "item" => ["item"], "total" => ["line total"]}
+
+      v1 = %{"name" => "invoice", "version" => 1, "header" => %{"columns" => columns}}
+
+      v2 =
+        put_in(v1, ["header", "columns"], Map.put(columns, "kg", ["kg"]))
+        |> Map.put("version", 2)
+
+      assert {:ok, %Result{verdict: :match, reason: :wider_header, shape: shape}} =
+               CSV.classify(path("invoice.csv"), [Shape.from_map!(v1), Shape.from_map!(v2)])
+
+      assert %Shape{name: "invoice", version: 2} = shape
     end
   end
 
@@ -120,20 +172,50 @@ defmodule Refract.ClassifyTest do
       assert %Line{check: :header, row: 10, passed: true} = candidate(result, "invoice").header
     end
 
-    test "rows are checked from the header down to the stop" do
+    test "rows are checked down to the failing row that ends the table" do
       invoice = "messy_invoice.csv" |> classify(["invoice"]) |> candidate("invoice")
 
       assert Enum.map(invoice.rows, &{&1.row, &1.check, &1.passed}) == [
                {11, :row, true},
                {12, :row, true},
-               {13, :row, false},
-               {14, :row, true}
+               {13, :row, false}
              ]
     end
 
+    test "max_misses lets rows past a failing row count" do
+      lenient =
+        Path.join([@inbox, "shapes", "invoice.yml"])
+        |> YamlElixir.read_from_file!()
+        |> Map.put("max_misses", 1)
+        |> Shape.from_map!()
+
+      assert {:ok, result} = CSV.classify(path("messy_invoice.csv"), [lenient])
+
+      assert Enum.map(candidate(result, "invoice").rows, &{&1.row, &1.passed}) == [
+               {11, true},
+               {12, true},
+               {13, false},
+               {14, true}
+             ]
+    end
+
+    test "the passing rows are the rows locate yields" do
+      result = classify("messy_invoice.csv", ["invoice"])
+      invoice = candidate(result, "invoice")
+
+      assert {:ok, table} =
+               CSV.locate(path("messy_invoice.csv"), invoice.shape.spec,
+                 header_row: invoice.header.row
+               )
+
+      assert length(Enum.to_list(table.rows)) == Enum.count(invoice.rows, & &1.passed)
+    end
+
     test "score is header share times row pass rate" do
-      assert %Candidate{status: :matched, score: 0.75} =
+      assert %Candidate{status: :matched, score: score} =
                "messy_invoice.csv" |> classify(["invoice"]) |> candidate("invoice")
+
+      assert score == 2 / 3
 
       assert %Candidate{status: :matched, score: 0.75} =
                "invoice_short.csv" |> classify(["invoice"]) |> candidate("invoice")
@@ -144,6 +226,22 @@ defmodule Refract.ClassifyTest do
 
       assert %Result{verdict: :match} = result
       assert %Candidate{status: :matched, score: 1.0, rows: []} = candidate(result, "invoice")
+    end
+
+    test "blank lines inside a table are not scored as rows" do
+      shape =
+        Shape.from_map!(%{
+          "name" => "invoice",
+          "header" => %{"columns" => %{"sku" => ["sku"], "total" => ["line total"]}},
+          "row" => %{"match" => %{"sku" => "integer", "total" => "number"}}
+        })
+
+      source = {:string, "SKU,Line Total\n78632478,3\n,\n , \t\n12319082,5\n"}
+
+      assert {:ok, %Result{verdict: :match} = result} = CSV.classify(source, [shape])
+      assert %Candidate{status: :matched, score: 1.0, rows: rows} = candidate(result, "invoice")
+      assert Enum.map(rows, & &1.row) == [2, 5]
+      assert %Facts{blank_lines: 2} = result.file
     end
 
     test "the header line with the best rows wins over an earlier one" do
@@ -301,9 +399,128 @@ defmodule Refract.ClassifyTest do
     end
   end
 
+  describe "markers" do
+    @plain [
+      ["SKU", "Item", "Kg", "Line Total"],
+      ["78632478", "apple", "2", "3"]
+    ]
+
+    test "markers break a tie between equal shapes" do
+      assert %Result{verdict: :match, reason: :markers, shape: %Shape{name: "invoice_au"}} =
+               classify("acme_au.csv", ["invoice_nz", "invoice_au"])
+    end
+
+    test "a content marker inside the table counts" do
+      assert %Result{verdict: :match, reason: :markers, shape: %Shape{name: "invoice_nz"}} =
+               classify("acme_nz.csv", ["invoice_au", "invoice_nz"])
+    end
+
+    test "a content marker alone breaks a tie" do
+      assert %Result{verdict: :match, reason: :markers, shape: %Shape{name: "invoice_au"}} =
+               classify("acme_q3.csv", ["invoice_nz", "invoice_au"])
+    end
+
+    test "a marker hit beats matching more columns" do
+      loose_au =
+        Shape.from_map!(%{
+          "name" => "invoice_loose_au",
+          "markers" => %{"content" => "/tax invoice/i"},
+          "header" => %{"columns" => %{"sku" => ["sku"], "total" => ["line total"]}}
+        })
+
+      assert {:ok,
+              %Result{verdict: :match, reason: :markers, shape: %Shape{name: "invoice_loose_au"}}} =
+               CSV.classify(path("acme_au.csv"), [shape("invoice"), loose_au])
+    end
+
+    test "no marker hits and equal columns stays ambiguous" do
+      assert %Result{verdict: :ambiguous, reason: :within_margin, shape: nil} =
+               classify("acme_plain.csv", ["invoice_au", "invoice_nz"])
+    end
+
+    test "every candidate reports its markers, file then content" do
+      result = classify("acme_au.csv", ["invoice_nz", "invoice_au"])
+
+      assert [
+               %Marker{marker: :file, against: "acme_au.csv", passed: true, pattern: file},
+               %Marker{marker: :content, against: "Tax Invoice", passed: true, pattern: content}
+             ] = candidate(result, "invoice_au").markers
+
+      assert Regex.source(file) == "au"
+      assert Regex.source(content) == "tax invoice"
+
+      assert [
+               %Marker{marker: :file, against: "acme_au.csv", passed: false},
+               %Marker{marker: :content, against: nil, passed: false}
+             ] = candidate(result, "invoice_nz").markers
+    end
+
+    test "a shape without markers reports none" do
+      assert candidate(classify("invoice.csv", ["invoice"]), "invoice").markers == []
+    end
+
+    test "markers never override a clear score lead" do
+      lines = [["Tax Invoice"], ["SKU", "Item", "Line Total"], ["78632478", "apple", "3"]]
+
+      assert %Result{verdict: :match, reason: nil, shape: %Shape{name: "invoice_loose"}} =
+               Classify.lines(lines, [shape("invoice_au"), shape("invoice_loose")],
+                 name: "acme_au.csv"
+               )
+    end
+
+    test "markers never rescue rows that fail" do
+      lines = [
+        ["Tax Invoice"],
+        ["SKU", "Item", "Kg", "Line Total"],
+        ["A-100", "apple", "2", "n/a"]
+      ]
+
+      assert %Result{verdict: :unknown, reason: :rows_failed} =
+               Classify.lines(lines, [shape("invoice_au"), shape("invoice_nz")],
+                 name: "acme_au.csv"
+               )
+    end
+
+    test "lines take a name for the file marker" do
+      assert %Result{verdict: :match, reason: :markers, shape: %Shape{name: "invoice_nz"}} =
+               Classify.lines(@plain, [shape("invoice_au"), shape("invoice_nz")],
+                 name: "acme_nz_q3.csv"
+               )
+    end
+
+    test "with no name the file marker cannot pass" do
+      result = Classify.lines(@plain, [shape("invoice_au"), shape("invoice_nz")])
+
+      assert %Result{verdict: :ambiguous} = result
+
+      assert [%Marker{marker: :file, against: nil, passed: false} | _] =
+               candidate(result, "invoice_au").markers
+    end
+
+    test "a stream has no name, its content still counts" do
+      lines = ["Tax Invoice,,,\n", "SKU,Item,Kg,Line Total\n", "78632478,apple,2,3\n"]
+
+      assert {:ok, %Result{verdict: :match, reason: :markers, shape: %Shape{name: "invoice_au"}}} =
+               CSV.classify({:stream, lines}, [shape("invoice_nz"), shape("invoice_au")])
+    end
+
+    test "pick first is unchanged and still reports markers" do
+      result = classify("acme_au.csv", ["invoice_nz", "invoice_au"], pick: :first)
+
+      assert %Result{verdict: :match, reason: nil, shape: %Shape{name: "invoice_nz"}} = result
+      assert [%Marker{passed: true} | _] = candidate(result, "invoice_au").markers
+    end
+
+    test "name must be a string" do
+      assert_raise ArgumentError, ~r/name/, fn ->
+        Classify.lines(@plain, [shape("invoice_au")], name: :acme)
+      end
+    end
+  end
+
   describe "pick" do
-    test "best is ambiguous when two tables each fit a shape" do
-      assert %Result{verdict: :ambiguous} =
+    test "best is ambiguous when two tables each fit a shape, whatever their columns" do
+      assert %Result{verdict: :ambiguous, reason: :within_margin} =
                classify("summary_then_invoice.csv", ["invoice", "summary"])
     end
 
@@ -384,6 +601,23 @@ defmodule Refract.ClassifyTest do
         assert {:ok, %Result{}} =
                  CSV.classify({:stream, lines}, [shape("invoice")], within: within)
       end
+    end
+  end
+
+  describe "unknown options" do
+    test "raise" do
+      assert_raise ArgumentError, ~r/colour/, fn ->
+        CSV.classify(path("invoice.csv"), [shape("invoice")], colour: :blue)
+      end
+    end
+  end
+
+  describe "malformed files" do
+    test "a parse error is an error, not a raise" do
+      assert {:error, {:parse_error, message}} =
+               CSV.classify({:string, "SKU,Item\n78632478,\"apple\n"}, [shape("invoice")])
+
+      assert message =~ "escape character"
     end
   end
 

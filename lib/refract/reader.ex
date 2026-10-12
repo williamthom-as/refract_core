@@ -2,6 +2,7 @@ defmodule Refract.Reader do
   @moduledoc """
   behaviour for tabular readers. to use, implement `open/2` and return arrays of cells
   `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3` and `load/2`.
+  implement `extensions/0` to be picked by file extension in `Refract.Classify.folder/3`.
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
 
@@ -19,14 +20,19 @@ defmodule Refract.Reader do
   @callback facts(source :: Refract.source(), opts :: keyword()) ::
               {:ok, map()} | {:error, term()}
 
-  @optional_callbacks facts: 2
+  @callback extensions() :: [String.t()]
+
+  @optional_callbacks facts: 2, extensions: 0
 
   alias Refract.Reader.Header
+  alias Refract.Reader.Lookup
 
   alias Refract.Classify
   alias Refract.Classify.Facts
   alias Refract.Classify.Score
+  alias Refract.Errors.ParseError
   alias Refract.Grid
+  alias Refract.Source
   alias Refract.Table
   alias Refract.Table.Locate
   alias Refract.Table.Spec
@@ -56,17 +62,17 @@ defmodule Refract.Reader do
       @spec load(Refract.source(), keyword()) :: {:ok, Refract.Grid.t()} | {:error, term()}
 
       def load(source, opts \\ []), do: Refract.Reader.load(__MODULE__, source, opts)
-
-      defoverridable classify: 2, classify: 3
     end
   end
 
   @spec stream(module(), Refract.source(), keyword()) :: {:ok, Enumerable.t()} | {:error, term()}
 
   def stream(reader, source, opts) do
-    case reader.open(source, opts) do
+    {stream_opts, open_opts} = Keyword.split(opts, [:skip])
+    skip = Keyword.get(stream_opts, :skip, 0)
+
+    case reader.open(source, open_opts) do
       {:ok, raw} ->
-        skip = Keyword.get(opts, :skip, 0)
         content = Stream.drop(raw, skip)
 
         {:ok,
@@ -89,11 +95,11 @@ defmodule Refract.Reader do
           | {:error, term()}
 
   def locate(reader, source, %Spec{} = spec, opts) do
-    {locate_opts, open_opts} = Keyword.split(opts, [:within, :on_miss])
+    {locate_opts, open_opts} = Keyword.split(opts, [:within, :on_miss, :header_row])
     locate_opts = Locate.validate_opts!(locate_opts)
 
     case reader.open(source, open_opts) do
-      {:ok, raw} -> Table.locate(raw, spec, locate_opts)
+      {:ok, raw} -> parse_error_as_error(fn -> Table.locate(raw, spec, locate_opts) end)
       {:error, _reason} = error -> error
     end
   end
@@ -103,21 +109,37 @@ defmodule Refract.Reader do
 
   def classify(reader, source, shapes, opts) do
     {classify_opts, open_opts} =
-      Keyword.split(opts, [:within, :min_score, :margin, :values, :pick])
+      Keyword.split(opts, [:within, :min_score, :margin, :values, :pick, :name])
 
-    classify_opts = Score.validate_opts!(classify_opts)
+    classify_opts =
+      classify_opts
+      |> Keyword.put_new(:name, Source.name(source))
+      |> Score.validate_opts!()
 
     case reader.open(source, open_opts) do
       {:ok, raw} ->
-        {:ok,
-         raw
-         |> Classify.lines(shapes, classify_opts)
-         |> Facts.Source.add(reader, source, open_opts)}
+        parse_error_as_error(fn ->
+          {:ok,
+           raw
+           |> Classify.lines(shapes, classify_opts)
+           |> Facts.Source.add(reader, source, open_opts)}
+        end)
 
       {:error, _reason} = error ->
         error
     end
   end
+
+  @type reader_entry :: Lookup.reader_entry()
+
+  @spec for_path(Path.t(), [reader_entry()]) ::
+          {:ok, {module(), keyword()}} | {:error, {:unsupported, String.t()}}
+
+  def for_path(path, readers \\ []), do: Lookup.for_path(path, readers)
+
+  @spec validate_readers!(term()) :: :ok
+
+  def validate_readers!(readers), do: Lookup.validate!(readers)
 
   @spec load(reader :: module(), Refract.source(), keyword()) ::
           {:ok, Grid.t()} | {:error, term()}
@@ -128,9 +150,14 @@ defmodule Refract.Reader do
     max_bytes = Keyword.get(grid_opts, :max_bytes, 10_000_000)
 
     with :ok <- size_check(source, max_bytes, streams_allowed: false),
-         {:ok, raw} <- reader.open(source, open_opts),
-         rows <- Enum.to_list(raw) do
-      {:ok, Grid.new(rows)}
+         {:ok, raw} <- reader.open(source, open_opts) do
+      parse_error_as_error(fn -> {:ok, Grid.new(Enum.to_list(raw))} end)
     end
+  end
+
+  defp parse_error_as_error(read) do
+    read.()
+  rescue
+    error in ParseError -> {:error, {:parse_error, Exception.message(error)}}
   end
 end

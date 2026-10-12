@@ -9,7 +9,7 @@ defmodule Refract.Shape.FromMap do
   @keys ~w(name version markers header row stop max_misses)
   @header_keys ~w(columns required min_matches)
   @row_keys ~w(match min_score)
-  @marker_keys ~w(file title)
+  @marker_keys ~w(file content)
 
   @spec run(term()) :: {:ok, Shape.t()} | {:error, Shape.error()}
 
@@ -63,7 +63,7 @@ defmodule Refract.Shape.FromMap do
   defp markers([_key | rest], markers, parsed), do: markers(rest, markers, parsed)
 
   defp marker_key("file"), do: :file
-  defp marker_key("title"), do: :title
+  defp marker_key("content"), do: :content
 
   defp spec(map) do
     with {:ok, header} <- header(Map.get(map, "header")),

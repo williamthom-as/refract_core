@@ -1,0 +1,12 @@
+defmodule Refract.Classify.Marker do
+  @moduledoc false
+
+  defstruct [:marker, :pattern, :against, passed: false]
+
+  @type t :: %__MODULE__{
+          marker: :file | :content,
+          pattern: Regex.t(),
+          against: String.t() | nil,
+          passed: boolean()
+        }
+end

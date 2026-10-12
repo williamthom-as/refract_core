@@ -1,0 +1,17 @@
+name: invoice_nz
+markers:
+  file: /nz/i
+  content: /gst invoice/i
+header:
+  columns:
+    sku: [sku, product code]
+    item: [item, description]
+    kg: [kg, qty]
+    total: [line total, amount]
+  required: [sku, total]
+  min_matches: 3
+row:
+  match:
+    sku: integer
+    total: number
+stop: [blank]

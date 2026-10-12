@@ -3,7 +3,7 @@ defmodule Refract.Table.Spec.Header do
 
   defstruct [:columns, :required, :min_matches, :lookup, :regexes]
 
-  import Refract.String.Utils, only: [normalise: 1]
+  import Refract.String.Utils, only: [header_cell: 1, normalise: 1]
 
   alias Refract.Table.Report
 
@@ -50,9 +50,14 @@ defmodule Refract.Table.Spec.Header do
   end
 
   defp lookup(columns) do
-    for {column, patterns} <- columns, pattern when is_binary(pattern) <- patterns, reduce: %{} do
+    for {column, patterns} <- columns, pattern <- plain_aliases(column, patterns), reduce: %{} do
       acc -> Map.update(acc, pattern, [column], &[column | &1])
     end
+  end
+
+  defp plain_aliases(column, patterns) do
+    [normalise(column) | Enum.filter(patterns, &is_binary/1)]
+    |> Enum.uniq()
   end
 
   defp regexes(columns) do
@@ -116,6 +121,10 @@ defmodule Refract.Table.Spec.Header do
         do: {column, index}
   end
 
+  @spec matched_count(report()) :: non_neg_integer()
+
+  def matched_count(report), do: map_size(positions(report))
+
   @spec required_missing(report()) :: [String.t()]
 
   def required_missing(%Report.Line{rules: rules}) do
@@ -153,7 +162,7 @@ defmodule Refract.Table.Spec.Header do
     %Report.Line{check: :header, passed: passed, columns: column_reports, rules: rules}
   end
 
-  defp normalise_cell(cell) when is_binary(cell), do: normalise(cell)
+  defp normalise_cell(cell) when is_binary(cell), do: cell |> header_cell() |> normalise()
   defp normalise_cell(_cell), do: nil
 
   defp plain_matches(%__MODULE__{lookup: lookup}, line, normalised_line) do
@@ -192,13 +201,19 @@ defmodule Refract.Table.Spec.Header do
   end
 
   defp regex_cell(cell, index, regexes) when is_binary(cell) do
-    case Enum.find(regexes, &Regex.match?(&1, cell)) do
+    regex_cell(cell, header_cell(cell), index, regexes)
+  end
+
+  defp regex_cell(_cell, _index, _regexes), do: nil
+
+  defp regex_cell(_cell, nil, _index, _regexes), do: nil
+
+  defp regex_cell(cell, cleaned, index, regexes) do
+    case Enum.find(regexes, &Regex.match?(&1, cleaned)) do
       nil -> nil
       regex -> %Report.Column{passed: true, index: index, cell: cell, rule: regex}
     end
   end
-
-  defp regex_cell(_cell, _index, _regexes), do: nil
 
   defp min_matches_rule(%__MODULE__{min_matches: min_matches}, matched) do
     actual = length(matched)
