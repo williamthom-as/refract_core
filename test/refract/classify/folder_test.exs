@@ -9,6 +9,13 @@ defmodule Refract.Classify.FolderTest.CountedInvoice do
   end
 end
 
+defmodule Refract.Classify.FolderTest.CrashingReader do
+  use Refract.Reader
+
+  @impl Refract.Reader
+  def open(_source, _opts), do: raise("reader bug")
+end
+
 defmodule Refract.Classify.FolderTest do
   use ExUnit.Case, async: true
 
@@ -17,6 +24,8 @@ defmodule Refract.Classify.FolderTest do
 
   alias Refract.Classify
   alias Refract.Classify.FolderTest.CountedInvoice
+  alias Refract.Classify.FolderTest.CrashingReader
+
   alias Refract.Classify.Result
   alias Refract.CSV
   alias Refract.Shape
@@ -141,6 +150,48 @@ defmodule Refract.Classify.FolderTest do
       assert [{^broken, {:error, _reason}}, {_invoice, {:ok, %Result{verdict: :match}}}] = results
     after
       File.chmod(Path.join(dir, "broken.csv"), 0o644)
+    end
+
+    test "a malformed file is a parse error, the rest carry on", %{tmp_dir: dir} do
+      malformed = Path.join(dir, "a_malformed.csv")
+      File.write!(malformed, "SKU,Item\n78632478,\"apple\n")
+      copy(dir, "invoice.csv")
+
+      assert [
+               {^malformed, {:error, {:parse_error, _message}}},
+               {_invoice, {:ok, %Result{verdict: :match}}}
+             ] = folder(dir, ["invoice"])
+    end
+
+    test "a reader that raises is reported as crashed, the rest carry on", %{tmp_dir: dir} do
+      crashing = Path.join(dir, "a_crash.boom")
+      File.write!(crashing, "anything")
+      copy(dir, "invoice.csv")
+
+      assert [
+               {^crashing, {:error, {:crashed, %RuntimeError{message: "reader bug"}}}},
+               {_invoice, {:ok, %Result{verdict: :match}}}
+             ] = folder(dir, ["invoice"], readers: %{"boom" => CrashingReader})
+    end
+
+    test "dot files are skipped", %{tmp_dir: dir} do
+      copy(dir, "invoice.csv")
+      copy(dir, "invoice.csv", ".hidden.csv")
+      copy(dir, "invoice.csv", ".~lock.invoice.csv#")
+      File.write!(Path.join(dir, ".DS_Store"), "junk")
+
+      assert [{invoice, {:ok, %Result{verdict: :match}}}] = folder(dir, ["invoice"])
+      assert Path.basename(invoice) == "invoice.csv"
+    end
+
+    test "office lock files and windows thumbnail and folder files are skipped", %{tmp_dir: dir} do
+      copy(dir, "invoice.csv")
+      copy(dir, "invoice.csv", "~$invoice.csv")
+      File.write!(Path.join(dir, "Thumbs.db"), "junk")
+      File.write!(Path.join(dir, "desktop.ini"), "junk")
+
+      assert [{invoice, {:ok, %Result{verdict: :match}}}] = folder(dir, ["invoice"])
+      assert Path.basename(invoice) == "invoice.csv"
     end
 
     test "subdirectories are not entered", %{tmp_dir: dir} do

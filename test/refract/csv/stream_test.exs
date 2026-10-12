@@ -83,6 +83,20 @@ defmodule Refract.CSV.StreamTest do
       assert Enum.map(rows, & &1["name"]) == ["Zoë", "山田", "Émile", "Noe\u0308l"]
     end
 
+    test "an unclosed quote raises Refract.Errors.ParseError while streaming" do
+      assert {:ok, rows} = Refract.CSV.stream({:string, "id,name\n1,\"john\n"})
+
+      assert_raise Refract.Errors.ParseError, ~r/escape character/, fn -> Enum.to_list(rows) end
+    end
+
+    test "an unclosed quote raises Refract.Errors.ParseError when the stream is zipped" do
+      assert {:ok, rows} = Refract.CSV.stream({:string, "id,name\n1,john\n2,\"lean\n"})
+
+      assert_raise Refract.Errors.ParseError, fn ->
+        rows |> Stream.zip(1..10) |> Enum.to_list()
+      end
+    end
+
     test "header only gives an empty stream" do
       assert rows!(fixture("header_only.csv")) == []
     end

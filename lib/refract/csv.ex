@@ -14,6 +14,7 @@ defmodule Refract.CSV do
   alias Refract.CSV.Facts
   alias Refract.CSV.Parsers
   alias Refract.CSV.Source
+  alias Refract.Reader.ParseErrors
 
   @impl Refract.Writer
   def extension, do: "csv"
@@ -29,7 +30,8 @@ defmodule Refract.CSV do
        content
        |> parser.to_line_stream()
        |> Source.strip_bom()
-       |> parser.parse_stream(skip_headers: false)}
+       |> parser.parse_stream(skip_headers: false)
+       |> ParseErrors.translate(NimbleCSV.ParseError)}
     end
   end
 

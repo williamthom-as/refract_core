@@ -26,6 +26,7 @@ defmodule Refract.Reader do
   alias Refract.Classify
   alias Refract.Classify.Facts
   alias Refract.Classify.Score
+  alias Refract.Errors.ParseError
   alias Refract.Grid
   alias Refract.Source
   alias Refract.Table
@@ -94,7 +95,7 @@ defmodule Refract.Reader do
     locate_opts = Locate.validate_opts!(locate_opts)
 
     case reader.open(source, open_opts) do
-      {:ok, raw} -> Table.locate(raw, spec, locate_opts)
+      {:ok, raw} -> parse_error_as_error(fn -> Table.locate(raw, spec, locate_opts) end)
       {:error, _reason} = error -> error
     end
   end
@@ -113,10 +114,12 @@ defmodule Refract.Reader do
 
     case reader.open(source, open_opts) do
       {:ok, raw} ->
-        {:ok,
-         raw
-         |> Classify.lines(shapes, classify_opts)
-         |> Facts.Source.add(reader, source, open_opts)}
+        parse_error_as_error(fn ->
+          {:ok,
+           raw
+           |> Classify.lines(shapes, classify_opts)
+           |> Facts.Source.add(reader, source, open_opts)}
+        end)
 
       {:error, _reason} = error ->
         error
@@ -154,10 +157,15 @@ defmodule Refract.Reader do
     max_bytes = Keyword.get(grid_opts, :max_bytes, 10_000_000)
 
     with :ok <- size_check(source, max_bytes, streams_allowed: false),
-         {:ok, raw} <- reader.open(source, open_opts),
-         rows <- Enum.to_list(raw) do
-      {:ok, Grid.new(rows)}
+         {:ok, raw} <- reader.open(source, open_opts) do
+      parse_error_as_error(fn -> {:ok, Grid.new(Enum.to_list(raw))} end)
     end
+  end
+
+  defp parse_error_as_error(read) do
+    read.()
+  rescue
+    error in ParseError -> {:error, {:parse_error, Exception.message(error)}}
   end
 
   defp reader_entry({:ok, {reader, opts}}, _extension), do: {:ok, {reader, opts}}

@@ -32,12 +32,10 @@ defmodule Refract.Classify.Folder do
 
     resolved_shapes = Shape.resolve_all(shapes)
 
-    with {:ok, names} <- File.ls(dir) do
+    with {:ok, file_names} <- File.ls(dir) do
       {:ok,
-       names
-       |> Enum.sort()
-       |> Enum.map(&Path.join(dir, &1))
-       |> Enum.filter(&File.regular?/1)
+       dir
+       |> extract_candidate_files(file_names)
        |> Task.async_stream(&classify_file(&1, readers, resolved_shapes, classify_opts),
          max_concurrency: max_concurrency,
          ordered: true,
@@ -56,8 +54,22 @@ defmodule Refract.Classify.Folder do
           "max_concurrency must be a positive integer, got: #{inspect(max_concurrency)}"
   end
 
+  defp extract_candidate_files(dir, file_names) do
+    file_names
+    |> Enum.reject(&junk?/1)
+    |> Enum.sort()
+    |> Enum.map(&Path.join(dir, &1))
+    |> Enum.filter(&File.regular?/1)
+  end
+
+  defp junk?("." <> _name), do: true
+  defp junk?("~$" <> _name), do: true
+  defp junk?(name), do: String.downcase(name) in ["thumbs.db", "desktop.ini"]
+
   defp classify_file(file, readers, shapes, opts) do
     {file, classify_with(Reader.for_path(file, readers), file, shapes, opts)}
+  rescue
+    error -> {file, {:error, {:crashed, error}}}
   end
 
   defp classify_with({:ok, {reader, reader_opts}}, file, shapes, opts),

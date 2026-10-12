@@ -24,6 +24,11 @@ defmodule Refract.Grid.LookupTest do
       assert is_struct(grid, Grid)
     end
 
+    test "a malformed source is a parse error" do
+      assert {:error, {:parse_error, message}} = CSV.load({:string, "id,name\n1,\"john\n"})
+      assert message =~ "escape character"
+    end
+
     test "loads string sources" do
       assert {:ok, grid} = CSV.load({:string, "id,name\n1,alice\n"})
       assert Grid.cell(grid, "B2") == "alice"

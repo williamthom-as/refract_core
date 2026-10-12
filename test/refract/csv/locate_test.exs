@@ -105,6 +105,20 @@ defmodule Refract.CSV.LocateTest do
       assert Enum.to_list(table.rows) == Enum.take(@rows, 2)
     end
 
+    test "a malformed line in the header search is a parse error" do
+      assert {:error, {:parse_error, message}} =
+               CSV.locate({:string, "SKU,Line Total\n\"unclosed\n"}, invoice_spec())
+
+      assert message =~ "escape character"
+    end
+
+    test "a malformed line under the header raises Refract.Errors.ParseError while streaming rows" do
+      source = {:string, "Vendor,SKU,Item,Kg,Line Total\nABC123,78632478,apple,2,3\n\"bad\n"}
+
+      assert {:ok, table} = CSV.locate(source, invoice_spec(), within: 2)
+      assert_raise Refract.Errors.ParseError, fn -> Enum.to_list(table.rows) end
+    end
+
     test "open errors pass through" do
       assert {:error, :enoent} = CSV.locate(layout("missing.csv"), invoice_spec())
     end

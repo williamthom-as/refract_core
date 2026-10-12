@@ -545,6 +545,15 @@ defmodule Refract.ClassifyTest do
     end
   end
 
+  describe "malformed files" do
+    test "a parse error is an error, not a raise" do
+      assert {:error, {:parse_error, message}} =
+               CSV.classify({:string, "SKU,Item\n78632478,\"apple\n"}, [shape("invoice")])
+
+      assert message =~ "escape character"
+    end
+  end
+
   describe "lines/3" do
     @lines [["SKU", "Item", "Kg", "Line Total"], ["78632478", "apple", "2", "3"]]
 
