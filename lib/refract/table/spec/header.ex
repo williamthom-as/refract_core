@@ -85,11 +85,11 @@ defmodule Refract.Table.Spec.Header do
     raise ArgumentError, "header column name must be a string, got: #{inspect(column)}"
   end
 
+  defp validate_aliases(_column, [_ | _]), do: :ok
+
   defp validate_aliases(column, []) do
     raise ArgumentError, "header column #{column} has no aliases"
   end
-
-  defp validate_aliases(_column, _aliases), do: :ok
 
   defp validate_min_matches(columns, min_matches) do
     if min_matches > map_size(columns) do
