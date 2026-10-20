@@ -89,6 +89,12 @@ defmodule Refract.TableTest do
       end
     end
 
+    test "a column name that is not a string raises" do
+      assert_raise ArgumentError, ~r/:sku/, fn ->
+        Table.spec(header: [columns: %{sku: ["sku"]}])
+      end
+    end
+
     test "min_matches defaults to every column" do
       spec = Table.spec(header: [columns: %{"id" => ["id"], "name" => ["name"]}])
 

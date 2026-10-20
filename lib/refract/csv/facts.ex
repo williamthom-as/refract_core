@@ -79,6 +79,8 @@ defmodule Refract.CSV.Facts do
     end
   end
 
+  defp head(source), do: {:error, {:unsupported_source, source}}
+
   defp read_bytes(:eof), do: ""
   defp read_bytes(bytes), do: bytes
 

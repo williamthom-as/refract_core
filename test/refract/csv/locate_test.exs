@@ -118,6 +118,10 @@ defmodule Refract.CSV.LocateTest do
       end
     end
 
+    test "an unsupported source is an error" do
+      assert {:error, {:unsupported_source, :bills}} = CSV.locate(:bills, invoice_spec())
+    end
+
     test "a malformed line in the header search is a parse error" do
       assert {:error, {:parse_error, message}} =
                CSV.locate({:string, "SKU,Line Total\n\"unclosed\n"}, invoice_spec())
@@ -284,6 +288,23 @@ defmodule Refract.CSV.LocateTest do
 
       assert {:ok, table} = CSV.locate({:stream, lines}, spec, within: 2)
       assert Enum.take(table.rows, 1) == [%{"sku" => "1", "total" => "2"}]
+    end
+
+    test "reads no further than the row that ends the table" do
+      lines =
+        Stream.concat(
+          ["sku,total\n", "1,2\n", "total,3\n"],
+          Stream.map(["boom\n"], fn _ -> raise "read past the end of the table" end)
+        )
+
+      spec =
+        Table.spec(
+          header: [columns: %{"sku" => ["sku"], "total" => ["total"]}],
+          row: [match: %{"sku" => :integer}]
+        )
+
+      assert {:ok, table} = CSV.locate({:stream, lines}, spec, within: 2)
+      assert Enum.to_list(table.rows) == [%{"sku" => "1", "total" => "2"}]
     end
   end
 end

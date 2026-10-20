@@ -202,6 +202,28 @@ defmodule Refract.Classify.FolderTest do
              ] = folder(dir, ["invoice"], readers: [TestReaders.Crashing])
     end
 
+    test "a reader that exits is reported as crashed, the rest carry on", %{tmp_dir: dir} do
+      exiting = Path.join(dir, "a_down.exit")
+      File.write!(exiting, "anything")
+      copy(dir, "invoice.csv")
+
+      assert [
+               {^exiting, {:error, {:crashed, {:exit, :reader_down}}}},
+               {_invoice, {:ok, %Result{verdict: :match}}}
+             ] = folder(dir, ["invoice"], readers: [TestReaders.Exiting])
+    end
+
+    test "a reader that throws is reported as crashed, the rest carry on", %{tmp_dir: dir} do
+      throwing = Path.join(dir, "a_bail.throw")
+      File.write!(throwing, "anything")
+      copy(dir, "invoice.csv")
+
+      assert [
+               {^throwing, {:error, {:crashed, {:throw, :reader_bail}}}},
+               {_invoice, {:ok, %Result{verdict: :match}}}
+             ] = folder(dir, ["invoice"], readers: [TestReaders.Throwing])
+    end
+
     test "dot files are skipped", %{tmp_dir: dir} do
       copy(dir, "invoice.csv")
       copy(dir, "invoice.csv", ".hidden.csv")

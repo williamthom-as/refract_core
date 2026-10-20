@@ -33,4 +33,6 @@ defmodule Refract.Source do
       {:error, reason} -> {:error, reason}
     end
   end
+
+  def size(source), do: {:error, {:unsupported_source, source}}
 end

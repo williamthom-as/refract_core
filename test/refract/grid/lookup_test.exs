@@ -51,6 +51,12 @@ defmodule Refract.Grid.LookupTest do
       assert {:error, :enoent} = CSV.load("missing.csv")
     end
 
+    test "an unsupported source is an error" do
+      for source <- [~c"bills.csv", :bills, {:file, "bills.csv"}] do
+        assert {:error, {:unsupported_source, ^source}} = CSV.load(source)
+      end
+    end
+
     test "refuses a file over max_bytes" do
       assert {:error, {:max_bytes_exceeded, 100}} = CSV.load(@invoice, max_bytes: 100)
       assert {:ok, _grid} = CSV.load(@invoice, max_bytes: 1_000)
