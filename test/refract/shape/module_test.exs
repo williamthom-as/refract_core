@@ -60,6 +60,7 @@ defmodule Refract.Shape.ModuleTest do
       assert {:error, _} = Table.match_row(spec, %{"sku" => "1", "total" => "3"})
     end
 
+    @tag :yaml
     test "a module can load its shape from yaml" do
       expected = Shape.load!(Path.join(@shape_files, "invoice.yml"))
 

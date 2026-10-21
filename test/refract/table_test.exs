@@ -461,6 +461,12 @@ defmodule Refract.TableTest do
       refute passes?(:integer, "")
     end
 
+    test ":integer takes a whole decimal, as xlsx numbers arrive" do
+      assert passes?(:integer, Decimal.new("1"))
+      assert passes?(:integer, Decimal.new("1.0"))
+      refute passes?(:integer, Decimal.new("1.5"))
+    end
+
     test ":number" do
       assert passes?(:number, "3")
       assert passes?(:number, "1.5")
@@ -512,6 +518,21 @@ defmodule Refract.TableTest do
     test "regex rules match the cell" do
       assert passes?(~r/^[A-Z]{3}\d{3}$/, "ABC123")
       refute passes?(~r/^[A-Z]{3}\d{3}$/, "Subtotal")
+    end
+
+    test "regex rules match a native cell by its text" do
+      assert passes?(~r/^\d{12}$/, Decimal.new("123456789012"))
+      assert passes?(~r/^\d{12}$/, Decimal.new("1.23456789012E+11"))
+      assert passes?(~r/^\d{12}$/, 123_456_789_012)
+      assert passes?(~r/^-?\d+\.\d+$/, 1.5)
+      assert passes?(~r/^2026-10-21$/, ~D[2026-10-21])
+      assert passes?(~r/^2026-10-21T09:30:00$/, ~N[2026-10-21 09:30:00])
+      assert passes?(~r/^09:30:00$/, ~T[09:30:00])
+      assert passes?(~r/^true$/, true)
+    end
+
+    test "regex rules still fail a blank cell" do
+      refute passes?(~r/.*/, nil)
     end
 
     test "function rules pass on a truthy result" do

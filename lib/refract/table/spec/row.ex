@@ -1,6 +1,7 @@
 defmodule Refract.Table.Spec.Row do
   @moduledoc false
 
+  import Refract.String.Utils, only: [text: 1]
   import Refract.Utils, only: [truthy?: 1]
 
   alias Refract.Parse
@@ -94,9 +95,7 @@ defmodule Refract.Table.Spec.Row do
 
   defp passes?(:datetime, value), do: match?({:ok, _}, Parse.datetime(value, offset: :utc))
 
-  defp passes?(%Regex{} = regex, value) when is_binary(value) do
-    Regex.match?(regex, value)
-  end
+  defp passes?(%Regex{} = regex, value), do: Regex.match?(regex, text(value))
 
   defp passes?(fun, value) when is_function(fun, 1) do
     truthy?(fun.(value))

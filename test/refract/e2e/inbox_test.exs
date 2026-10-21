@@ -2,6 +2,7 @@ defmodule Refract.E2E.InboxTest do
   use ExUnit.Case, async: true
 
   @moduletag :e2e
+  @moduletag :yaml
   @moduletag :tmp_dir
   @moduletag timeout: 10_000
 

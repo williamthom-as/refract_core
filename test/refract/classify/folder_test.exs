@@ -12,6 +12,7 @@ end
 defmodule Refract.Classify.FolderTest do
   use ExUnit.Case, async: true
 
+  @moduletag :yaml
   @moduletag :tmp_dir
   @moduletag timeout: 10_000
 

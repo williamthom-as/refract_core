@@ -299,6 +299,8 @@ defmodule Refract.ShapeTest do
   end
 
   describe "load/1" do
+    @describetag :yaml
+
     test "a yaml file builds the same shape as its map" do
       assert {:ok, shape} = Shape.load(shape_file("invoice.yml"))
       assert {:ok, expected} = Shape.from_map(invoice_map())
@@ -335,6 +337,8 @@ defmodule Refract.ShapeTest do
   end
 
   describe "load!/1" do
+    @describetag :yaml
+
     test "returns the shape" do
       assert %Shape{name: "invoice"} = Shape.load!(shape_file("invoice.yml"))
     end
@@ -346,6 +350,20 @@ defmodule Refract.ShapeTest do
 
       assert_raise ArgumentError, ~r/typed\.yml.*header\.columns\.rate/, fn ->
         Shape.load!(shape_file("typed.yml"))
+      end
+    end
+  end
+
+  describe "load/1 without yaml_elixir" do
+    @describetag :without_yaml
+
+    test "is a missing dependency error" do
+      assert {:error, {:missing_dependency, :yaml_elixir}} = Shape.load(shape_file("invoice.yml"))
+    end
+
+    test "load! names the missing dependency" do
+      assert_raise ArgumentError, ~r/missing_dependency.*yaml_elixir/, fn ->
+        Shape.load!(shape_file("invoice.yml"))
       end
     end
   end

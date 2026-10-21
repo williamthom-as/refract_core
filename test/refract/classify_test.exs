@@ -9,6 +9,7 @@ defmodule Refract.ClassifyTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
+  @moduletag :yaml
   @moduletag timeout: 10_000
 
   alias Refract.Classify

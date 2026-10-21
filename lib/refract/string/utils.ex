@@ -45,4 +45,13 @@ defmodule Refract.String.Utils do
 
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(cell), do: cell
+
+  @spec text(term()) :: String.t() | nil
+
+  def text(nil), do: nil
+  def text(%Decimal{} = value), do: Decimal.to_string(value, :normal)
+  def text(%Date{} = value), do: Date.to_iso8601(value)
+  def text(%NaiveDateTime{} = value), do: NaiveDateTime.to_iso8601(value)
+  def text(%Time{} = value), do: Time.to_iso8601(value)
+  def text(value), do: to_string(value)
 end

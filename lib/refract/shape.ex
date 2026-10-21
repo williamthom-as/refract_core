@@ -143,7 +143,8 @@ defmodule Refract.Shape do
 
   defp describe_error({:invalid_value, {key, _value}}), do: "invalid_value #{key}"
 
-  defp describe_error({reason, detail}) when is_binary(detail), do: "#{reason} #{detail}"
+  defp describe_error({reason, detail}) when is_binary(detail) or is_atom(detail),
+    do: "#{reason} #{detail}"
 
   defp describe_error({reason, _detail}), do: "#{reason}"
 
