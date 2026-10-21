@@ -18,10 +18,10 @@ defmodule Refract.MixProject do
 
   defp dialyzer do
     [
-      plt_local_path: "priv/plts",
+      plt_local_path: "priv/plts/#{optional()}",
       plt_core_path: "priv/plts",
       ignore_warnings: ".dialyzer_ignore.exs",
-      plt_add_apps: [:ex_unit],
+      plt_add_apps: [:ex_unit | Enum.map(optional_deps(optional()), &elem(&1, 0))],
       list_unused_filters: true
     ]
   end
@@ -38,12 +38,20 @@ defmodule Refract.MixProject do
     [
       {:nimble_csv, "~> 1.3"},
       {:decimal, "~> 2.0 or ~> 3.0"},
-      {:yaml_elixir, "~> 2.12", optional: true},
       {:stream_data, "~> 1.4", only: [:dev, :test]},
       {:benchee, "~> 1.5", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
-    ]
+    ] ++ optional_deps(optional())
   end
+
+  defp optional, do: System.get_env("REFRACT_OPTIONAL") || "all"
+
+  defp optional_deps("none"), do: []
+
+  defp optional_deps("all"),
+    do: [
+      {:yaml_elixir, "~> 2.12", optional: true}
+    ]
 end

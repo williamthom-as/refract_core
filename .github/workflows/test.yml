@@ -12,9 +12,13 @@ permissions:
 
 jobs:
   build:
-    name: Build and test
+    name: Build and test (${{ matrix.optional }} optional deps)
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        optional: [all, none]
+    env:
+      REFRACT_OPTIONAL: ${{ matrix.optional }}
 
     steps:
     - uses: actions/checkout@v4
@@ -27,8 +31,8 @@ jobs:
       uses: actions/cache@v3
       with:
         path: deps
-        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-        restore-keys: ${{ runner.os }}-mix-
+        key: ${{ runner.os }}-mix-${{ matrix.optional }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-${{ matrix.optional }}-
     - name: Install dependencies
       run: mix deps.get
     - name: Compile code
@@ -47,7 +51,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: priv/plts
-        key: ${{ runner.os }}-plt-otp28.5-elixir1.20.2-${{ hashFiles('**/mix.lock', 'mix.exs') }}
+        key: ${{ runner.os }}-plt-${{ matrix.optional }}-otp28.5-elixir1.20.2-${{ hashFiles('**/mix.lock', 'mix.exs') }}
     - name: Build PLT
       run: mix dialyzer --plt
     - name: Dialyzer

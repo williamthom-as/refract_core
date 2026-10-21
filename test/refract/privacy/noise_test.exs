@@ -91,4 +91,22 @@ defmodule Refract.Privacy.NoiseTest do
       assert Noise.absolute(42, 3, opts()) - 42 == Noise.absolute(100, 3, opts()) - 100
     end
   end
+
+  describe "round bounds" do
+    test "round must be an integer from 0 to 6144" do
+      for noise <- [&Noise.relative/3, &Noise.absolute/3], round <- [-1, 6145, 2.5, "2"] do
+        assert_raise ArgumentError, ~r/round/, fn ->
+          noise.(Decimal.new("1.5"), 0.05, opts(round: round))
+        end
+      end
+    end
+
+    test "round of 6144 is allowed" do
+      assert %Decimal{exp: -6144} = Noise.relative(Decimal.new(0), 0.05, opts(round: 6144))
+    end
+
+    test "a decimal with more than 6144 places keeps 6144" do
+      assert %Decimal{exp: -6144} = Noise.relative(Decimal.new(1, 15, -100_000), 0.05, opts())
+    end
+  end
 end

@@ -17,7 +17,7 @@ defmodule Refract.E2E.SimpleTranslationsTest do
   @fruit ~w(fav_fruit fav_fruit_2 fav_fruit_3)
   @colour ~w(fav_colour fav_colour_2 fav_colour_3)
 
-  defp translate(rows) do
+  def translate(rows) do
     rows
     |> Rows.update(@fruit, &Pseudonym.apply!(&1, :fruit, @keyring, @opts))
     |> Rows.update(@colour, &Pseudonym.apply!(&1, :colour, @keyring, @opts))

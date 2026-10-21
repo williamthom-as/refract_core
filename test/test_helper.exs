@@ -1,5 +1,5 @@
 exclude =
-  for {tag, module} <- [duckdb: Duckdbex, yaml: YamlElixir] do
+  for {tag, module} <- [yaml: YamlElixir] do
     if Code.ensure_loaded?(module), do: :"without_#{tag}", else: tag
   end
 

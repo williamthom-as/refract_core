@@ -14,6 +14,7 @@ defmodule Refract.Privacy.Noise do
   @seed_range Integer.pow(2, 64)
   @spread_places 18
   @spread_scale Integer.pow(10, 18)
+  @max_places 6144
 
   @type value :: number() | Decimal.t()
 
@@ -21,7 +22,7 @@ defmodule Refract.Privacy.Noise do
           {:seed, String.Chars.t()}
           | {:domain, Keyring.domain()}
           | {:keyring, Keyring.t()}
-          | {:round, non_neg_integer()}
+          | {:round, 0..6144}
 
   @spec relative(value(), number(), [opt()]) :: value()
 
@@ -34,6 +35,7 @@ defmodule Refract.Privacy.Noise do
     round = Keyword.get(opts, :round)
 
     validate_amount(fraction)
+    validate_round(round)
 
     factor =
       seed
@@ -58,6 +60,7 @@ defmodule Refract.Privacy.Noise do
     round = Keyword.get(opts, :round)
 
     validate_amount(amount)
+    validate_round(round)
 
     shift =
       seed
@@ -87,12 +90,24 @@ defmodule Refract.Privacy.Noise do
     raise ArgumentError, "noise amount must be a non negative number, got: #{inspect(amount)}"
   end
 
+  defp validate_round(nil), do: :ok
+
+  defp validate_round(round) when is_integer(round) and round >= 0 and round <= @max_places,
+    do: :ok
+
+  defp validate_round(round) do
+    raise ArgumentError,
+          "round must be an integer from 0 to #{@max_places}, got: #{inspect(round)}"
+  end
+
   defp to_decimal(%Decimal{} = value), do: value
   defp to_decimal(value) when is_integer(value), do: Decimal.new(value)
   defp to_decimal(value) when is_float(value), do: Decimal.from_float(value)
   defp to_decimal(value), do: raise(ArgumentError, "noise needs a number, got: #{inspect(value)}")
 
-  defp from_decimal(shifted, %Decimal{exp: exp}, nil), do: Decimal.round(shifted, max(-exp, 0))
+  defp from_decimal(shifted, %Decimal{exp: exp}, nil),
+    do: Decimal.round(shifted, min(max(-exp, 0), @max_places))
+
   defp from_decimal(shifted, %Decimal{}, round), do: Decimal.round(shifted, round)
 
   defp from_decimal(shifted, value, _round) when is_integer(value),
