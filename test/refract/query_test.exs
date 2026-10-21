@@ -4,7 +4,9 @@ defmodule Refract.QueryTest do
   @moduletag :tmp_dir
   @moduletag timeout: 5_000
 
+  alias Refract.Errors.QueryError
   alias Refract.Query
+  alias Refract.Query.Result
   alias Refract.Table
   alias Refract.TestEngines
 
@@ -60,9 +62,10 @@ defmodule Refract.QueryTest do
 
       assert {:ok, ["aws_bill", "invoice"]} = Query.views(open!(), dir)
 
-      assert_received {:view, "aws_bill", glob, [types: :text]}
+      assert_received {:view, "aws_bill", glob, opts}
       assert glob == Path.join(bills, "*.csv")
-      assert_received {:view, "invoice", glob, [types: :text]}
+      assert Enum.sort(opts) == [format: "csv", types: :text]
+      assert_received {:view, "invoice", glob, _opts}
       assert glob == Path.join(invoices, "*.csv")
     end
 
@@ -98,7 +101,26 @@ defmodule Refract.QueryTest do
       folder!(dir, "invoice", ["a.csv"])
 
       assert {:ok, ["invoice"]} = Query.views(open!(), dir, types: :infer)
-      assert_received {:view, "invoice", _glob, [types: :infer]}
+      assert_received {:view, "invoice", _glob, opts}
+      assert opts[:types] == :infer
+    end
+
+    test "format: picks the folders and the glob", %{tmp_dir: dir} do
+      sales = folder!(dir, "sales", ["2026.parquet"])
+      folder!(dir, "invoice", ["a.csv"])
+
+      assert {:ok, ["sales"]} = Query.views(open!(), dir, format: "parquet")
+      assert_received {:view, "sales", glob, opts}
+      assert glob == Path.join(sales, "*.parquet")
+      assert opts[:format] == "parquet"
+    end
+
+    test "a format that is not a plain file extension raises", %{tmp_dir: dir} do
+      for format <- [:csv, ".csv", "CSV", ""] do
+        assert_raise ArgumentError, ~r/format/, fn ->
+          Query.views(open!(), dir, format: format)
+        end
+      end
     end
 
     test "unknown types raise", %{tmp_dir: dir} do
@@ -119,7 +141,14 @@ defmodule Refract.QueryTest do
       glob = Path.join([dir, "aws_bill", "2026-*", "*.csv"])
 
       assert :ok = Query.view(open!(), "bills", glob)
-      assert_received {:view, "bills", ^glob, [types: :text]}
+      assert_received {:view, "bills", ^glob, opts}
+      assert Enum.sort(opts) == [format: "csv", types: :text]
+    end
+
+    test "format: goes to the engine" do
+      assert :ok = Query.view(open!(), "sales", "*.parquet", format: "parquet")
+      assert_received {:view, "sales", "*.parquet", opts}
+      assert opts[:format] == "parquet"
     end
 
     test "a name that is not a plain identifier raises" do
@@ -157,12 +186,87 @@ defmodule Refract.QueryTest do
     end
   end
 
+  describe "run/3" do
+    test "rows are maps of column to value, columns in select order" do
+      query = open!(results: %{"SELECT b, a" => {["b", "a"], [[1, 2], [3, 4]]}})
+
+      assert {:ok, result} = Query.run(query, "SELECT b, a")
+      assert is_struct(result, Result)
+      assert result.columns == ["b", "a"]
+      assert Enum.to_list(result.rows) == [%{"b" => 1, "a" => 2}, %{"b" => 3, "a" => 4}]
+    end
+
+    test "rows are read lazily" do
+      rows = Stream.concat([[1]], Stream.map([:boom], fn _ -> raise "read too far" end))
+      query = open!(results: %{"SELECT a" => {["a"], rows}})
+
+      assert {:ok, result} = Query.run(query, "SELECT a")
+      assert Enum.take(result.rows, 1) == [%{"a" => 1}]
+    end
+
+    test "params go to the engine" do
+      query = open!(results: %{"SELECT a WHERE a = $1" => {["a"], []}})
+
+      assert {:ok, _result} = Query.run(query, "SELECT a WHERE a = $1", ["123"])
+      assert_received {:run, "SELECT a WHERE a = $1", ["123"]}
+    end
+
+    test "duplicate column names are an error" do
+      query = open!(results: %{"SELECT a.id, b.id" => {["id", "id"], [[1, 2]]}})
+
+      assert {:error, {:duplicate_columns, ["id"]}} = Query.run(query, "SELECT a.id, b.id")
+    end
+
+    test "an engine error is returned" do
+      assert {:error, {:query_error, _message}} = Query.run(open!(), "SELEC 1")
+    end
+
+    test "sql must be a string and params a list" do
+      assert_raise ArgumentError, ~r/sql/, fn -> Query.run(open!(), :select) end
+      assert_raise ArgumentError, ~r/params/, fn -> Query.run(open!(), "SELECT 1", "123") end
+    end
+
+    test "result rows write as csv in column order" do
+      query = open!(results: %{"SELECT b, a" => {["b", "a"], [["1", "2"]]}})
+
+      {:ok, result} = Query.run(query, "SELECT b, a")
+      csv = result.rows |> Refract.CSV.encode(header: result.columns) |> Enum.join()
+
+      assert csv == "b,a\n1,2\n"
+    end
+  end
+
+  describe "run!/3" do
+    test "returns the result" do
+      query = open!(results: %{"SELECT a" => {["a"], [[1]]}})
+
+      result = Query.run!(query, "SELECT a")
+
+      assert is_struct(result, Result)
+      assert result.columns == ["a"]
+    end
+
+    test "raises naming the reason" do
+      assert_raise ArgumentError, ~r/query_error/, fn -> Query.run!(open!(), "SELEC 1") end
+    end
+  end
+
   describe "close/1" do
     test "gives :ok and later calls are an error" do
       query = open!()
 
       assert :ok = Query.close(query)
       assert {:error, :closed} = Query.view(query, "bills", "*.csv")
+      assert {:error, :closed} = Query.run(query, "SELECT a")
+    end
+
+    test "reading rows after close raises a query error" do
+      query = open!(results: %{"SELECT a" => {["a"], [[1]]}})
+
+      {:ok, result} = Query.run(query, "SELECT a")
+      :ok = Query.close(query)
+
+      assert_raise QueryError, fn -> Enum.to_list(result.rows) end
     end
   end
 end

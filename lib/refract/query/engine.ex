@@ -3,5 +3,23 @@ defmodule Refract.Query.Engine do
   behaviour for a query engine behind `Refract.Query`. `Refract.Query.DuckDB` is the default.
   """
 
-  @callback open(opts :: keyword()) :: {:ok, state :: term()} | {:error, term()}
+  @type state :: term()
+
+  @callback open(opts :: keyword()) :: {:ok, state()} | {:error, term()}
+
+  @callback close(state()) :: :ok
+
+  @callback table(
+              state(),
+              name :: String.t(),
+              columns :: [String.t()],
+              rows :: Enumerable.t([String.t() | nil])
+            ) :: :ok | {:error, term()}
+
+  @callback view(
+              state(),
+              name :: String.t(),
+              glob :: String.t(),
+              opts :: [Refract.Query.view_opt()]
+            ) :: :ok | {:error, term()}
 end

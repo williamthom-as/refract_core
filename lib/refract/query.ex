@@ -2,30 +2,40 @@ defmodule Refract.Query do
   @moduledoc """
   sql over folders and tables of data, run by an engine passed as `engine:`
 
-  engines are plugins (eg `Refract.Query.DuckDB` from `refract_duckdb`),
-  or implement your own `Refract.Query.Engine`.
+  engines are plugins, use an existing or implement your own
+  `Refract.Query.Engine`.
 
   note doesnt use genserver for state, change if needed.
   """
+
+  alias Refract.Table
 
   defstruct [:engine, :state]
 
   @type t :: %__MODULE__{engine: module(), state: term()}
 
-  @spec open(keyword()) :: {:ok, t()} | {:error, term()}
+  @type types :: :text | :infer
+
+  @type open_opt :: {:engine, module()} | {atom(), term()}
+
+  @type view_opt :: {:types, types()} | {:format, String.t()}
+
+  @type table_opt :: {:columns, [String.t()]}
+
+  @spec open([open_opt()]) :: {:ok, t()} | {:error, term()}
 
   def open(opts \\ []) do
-    opts = Keyword.validate!(opts, [:engine])
+    {opts, engine_opts} = Keyword.split(opts, [:engine])
     engine = Keyword.fetch!(opts, :engine)
 
     validate_engine(engine)
 
-    with {:ok, state} <- engine.open(Keyword.delete(opts, :engine)) do
+    with {:ok, state} <- engine.open(Keyword.delete(engine_opts, :engine)) do
       {:ok, %__MODULE__{engine: engine, state: state}}
     end
   end
 
-  @spec open!(keyword()) :: t()
+  @spec open!([open_opt()]) :: t()
 
   def open!(opts \\ []) do
     case open(opts) do
@@ -34,11 +44,144 @@ defmodule Refract.Query do
     end
   end
 
+  @spec close(t()) :: :ok | {:error, term()}
+
+  def close(%__MODULE__{engine: engine, state: state}) do
+    engine.close(state)
+  end
+
+  @spec close!(t()) :: :ok
+
+  def close!(query) do
+    case close(query) do
+      :ok -> :ok
+      {:error, reason} -> raise ArgumentError, "cannot close query capability: #{inspect(reason)}"
+    end
+  end
+
+  @spec view(t(), name :: String.t(), glob :: String.t(), opts :: [view_opt()]) ::
+          :ok | {:error, term()}
+
+  def view(%__MODULE__{engine: engine, state: state}, name, glob, opts \\ []) do
+    opts = Keyword.validate!(opts, types: :text, format: "csv")
+    types = Keyword.fetch!(opts, :types)
+    format = Keyword.fetch!(opts, :format)
+
+    validate_types(types)
+    validate_format(format)
+    validate_name(name)
+
+    engine.view(state, name, glob, opts)
+  end
+
+  @spec views(t(), dir :: Path.t(), opts :: [view_opt()]) ::
+          {:ok, [String.t()]} | {:error, term()}
+
+  def views(%__MODULE__{} = query, dir, opts \\ []) do
+    opts = Keyword.validate!(opts, types: :text, format: "csv")
+    types = Keyword.fetch!(opts, :types)
+    format = Keyword.fetch!(opts, :format)
+
+    validate_types(types)
+    validate_format(format)
+
+    with {:ok, entries} <- File.ls(dir) do
+      entries
+      |> Enum.sort()
+      |> Enum.reject(&String.starts_with?(&1, "_"))
+      |> Enum.filter(&holds_format?(Path.join(dir, &1), format))
+      |> Enum.reduce_while({:ok, []}, &add_view(&1, &2, query, dir, opts))
+      |> in_order()
+    end
+  end
+
+  defp holds_format?(path, format) do
+    case File.ls(path) do
+      {:ok, files} -> Enum.any?(files, &String.ends_with?(&1, "." <> format))
+      {:error, _reason} -> false
+    end
+  end
+
+  defp add_view(name, {:ok, names}, query, dir, opts) do
+    glob = Path.join([dir, name, "*." <> Keyword.fetch!(opts, :format)])
+
+    case view(query, name, glob, opts) do
+      :ok -> {:cont, {:ok, [name | names]}}
+      error -> {:halt, error}
+    end
+  end
+
+  defp in_order({:ok, names}), do: {:ok, Enum.reverse(names)}
+  defp in_order(error), do: error
+
+  @spec table(t(), name :: String.t(), Table.t() | Enumerable.t(), opts :: [table_opt()]) ::
+          :ok | {:error, term()}
+
+  def table(query, name, rows, opts \\ [])
+
+  def table(query, name, %Table{header: header, rows: rows}, opts) do
+    opts = Keyword.validate!(opts, columns: header)
+
+    create_table(query, name, Keyword.fetch!(opts, :columns), rows)
+  end
+
+  def table(query, name, rows, opts) do
+    opts = Keyword.validate!(opts, [:columns])
+
+    create_table(query, name, Keyword.fetch!(opts, :columns), rows)
+  end
+
+  defp create_table(%__MODULE__{engine: engine, state: state}, name, columns, rows) do
+    validate_name(name)
+    validate_columns(columns)
+
+    engine.table(state, name, columns, Stream.map(rows, &cells(&1, columns)))
+  end
+
+  defp cells(row, columns), do: Enum.map(columns, &Map.get(row, &1))
+
   defp validate_engine(engine) do
     if not (is_atom(engine) and Code.ensure_loaded?(engine) and
               function_exported?(engine, :open, 1)) do
       raise ArgumentError,
             "engine must implement Refract.Query.Engine, got: #{inspect(engine)}"
     end
+  end
+
+  defp validate_types(types) when types in [:text, :infer], do: :ok
+
+  defp validate_types(types) do
+    raise ArgumentError, "types must be :text or :infer, got: #{inspect(types)}"
+  end
+
+  defp validate_format(format) when is_binary(format) do
+    if not Regex.match?(~r/^[a-z0-9]+$/, format) do
+      raise ArgumentError,
+            "format must be a lowercase file extension with no dot, got: #{inspect(format)}"
+    end
+  end
+
+  defp validate_format(format) do
+    raise ArgumentError, "format must be a string, got: #{inspect(format)}"
+  end
+
+  defp validate_columns([_ | _] = columns) do
+    if not Enum.all?(columns, &is_binary/1) do
+      raise ArgumentError, "columns must be strings, got: #{inspect(columns)}"
+    end
+  end
+
+  defp validate_columns(columns) do
+    raise ArgumentError, "columns must be a non empty list of strings, got: #{inspect(columns)}"
+  end
+
+  defp validate_name(name) when is_binary(name) do
+    if not Regex.match?(~r/^[a-z][a-z0-9_]*$/, name) do
+      raise ArgumentError, "name must match [a-z][a-z0-9_]*, got: #{inspect(name)}"
+    end
+  end
+
+  defp validate_name(name) do
+    raise ArgumentError, "name must be a string, got: #{inspect(name)}"
   end
 end
