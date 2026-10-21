@@ -40,8 +40,8 @@ defmodule Refract.QueryTest do
     end
 
     test "other options go to the engine" do
-      assert {:ok, %Query{state: %{opts: [path: "q.duckdb"]}}} =
-               Query.open(engine: TestEngines.Stub, path: "q.duckdb")
+      assert {:ok, %Query{state: %{opts: [path: "q.db"]}}} =
+               Query.open(engine: TestEngines.Stub, path: "q.db")
     end
   end
 

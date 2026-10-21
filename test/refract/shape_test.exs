@@ -105,7 +105,7 @@ defmodule Refract.ShapeTest do
 
     test "markers are file and content regexes" do
       assert_raise ArgumentError, ~r/marker/, fn ->
-        Shape.new(name: "ids", spec: invoice_spec(), markers: [sheet: ~r/x/])
+        Shape.new(name: "ids", spec: invoice_spec(), markers: [colour: ~r/x/])
       end
 
       assert_raise ArgumentError, ~r/marker/, fn ->

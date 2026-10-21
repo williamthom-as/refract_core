@@ -461,7 +461,7 @@ defmodule Refract.TableTest do
       refute passes?(:integer, "")
     end
 
-    test ":integer takes a whole decimal, as xlsx numbers arrive" do
+    test ":integer takes a whole decimal" do
       assert passes?(:integer, Decimal.new("1"))
       assert passes?(:integer, Decimal.new("1.0"))
       refute passes?(:integer, Decimal.new("1.5"))

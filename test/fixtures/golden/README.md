@@ -27,11 +27,6 @@ invoice input headers have leading spaces trimmed by header normalisation
 empty_columns expected keeps whitespace only cells
 total_arrivals headers parse with literal wrapping quotes stripped by header normalisation
 
-joins
-=====
-
-simple_joins complex_joins multisheet_anon need a query engine so they run in refract_duckdb e2e with copies of these files
-
 refract differs
 ===============
 

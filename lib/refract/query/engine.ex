@@ -1,6 +1,6 @@
 defmodule Refract.Query.Engine do
   @moduledoc """
-  behaviour for a query engine behind `Refract.Query`. `Refract.Query.DuckDB` is the default.
+  behaviour for a query engine behind `Refract.Query`.
   """
 
   @type state :: term()
