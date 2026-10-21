@@ -244,5 +244,13 @@ defmodule Refract.Parse do
     end
   end
 
+  defp parse_integer(%Decimal{} = value) do
+    if Decimal.integer?(value) do
+      {:ok, Decimal.to_integer(value)}
+    else
+      {:error, {:not_an_integer, value}}
+    end
+  end
+
   defp parse_integer(value), do: {:error, {:not_an_integer, value}}
 end

@@ -175,6 +175,35 @@ defmodule Refract.QueryTest do
       assert_received {:table, "names", ["b", "a"], [["2", "1"], [nil, "3"]]}
     end
 
+    test "native cells load as their text" do
+      row = %{
+        "decimal" => Decimal.new("1.23456789012E+11"),
+        "integer" => 7,
+        "day" => ~D[2026-10-21],
+        "at" => ~N[2026-10-21 09:30:00],
+        "time" => ~T[09:30:00],
+        "flag" => true,
+        "blank" => nil
+      }
+
+      columns = ["decimal", "integer", "day", "at", "time", "flag", "blank"]
+
+      assert :ok = Query.table(open!(), "names", [row], columns: columns)
+
+      assert_received {:table, "names", ^columns,
+                       [
+                         [
+                           "123456789012",
+                           "7",
+                           "2026-10-21",
+                           "2026-10-21T09:30:00",
+                           "09:30:00",
+                           "true",
+                           nil
+                         ]
+                       ]}
+    end
+
     test "rows without columns: raise" do
       assert_raise KeyError, ~r/columns/, fn -> Query.table(open!(), "names", [%{"a" => "1"}]) end
     end

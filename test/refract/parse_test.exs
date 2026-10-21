@@ -144,8 +144,16 @@ defmodule Refract.ParseTest do
       assert Parse.integer(7) == {:ok, 7}
     end
 
+    test "a whole decimal is an integer" do
+      assert {:ok, 12} = Parse.integer(Decimal.new("12"))
+      assert {:ok, 12} = Parse.integer(Decimal.new("12.00"))
+      assert {:ok, -3} = Parse.integer(Decimal.new("-3"))
+      assert {:ok, 123_456_789_012} = Parse.integer(Decimal.new("1.23456789012E+11"))
+      assert {:error, {:not_an_integer, _value}} = Parse.integer(Decimal.new("1.5"))
+    end
+
     test "anything else is an error" do
-      for value <- ["1.5", "12a", "1,234", "", nil, 1.5, Decimal.new("3")] do
+      for value <- ["1.5", "12a", "1,234", "", nil, 1.5, Decimal.new("3.5")] do
         assert Parse.integer(value) == {:error, {:not_an_integer, value}}, inspect(value)
       end
     end

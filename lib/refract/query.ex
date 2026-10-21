@@ -8,9 +8,10 @@ defmodule Refract.Query do
   note doesnt use genserver for state, change if needed.
   """
 
+  alias Refract.Query.Result
   alias Refract.Table
 
-  alias Refract.Query.Result
+  import Refract.String.Utils, only: [text: 1]
 
   defstruct [:engine, :state]
 
@@ -140,7 +141,7 @@ defmodule Refract.Query do
     engine.table(state, name, columns, Stream.map(rows, &cells(&1, columns)))
   end
 
-  defp cells(row, columns), do: Enum.map(columns, &Map.get(row, &1))
+  defp cells(row, columns), do: Enum.map(columns, &text(Map.get(row, &1)))
 
   @spec run(t(), sql :: String.t(), params :: list()) ::
           {:ok, Result.t()} | {:error, term()}
