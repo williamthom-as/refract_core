@@ -22,4 +22,10 @@ defmodule Refract.Query.Engine do
               glob :: String.t(),
               opts :: [Refract.Query.view_opt()]
             ) :: :ok | {:error, term()}
+
+  @callback run(
+              state(),
+              sql :: String.t(),
+              params :: list()
+            ) :: {:ok, columns :: [String.t()], rows :: Enumerable.t()} | {:error, term()}
 end

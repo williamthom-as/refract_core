@@ -10,6 +10,8 @@ defmodule Refract.Query do
 
   alias Refract.Table
 
+  alias Refract.Query.Result
+
   defstruct [:engine, :state]
 
   @type t :: %__MODULE__{engine: module(), state: term()}
@@ -139,6 +141,47 @@ defmodule Refract.Query do
   end
 
   defp cells(row, columns), do: Enum.map(columns, &Map.get(row, &1))
+
+  @spec run(t(), sql :: String.t(), params :: list()) ::
+          {:ok, Result.t()} | {:error, term()}
+
+  def run(%__MODULE__{engine: engine, state: state}, sql, params \\ []) do
+    validate_sql(sql)
+    validate_params(params)
+
+    with {:ok, columns, rows} <- engine.run(state, sql, params),
+         :ok <- unique_columns(columns) do
+      {:ok, %Result{columns: columns, rows: Stream.map(rows, &Map.new(Enum.zip(columns, &1)))}}
+    end
+  end
+
+  @spec run!(t(), sql :: String.t(), params :: list()) :: Result.t()
+
+  def run!(query, sql, params \\ []) do
+    case run(query, sql, params) do
+      {:ok, result} -> result
+      {:error, reason} -> raise ArgumentError, "cannot run query: #{inspect(reason)}"
+    end
+  end
+
+  defp unique_columns(columns) do
+    case Enum.uniq(columns -- Enum.uniq(columns)) do
+      [] -> :ok
+      duplicates -> {:error, {:duplicate_columns, duplicates}}
+    end
+  end
+
+  defp validate_sql(sql) when is_binary(sql), do: :ok
+
+  defp validate_sql(sql) do
+    raise ArgumentError, "sql must be a string, got: #{inspect(sql)}"
+  end
+
+  defp validate_params(params) when is_list(params), do: :ok
+
+  defp validate_params(params) do
+    raise ArgumentError, "params must be a list, got: #{inspect(params)}"
+  end
 
   defp validate_engine(engine) do
     if not (is_atom(engine) and Code.ensure_loaded?(engine) and
