@@ -281,6 +281,13 @@ defmodule Refract.TableTest do
                Table.scan([@blank_line, @header_line, @raw_line], invoice_spec())
     end
 
+    test "a header report lists the non blank cells no column claimed" do
+      assert [header] =
+               Table.scan([["SKU", "Region", "", "Item", "Amount"]], invoice_spec(min_matches: 3))
+
+      assert header.extra == [{1, "Region"}]
+    end
+
     test "a header line passes and says where and how each column matched" do
       assert [_blank, header] = Table.scan([@blank_line, @header_line], invoice_spec())
 

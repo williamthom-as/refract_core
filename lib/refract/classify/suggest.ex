@@ -189,21 +189,11 @@ defmodule Refract.Classify.Suggest do
       columns:
         Map.new(columns, fn {column, _aliases} -> {column, column_report(found, column)} end),
       rules: rules,
-      extra: extra(line, found)
+      extra: Header.extra(line, found)
     }
   end
 
   defp column_report(found, column), do: Map.get(found, column, %Column{})
-
-  defp extra(line, found) do
-    taken = Map.new(found, fn {_column, %Column{index: index}} -> {index, true} end)
-
-    for {cell, index} <- Enum.with_index(line),
-        is_binary(cell),
-        String.trim(cell) != "",
-        not is_map_key(taken, index),
-        do: {index, cell}
-  end
 
   defp validate_within(within) when is_integer(within) and within > 0, do: :ok
 

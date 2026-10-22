@@ -3,7 +3,7 @@ defmodule Refract.Table.Spec.Header do
 
   defstruct [:columns, :required, :min_matches, :lookup, :regexes]
 
-  import Refract.String.Utils, only: [header_cell: 1, normalise: 1]
+  import Refract.String.Utils, only: [blank?: 1, header_cell: 1, normalise: 1]
 
   alias Refract.Table.Report
 
@@ -182,7 +182,30 @@ defmodule Refract.Table.Spec.Header do
 
     passed = Enum.all?(rules, & &1.passed)
 
-    %Report.Line{check: :header, passed: passed, columns: column_reports, rules: rules}
+    %Report.Line{
+      check: :header,
+      passed: passed,
+      columns: column_reports,
+      rules: rules,
+      extra: extra(line, found)
+    }
+  end
+
+  @spec extra(Refract.raw_row(), %{String.t() => Report.Column.t()}) ::
+          [{non_neg_integer(), Refract.cell()}]
+
+  def extra(line, found) do
+    taken =
+      for {_column, %Report.Column{index: index, others: others}} <- found,
+          taken <- [index | Enum.map(others, &elem(&1, 0))],
+          into: %{},
+          do: {taken, true}
+
+    for {cell, index} <- Enum.with_index(line),
+        is_binary(cell),
+        not blank?(cell),
+        not is_map_key(taken, index),
+        do: {index, cell}
   end
 
   @spec rules(t(), [String.t()]) :: [Report.Rule.t()]
