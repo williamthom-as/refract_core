@@ -7,8 +7,9 @@ defmodule Refract.Classify.Suggest do
   alias Refract.Table.Report.Line
 
   alias Refract.Table.Spec.Header
+  alias Refract.Table.Spec.Row
 
-  import Refract.String.Utils, only: [normalise: 1]
+  import Refract.String.Utils, only: [blank?: 1, blank_line?: 1, normalise: 1]
 
   @type opt :: {:within, pos_integer()} | {:header_row, pos_integer() | nil}
 
@@ -24,33 +25,45 @@ defmodule Refract.Classify.Suggest do
 
     resolved_shape = Shape.resolve(shape)
     header = resolved_shape.spec.header
+    rules = resolved_shape.spec.row.match
 
-    raw
-    |> candidate_lines(within, header_row)
-    |> Enum.map(fn {line, row_num} -> {row_num, line, assign(line, header)} end)
+    sample = sample(raw, within, header_row)
+
+    sample
+    |> candidate_lines(header_row)
+    |> Enum.map(fn {line, row_num} ->
+      {row_num, line, assign(line, header, rules, rows_below(sample, row_num))}
+    end)
     |> Enum.max_by(fn {row_num, _line, found} -> {map_size(found), -row_num} end, fn -> nil end)
     |> report(header)
   end
 
-  defp candidate_lines(raw, within, nil), do: raw |> Enum.take(within) |> Enum.with_index(1)
+  defp sample(raw, within, nil), do: raw |> Enum.take(within) |> Enum.with_index(1)
 
-  defp candidate_lines(raw, _within, header_row) do
-    raw
-    |> Stream.drop(header_row - 1)
-    |> Enum.take(1)
-    |> Enum.map(&{&1, header_row})
+  defp sample(raw, within, header_row),
+    do: raw |> Enum.take(header_row + within - 1) |> Enum.with_index(1)
+
+  defp candidate_lines(sample, nil), do: sample
+
+  defp candidate_lines(sample, header_row),
+    do: Enum.filter(sample, fn {_line, row_num} -> row_num == header_row end)
+
+  defp rows_below(sample, row_num) do
+    for {line, line_num} <- sample, line_num > row_num, not blank_line?(line), do: line
   end
 
-  defp assign(line, %Header{columns: columns}) do
+  defp assign(line, %Header{columns: columns}, rules, rows) do
     line
     |> Enum.zip(Header.normalise_line(line))
     |> Enum.with_index()
     |> candidates(columns)
+    |> Enum.reject(&fails_values?(&1, rules, rows))
     |> Enum.sort_by(fn {column, %Column{score: score, index: index}} ->
       {-score, index, column}
     end)
     |> Enum.reduce({%{}, %{}}, &take/2)
-    |> elem(0)
+    |> add_values(line, rules, rows)
+    |> add_counts(rules, rows)
   end
 
   defp candidates(cells, columns) do
@@ -95,6 +108,58 @@ defmodule Refract.Classify.Suggest do
     |> String.downcase()
     |> String.split(~r/[^a-z0-9]+/, trim: true)
   end
+
+  defp fails_values?({column, %Column{index: index}}, rules, rows) when is_map_key(rules, column),
+    do: rules |> Map.fetch!(column) |> counts(rows, index) |> mostly_fails?()
+
+  defp fails_values?(_candidate, _rules, _rows), do: false
+
+  defp add_values({found, taken}, line, rules, rows) do
+    rules
+    |> Enum.reject(fn {column, _rule} -> is_map_key(found, column) end)
+    |> Enum.sort()
+    |> Enum.reduce({found, taken}, &add_value(&1, &2, line, rows))
+    |> elem(0)
+  end
+
+  defp add_value({column, rule}, {_found, taken} = acc, line, rows) do
+    line
+    |> Enum.with_index()
+    |> Enum.filter(fn {cell, index} -> free?(cell, index, taken) and fits?(rule, rows, index) end)
+    |> claim(column, acc)
+  end
+
+  defp claim([{cell, index}], column, {found, taken}) do
+    report = %Column{passed: true, index: index, cell: cell, via: :values, score: 0.4}
+
+    {Map.put(found, column, report), Map.put(taken, index, true)}
+  end
+
+  defp claim(_fits, _column, acc), do: acc
+
+  defp free?(cell, index, taken),
+    do: is_binary(cell) and not blank?(cell) and not is_map_key(taken, index)
+
+  defp fits?(rule, rows, index), do: rule |> counts(rows, index) |> mostly_passes?()
+
+  defp add_counts(found, rules, rows),
+    do: Map.new(found, fn {column, report} -> {column, counted(report, rules, column, rows)} end)
+
+  defp counted(%Column{index: index} = report, rules, column, rows)
+       when is_map_key(rules, column),
+       do: %{report | rows: rules |> Map.fetch!(column) |> counts(rows, index)}
+
+  defp counted(report, _rules, _column, _rows), do: report
+
+  defp counts(rule, rows, index) do
+    values = for row <- rows, value = Enum.at(row, index), not blank?(value), do: value
+
+    {Enum.count(values, &Row.passes?(rule, &1)), length(values)}
+  end
+
+  defp mostly_fails?({passed, checked}), do: checked > 0 and passed * 2 < checked
+
+  defp mostly_passes?({passed, checked}), do: checked > 0 and passed >= 0.95 * checked
 
   defp targets(column, aliases),
     do: Enum.uniq([normalise(column) | Enum.map(aliases, &normalise/1)])
