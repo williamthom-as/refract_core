@@ -178,13 +178,17 @@ defmodule Refract.Table.Spec.Header do
         {column, Map.get(found, column, %Report.Column{})}
       end)
 
-    matched = Map.keys(found)
-    rules = [min_matches_rule(header, matched), required_rule(header, matched)]
+    rules = rules(header, Map.keys(found))
 
     passed = Enum.all?(rules, & &1.passed)
 
     %Report.Line{check: :header, passed: passed, columns: column_reports, rules: rules}
   end
+
+  @spec rules(t(), [String.t()]) :: [Report.Rule.t()]
+
+  def rules(%__MODULE__{} = header, matched),
+    do: [min_matches_rule(header, matched), required_rule(header, matched)]
 
   defp normalise_cell(cell) when is_binary(cell), do: cell |> header_cell() |> normalise()
   defp normalise_cell(_cell), do: nil

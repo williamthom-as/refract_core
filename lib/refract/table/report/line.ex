@@ -4,7 +4,7 @@ defmodule Refract.Table.Report.Line do
   alias Refract.Table.Report.Column
   alias Refract.Table.Report.Rule
 
-  defstruct [:row, :check, :passed, columns: %{}, rules: []]
+  defstruct [:row, :check, :passed, columns: %{}, rules: [], extra: []]
 
   @type check :: :header | :row | :stop
 
@@ -13,6 +13,7 @@ defmodule Refract.Table.Report.Line do
           check: check(),
           passed: boolean(),
           columns: %{String.t() => Column.t()},
-          rules: [Rule.t()]
+          rules: [Rule.t()],
+          extra: [{non_neg_integer(), Refract.cell()}]
         }
 end

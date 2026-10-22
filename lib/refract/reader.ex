@@ -1,13 +1,14 @@
 defmodule Refract.Reader do
   @moduledoc """
   behaviour for tabular readers. to use, implement `open/2` and return arrays of cells
-  `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3` and `load/2`.
+  `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3`, `suggest/3` and `load/2`.
   implement `extensions/0` to be picked by file extension in `Refract.Classify.folder/3`.
 
   options go to `open/2`, bar the names refract keeps for itself, so a reader picks other names:
   - `stream`: `skip`
   - `locate`: `within`, `on_miss`, `header_row`
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
+  - `suggest`: `within`, `header_row`
   - `load`: `max_bytes`
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
@@ -66,7 +67,10 @@ defmodule Refract.Reader do
         do: Refract.Reader.classify(__MODULE__, source, shapes, opts)
 
       @spec suggest(Refract.source(), Refract.Shape.t() | module(), keyword()) ::
-              {:ok, Refract.Classify.Mapping.t()} | {:error, term()}
+              {:ok, Refract.Table.Report.Line.t()} | {:error, term()}
+
+      def suggest(source, shape, opts \\ []),
+        do: Refract.Reader.suggest(__MODULE__, source, shape, opts)
 
       @spec load(Refract.source(), keyword()) :: {:ok, Refract.Grid.t()} | {:error, term()}
 
@@ -140,7 +144,19 @@ defmodule Refract.Reader do
   end
 
   @spec suggest(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::
-          {:ok, Classify.Mapping.t()} | {:error, term()}
+          {:ok, Refract.Table.Report.Line.t()} | {:error, term()}
+
+  def suggest(reader, source, shape, opts) do
+    {suggest_opts, open_opts} = Keyword.split(opts, [:within, :header_row])
+
+    case reader.open(source, open_opts) do
+      {:ok, raw} ->
+        parse_error_as_error(fn -> {:ok, Classify.suggest(raw, shape, suggest_opts)} end)
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
 
   @type reader_entry :: Lookup.reader_entry()
 
