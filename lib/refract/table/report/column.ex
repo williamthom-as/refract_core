@@ -3,7 +3,7 @@ defmodule Refract.Table.Report.Column do
 
   alias Refract.Table.Spec.Row
 
-  defstruct [:index, :cell, :rule, passed: false]
+  defstruct [:index, :cell, :rule, passed: false, others: []]
 
   @type rule :: String.t() | Row.rule()
 
@@ -11,6 +11,7 @@ defmodule Refract.Table.Report.Column do
           passed: boolean(),
           index: non_neg_integer() | nil,
           cell: Refract.cell(),
-          rule: rule() | nil
+          rule: rule() | nil,
+          others: [{non_neg_integer(), Refract.cell()}]
         }
 end

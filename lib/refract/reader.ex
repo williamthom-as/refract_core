@@ -65,6 +65,9 @@ defmodule Refract.Reader do
       def classify(source, shapes, opts \\ []),
         do: Refract.Reader.classify(__MODULE__, source, shapes, opts)
 
+      @spec suggest(Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+              {:ok, Refract.Classify.Mapping.t()} | {:error, term()}
+
       @spec load(Refract.source(), keyword()) :: {:ok, Refract.Grid.t()} | {:error, term()}
 
       def load(source, opts \\ []), do: Refract.Reader.load(__MODULE__, source, opts)
@@ -135,6 +138,9 @@ defmodule Refract.Reader do
         error
     end
   end
+
+  @spec suggest(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+          {:ok, Classify.Mapping.t()} | {:error, term()}
 
   @type reader_entry :: Lookup.reader_entry()
 
