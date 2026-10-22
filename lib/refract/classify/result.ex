@@ -2,6 +2,7 @@ defmodule Refract.Classify.Result do
   @moduledoc false
 
   alias Refract.Classify.Candidate
+  alias Refract.Classify.Drift
   alias Refract.Classify.Facts
   alias Refract.Shape
 
@@ -15,8 +16,9 @@ defmodule Refract.Classify.Result do
           reason: reason() | nil,
           shape: Shape.t() | nil,
           file: Facts.t() | nil,
+          drift: Drift.t() | nil,
           candidates: [Candidate.t()]
         }
 
-  defstruct [:verdict, :reason, :shape, :file, candidates: []]
+  defstruct [:verdict, :reason, :shape, :file, :drift, candidates: []]
 end

@@ -3,7 +3,7 @@ defmodule Refract.Table.Spec.Header do
 
   defstruct [:columns, :required, :min_matches, :lookup, :regexes]
 
-  import Refract.String.Utils, only: [header_cell: 1, normalise: 1]
+  import Refract.String.Utils, only: [blank?: 1, header_cell: 1, normalise: 1]
 
   alias Refract.Table.Report
 
@@ -11,9 +11,11 @@ defmodule Refract.Table.Spec.Header do
           columns: %{String.t() => [String.t() | Regex.t()]},
           required: [String.t()],
           min_matches: non_neg_integer(),
-          lookup: %{String.t() => [String.t()]},
-          regexes: %{String.t() => [Regex.t()]}
+          lookup: %{String.t() => [{String.t(), rank()}]},
+          regexes: %{String.t() => [{Regex.t(), rank()}]}
         }
+
+  @type rank :: {0 | 1, non_neg_integer()}
 
   def new(opts) do
     opts = Keyword.validate!(opts, [:columns, :min_matches, required: []])
@@ -50,22 +52,35 @@ defmodule Refract.Table.Spec.Header do
   end
 
   defp lookup(columns) do
-    for {column, patterns} <- columns, pattern <- plain_aliases(column, patterns), reduce: %{} do
-      acc -> Map.update(acc, pattern, [column], &[column | &1])
+    for {column, patterns} <- columns,
+        {pattern, rank} <- plain_aliases(column, patterns),
+        reduce: %{} do
+      acc -> Map.update(acc, pattern, [{column, rank}], &[{column, rank} | &1])
     end
   end
 
   defp plain_aliases(column, patterns) do
-    [normalise(column) | Enum.filter(patterns, &is_binary/1)]
-    |> Enum.uniq()
+    patterns
+    |> Enum.with_index(1)
+    |> Enum.concat([{normalise(column), 0}])
+    |> Enum.filter(fn {pattern, _position} -> is_binary(pattern) end)
+    |> Enum.uniq_by(fn {pattern, _position} -> pattern end)
+    |> Enum.map(fn {pattern, position} -> {pattern, {0, position}} end)
   end
 
   defp regexes(columns) do
     for {column, patterns} <- columns,
-        regexes = Enum.filter(patterns, &is_struct(&1, Regex)),
+        regexes = ranked_regexes(patterns),
         regexes != [],
         into: %{},
         do: {column, regexes}
+  end
+
+  defp ranked_regexes(patterns) do
+    patterns
+    |> Enum.with_index(1)
+    |> Enum.filter(fn {pattern, _position} -> is_struct(pattern, Regex) end)
+    |> Enum.map(fn {regex, position} -> {regex, {1, position}} end)
   end
 
   defp validate_columns(columns) when map_size(columns) == 0 do
@@ -155,75 +170,91 @@ defmodule Refract.Table.Spec.Header do
   @spec report(t(), Refract.raw_row(), [String.t() | nil]) :: report()
 
   def report(%__MODULE__{columns: columns} = header, line, normalised_line) do
-    found =
-      header
-      |> plain_matches(line, normalised_line)
-      |> regex_matches(header, line)
+    plain = group_hits(plain_hits(header, line, normalised_line))
+    found = Map.merge(group_hits(regex_hits(header, line, Map.keys(plain))), plain)
 
     column_reports =
       Map.new(columns, fn {column, _patterns} ->
         {column, Map.get(found, column, %Report.Column{})}
       end)
 
-    matched = Map.keys(found)
-    rules = [min_matches_rule(header, matched), required_rule(header, matched)]
+    rules = rules(header, Map.keys(found))
 
     passed = Enum.all?(rules, & &1.passed)
 
-    %Report.Line{check: :header, passed: passed, columns: column_reports, rules: rules}
+    %Report.Line{
+      check: :header,
+      passed: passed,
+      columns: column_reports,
+      rules: rules,
+      extra: extra(line, found)
+    }
   end
+
+  @spec extra(Refract.raw_row(), %{String.t() => Report.Column.t()}) ::
+          [{non_neg_integer(), Refract.cell()}]
+
+  def extra(line, found) do
+    taken =
+      for {_column, %Report.Column{index: index, others: others}} <- found,
+          taken <- [index | Enum.map(others, &elem(&1, 0))],
+          into: %{},
+          do: {taken, true}
+
+    for {cell, index} <- Enum.with_index(line),
+        is_binary(cell),
+        not blank?(cell),
+        not is_map_key(taken, index),
+        do: {index, cell}
+  end
+
+  @spec rules(t(), [String.t()]) :: [Report.Rule.t()]
+
+  def rules(%__MODULE__{} = header, matched),
+    do: [min_matches_rule(header, matched), required_rule(header, matched)]
 
   defp normalise_cell(cell) when is_binary(cell), do: cell |> header_cell() |> normalise()
   defp normalise_cell(_cell), do: nil
 
-  defp plain_matches(%__MODULE__{lookup: lookup}, line, normalised_line) do
-    line
-    |> Enum.zip(normalised_line)
-    |> Enum.with_index()
-    |> Enum.reduce(%{}, fn {{cell, normalised}, index}, found ->
-      lookup
-      |> Map.get(normalised, [])
-      |> Enum.reduce(found, fn column, acc ->
-        Map.put_new(acc, column, %Report.Column{
-          passed: true,
-          index: index,
-          cell: cell,
-          rule: normalised
-        })
-      end)
-    end)
+  defp plain_hits(%__MODULE__{lookup: lookup}, line, normalised_line) do
+    for {{cell, normalised}, index} <- line |> Enum.zip(normalised_line) |> Enum.with_index(),
+        {column, rank} <- Map.get(lookup, normalised, []),
+        do: {column, {rank, index}, cell, normalised}
   end
 
-  defp regex_matches(found, %__MODULE__{regexes: regexes}, line) do
-    regexes
-    |> Map.drop(Map.keys(found))
-    |> Enum.reduce(found, fn {column, column_regexes}, acc ->
-      case regex_column(line, column_regexes) do
-        nil -> acc
-        column_report -> Map.put(acc, column, column_report)
-      end
-    end)
+  defp regex_hits(%__MODULE__{regexes: regexes}, line, found) do
+    unfound = Map.drop(regexes, found)
+
+    for {cell, index} <- Enum.with_index(line),
+        cleaned = regex_text(cell),
+        cleaned != nil,
+        {column, column_regexes} <- unfound,
+        {regex, rank} <- column_regexes,
+        Regex.match?(regex, cleaned),
+        do: {column, {rank, index}, cell, regex}
   end
 
-  defp regex_column(line, regexes) do
-    line
-    |> Enum.with_index()
-    |> Enum.find_value(fn {cell, index} -> regex_cell(cell, index, regexes) end)
+  defp regex_text(cell) when is_binary(cell), do: header_cell(cell)
+  defp regex_text(_cell), do: nil
+
+  defp group_hits(hits) do
+    hits
+    |> Enum.group_by(fn {column, _position, _cell, _rule} -> column end)
+    |> Map.new(fn {column, column_hits} -> {column, column_report(column_hits)} end)
   end
 
-  defp regex_cell(cell, index, regexes) when is_binary(cell) do
-    regex_cell(cell, header_cell(cell), index, regexes)
-  end
+  defp column_report(hits) do
+    [{_column, {_rank, index}, cell, rule} | _rest] =
+      sorted = Enum.sort_by(hits, fn {_column, position, _cell, _rule} -> position end)
 
-  defp regex_cell(_cell, _index, _regexes), do: nil
+    others =
+      sorted
+      |> Enum.map(fn {_column, {_rank, other}, other_cell, _rule} -> {other, other_cell} end)
+      |> Enum.reject(fn {other, _cell} -> other == index end)
+      |> Enum.uniq_by(fn {other, _cell} -> other end)
+      |> Enum.sort()
 
-  defp regex_cell(_cell, nil, _index, _regexes), do: nil
-
-  defp regex_cell(cell, cleaned, index, regexes) do
-    case Enum.find(regexes, &Regex.match?(&1, cleaned)) do
-      nil -> nil
-      regex -> %Report.Column{passed: true, index: index, cell: cell, rule: regex}
-    end
+    %Report.Column{passed: true, index: index, cell: cell, rule: rule, others: others}
   end
 
   defp min_matches_rule(%__MODULE__{min_matches: min_matches}, matched) do

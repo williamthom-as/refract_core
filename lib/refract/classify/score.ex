@@ -3,6 +3,7 @@ defmodule Refract.Classify.Score do
 
   alias Refract.Classify.Candidate
   alias Refract.Classify.Ctx
+  alias Refract.Classify.Drift
   alias Refract.Classify.Markers
   alias Refract.Classify.Result
   alias Refract.Classify.Verdict
@@ -76,7 +77,7 @@ defmodule Refract.Classify.Score do
       above_header: above_header(candidates)
     }
 
-    %{result | file: facts}
+    %{result | file: facts, drift: Drift.from(result)}
   end
 
   defp above_header([%Candidate{header: %Report.Line{passed: true, row: row}} | _]), do: row - 1

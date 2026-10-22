@@ -19,6 +19,7 @@ defmodule Refract.Table do
       Enum.to_list(table.rows)
   """
 
+  alias Refract.Table.Concat
   alias Refract.Table.Locate
   alias Refract.Table.Report
   alias Refract.Table.Scan
@@ -90,4 +91,8 @@ defmodule Refract.Table do
   @spec scan([Refract.raw_row()], Spec.t()) :: [Report.Line.t()]
 
   def scan(lines, %Spec{} = spec), do: Scan.run(lines, spec)
+
+  @spec concat([t()]) :: t()
+
+  def concat(tables), do: Concat.run(tables)
 end

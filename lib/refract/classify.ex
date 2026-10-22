@@ -14,7 +14,9 @@ defmodule Refract.Classify do
   alias Refract.Classify.Folder
   alias Refract.Classify.Result
   alias Refract.Classify.Score
+  alias Refract.Classify.Suggest
   alias Refract.Shape
+  alias Refract.Table.Report.Line
 
   @spec lines(Enumerable.t(), [Shape.t() | module()], [Score.opt()]) :: Result.t()
 
@@ -24,4 +26,8 @@ defmodule Refract.Classify do
           {:ok, Enumerable.t(Folder.item())} | {:error, term()}
 
   def folder(dir, shapes, opts \\ []), do: Folder.run(dir, shapes, opts)
+
+  @spec suggest(Enumerable.t(), Shape.t() | module(), [Suggest.opt()]) :: Line.t()
+
+  def suggest(raw, shape, opts \\ []), do: Suggest.run(raw, shape, opts)
 end

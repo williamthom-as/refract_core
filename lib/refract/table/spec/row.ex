@@ -85,23 +85,25 @@ defmodule Refract.Table.Spec.Row do
     for {column, %Report.Column{passed: false, rule: rule}} <- columns, do: {column, rule}
   end
 
-  defp passes?(_, nil), do: false
+  @spec passes?(rule(), Refract.cell()) :: boolean()
 
-  defp passes?(:integer, value), do: match?({:ok, _}, Parse.integer(value))
+  def passes?(_, nil), do: false
 
-  defp passes?(:number, value), do: match?({:ok, _}, Parse.number(value))
+  def passes?(:integer, value), do: match?({:ok, _}, Parse.integer(value))
 
-  defp passes?(:date, value), do: match?({:ok, _}, Parse.date(value))
+  def passes?(:number, value), do: match?({:ok, _}, Parse.number(value))
 
-  defp passes?(:datetime, value), do: match?({:ok, _}, Parse.datetime(value, offset: :utc))
+  def passes?(:date, value), do: match?({:ok, _}, Parse.date(value))
 
-  defp passes?(%Regex{} = regex, value), do: Regex.match?(regex, text(value))
+  def passes?(:datetime, value), do: match?({:ok, _}, Parse.datetime(value, offset: :utc))
 
-  defp passes?(fun, value) when is_function(fun, 1) do
+  def passes?(%Regex{} = regex, value), do: Regex.match?(regex, text(value))
+
+  def passes?(fun, value) when is_function(fun, 1) do
     truthy?(fun.(value))
   end
 
-  defp passes?(_, _), do: false
+  def passes?(_, _), do: false
 
   @type report_opt :: {:values, boolean()}
 

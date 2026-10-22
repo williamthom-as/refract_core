@@ -168,6 +168,52 @@ defmodule Refract.TableTest do
                {:ok, %{"sku" => 0, "total" => 1, "vendor" => 2, "item" => 3}}
     end
 
+    test "when several cells match a column the alias listed first wins, whatever the order" do
+      spec = Table.spec(header: [columns: %{"cost" => ["total cost", "cost", "final price"]}])
+
+      assert Table.match_header(spec, ["Final Price", "Cost", "Total Cost"]) ==
+               {:ok, %{"cost" => 2}}
+
+      assert Table.match_header(spec, ["Total Cost", "Final Price"]) == {:ok, %{"cost" => 0}}
+      assert Table.match_header(spec, ["Final Price", "Cost"]) == {:ok, %{"cost" => 1}}
+    end
+
+    test "a column name not in its aliases outranks them, listed it ranks where it sits" do
+      assert Table.match_header(Table.spec(header: [columns: %{"cost" => ["final price"]}]), [
+               "Final Price",
+               "Cost"
+             ]) == {:ok, %{"cost" => 1}}
+
+      assert Table.match_header(
+               Table.spec(header: [columns: %{"cost" => ["final price", "cost"]}]),
+               ["Cost", "Final Price"]
+             ) == {:ok, %{"cost" => 1}}
+    end
+
+    test "regex aliases rank by their place among the regex aliases" do
+      spec = Table.spec(header: [columns: %{"product" => [~r/^item\s*no/i, ~r/^sku/i]}])
+
+      assert Table.match_header(spec, ["SKU", "Item No."]) == {:ok, %{"product" => 1}}
+    end
+
+    test "the other cells that matched a column are reported, the first alias used" do
+      spec = Table.spec(header: [columns: %{"cost" => ["total cost", "cost", "final price"]}])
+
+      assert [%Line{columns: %{"cost" => column}}] =
+               Table.scan([["Final Price", "Cost", "Total Cost"]], spec)
+
+      assert %Column{passed: true, index: 2, cell: "Total Cost"} = column
+      assert column.others == [{0, "Final Price"}, {1, "Cost"}]
+    end
+
+    test "a column one cell matched reports no others" do
+      assert [%Line{columns: %{"sku" => column}}] =
+               Table.scan([["SKU", "Item", "Amount"]], invoice_spec(min_matches: 3))
+
+      assert column.index == 0
+      assert column.others == []
+    end
+
     test "regex aliases ignore surrounding whitespace and literal wrapping quotes" do
       row = ["  Item No. ", "\"Item No\"", "Description", "Amount"]
 
@@ -233,6 +279,13 @@ defmodule Refract.TableTest do
     test "one report per line, numbered from 1" do
       assert [%Line{row: 1, check: :header}, %Line{row: 2}, %Line{row: 3}] =
                Table.scan([@blank_line, @header_line, @raw_line], invoice_spec())
+    end
+
+    test "a header report lists the non blank cells no column claimed" do
+      assert [header] =
+               Table.scan([["SKU", "Region", "", "Item", "Amount"]], invoice_spec(min_matches: 3))
+
+      assert header.extra == [{1, "Region"}]
     end
 
     test "a header line passes and says where and how each column matched" do
@@ -336,9 +389,16 @@ defmodule Refract.TableTest do
       assert positions(report) == %{"sku" => 2}
     end
 
-    test "the first cell matching a column wins" do
+    test "the alias listed first wins, the other matching cells are kept" do
       assert [report] = Table.scan([["SKU", "Product Code"]], invoice_spec())
-      assert report.columns["sku"] == %Column{passed: true, index: 0, cell: "SKU", rule: "sku"}
+
+      assert report.columns["sku"] == %Column{
+               passed: true,
+               index: 0,
+               cell: "SKU",
+               rule: "sku",
+               others: [{1, "Product Code"}]
+             }
     end
 
     test "a plain alias beats a regex alias in the same column" do
@@ -728,6 +788,85 @@ defmodule Refract.TableTest do
       spec = table_spec(stop: [condition, :blank])
 
       assert Table.match_stop(spec, @blank_line) == {:stop, condition}
+    end
+  end
+
+  describe "concat/1" do
+    defp page(header, rows), do: Table.new(3, header, %{"id" => 0}, rows)
+
+    test "rows of every table in order under one header" do
+      table =
+        Table.concat([
+          page(["id", "name"], [%{"id" => "1", "name" => "alice"}]),
+          page(["id", "name"], [%{"id" => "2", "name" => "bob"}, %{"id" => "3", "name" => "cy"}])
+        ])
+
+      assert table.header == ["id", "name"]
+
+      assert Enum.to_list(table.rows) == [
+               %{"id" => "1", "name" => "alice"},
+               %{"id" => "2", "name" => "bob"},
+               %{"id" => "3", "name" => "cy"}
+             ]
+    end
+
+    test "the header is every column in first seen order, a missing column is nil" do
+      table =
+        Table.concat([
+          page(["id", "name"], [%{"id" => "1", "name" => "alice"}]),
+          page(["age", "id"], [%{"age" => "40", "id" => "2"}])
+        ])
+
+      assert table.header == ["id", "name", "age"]
+
+      assert Enum.to_list(table.rows) == [
+               %{"id" => "1", "name" => "alice", "age" => nil},
+               %{"id" => "2", "name" => nil, "age" => "40"}
+             ]
+    end
+
+    test "rows are read only when the table is read" do
+      rows = Stream.map([%{"id" => "1"}], &tap(&1, fn _row -> send(self(), :read) end))
+
+      table = Table.concat([page(["id"], rows), page(["id"], [%{"id" => "2"}])])
+      refute_received :read
+
+      assert Enum.to_list(table.rows) == [%{"id" => "1"}, %{"id" => "2"}]
+      assert_received :read
+    end
+
+    test "the header row and source positions do not carry over" do
+      table = Table.concat([page(["id"], [%{"id" => "1"}])])
+
+      assert table.header_row == nil
+      assert table.columns == %{}
+    end
+
+    test "no tables gives an empty table" do
+      table = Table.concat([])
+
+      assert table.header == []
+      assert Enum.to_list(table.rows) == []
+    end
+
+    test "located tables from several sources read as one" do
+      spec = Table.spec(header: [columns: %{"sku" => ["sku", "item no"], "total" => ["total"]}])
+
+      {:ok, first} = Refract.CSV.locate({:string, "sku,total\n1,3\n"}, spec)
+      {:ok, second} = Refract.CSV.locate({:string, "report\nitem no,total\n2,4\n"}, spec)
+
+      table = Table.concat([first, second])
+
+      assert Enum.to_list(table.rows) == [
+               %{"sku" => "1", "total" => "3"},
+               %{"sku" => "2", "total" => "4"}
+             ]
+    end
+
+    test "anything but a list of tables raises" do
+      for tables <- [:pages, page(["id"], []), [page(["id"], []), %{"id" => "1"}]] do
+        assert_raise ArgumentError, ~r/tables/, fn -> Table.concat(tables) end
+      end
     end
   end
 end
