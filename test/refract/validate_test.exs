@@ -299,7 +299,7 @@ defmodule Refract.ValidateTest do
         "validation" => %{"columns" => %{"colour" => ["required"]}}
       }
 
-      assert {:error, {:invalid_validation, message}} = Shape.from_map(map)
+      assert {:error, {:invalid_shape, message}} = Shape.from_map(map)
       assert message =~ "colour"
     end
   end

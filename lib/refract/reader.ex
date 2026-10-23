@@ -1,8 +1,8 @@
 defmodule Refract.Reader do
   @moduledoc """
   behaviour for tabular readers. to use, implement `open/2` and return arrays of cells
-  `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3`, `suggest/3`, `validate/3`
-  and `load/2`.
+  `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3`, `suggest/3`, `validate/3`,
+  `fields/3` and `load/2`.
   implement `extensions/0` to be picked by file extension in `Refract.Classify.folder/3`.
 
   options go to `open/2`, bar the names refract keeps for itself, so a reader picks other names:
@@ -11,7 +11,7 @@ defmodule Refract.Reader do
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
   - `suggest`: `within`, `header_row`
   - `validate`: `within`, `header_row`, `values`
-  - `load`: `max_bytes`
+  - `load`, `fields`: `max_bytes`
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
 
@@ -80,6 +80,12 @@ defmodule Refract.Reader do
 
       def validate(source, shape, opts \\ []),
         do: Refract.Reader.validate(__MODULE__, source, shape, opts)
+
+      @spec fields(Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+              {:ok, %{String.t() => Refract.cell()}} | {:error, term()}
+
+      def fields(source, shape, opts \\ []),
+        do: Refract.Reader.fields(__MODULE__, source, shape, opts)
 
       @spec load(Refract.source(), keyword()) :: {:ok, Refract.Grid.t()} | {:error, term()}
 
@@ -177,6 +183,13 @@ defmodule Refract.Reader do
       {:ok, raw} -> parse_error_as_error(fn -> Validate.source(raw, shape, validate_opts) end)
       {:error, _reason} = error -> error
     end
+  end
+
+  @spec fields(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+          {:ok, %{String.t() => Refract.cell()}} | {:error, term()}
+
+  def fields(reader, source, shape, opts) do
+    with {:ok, grid} <- load(reader, source, opts), do: {:ok, Grid.fields(grid, shape)}
   end
 
   @type reader_entry :: Lookup.reader_entry()

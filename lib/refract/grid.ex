@@ -5,7 +5,8 @@ defmodule Refract.Grid do
   streams.
 
   cells and ranges are accessed by a1 refs, values and blocks by nearby labels.
-  `locate`, `validate`, `classify` and `explain` work the same as on a stream
+  `locate`, `validate`, `classify` and `explain` work the same as on a stream,
+  `fields` reads the values a shapes `fields:` name (by label or cell)
 
       {:ok, grid} = Refract.CSV.load("invoice.csv")
 
@@ -19,6 +20,7 @@ defmodule Refract.Grid do
   alias Refract.Grid.Lookup
 
   alias Refract.Shape
+  alias Refract.Shape.Field
   alias Refract.Table
   alias Refract.Table.Locate
   alias Refract.Table.Spec
@@ -76,6 +78,14 @@ defmodule Refract.Grid do
     |> Validate.source(shape, opts)
   end
 
+  @spec fields(t(), Shape.t() | module()) :: %{String.t() => Refract.cell()}
+
+  def fields(%__MODULE__{} = grid, shape) do
+    %Shape{fields: fields} = Shape.resolve(shape)
+
+    Map.new(fields, fn {name, field} -> {name, field_value(grid, field)} end)
+  end
+
   @spec cell(t(), String.t()) :: Refract.cell()
 
   def cell(%__MODULE__{} = grid, ref), do: Lookup.cell(grid, ref)
@@ -105,4 +115,9 @@ defmodule Refract.Grid do
   def rows_as_list(%__MODULE__{rows: rows}) do
     for row <- Tuple.to_list(rows), do: Tuple.to_list(row)
   end
+
+  defp field_value(grid, %Field{at: nil, label: label, take: take}),
+    do: Lookup.value(grid, label: label, take: take)
+
+  defp field_value(grid, %Field{at: at}), do: Lookup.cell(grid, at)
 end

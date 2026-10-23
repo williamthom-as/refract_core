@@ -6,11 +6,12 @@ defmodule Refract.Shape.FromMap do
   alias Refract.Shape
   alias Refract.Table
 
-  @keys ~w(name version markers header row stop max_misses validation)
+  @keys ~w(name version markers header row stop max_misses validation fields)
   @header_keys ~w(columns required min_matches)
   @row_keys ~w(match min_score)
   @marker_keys ~w(file content)
   @validation_keys ~w(columns)
+  @field_keys ~w(label take at rules)
 
   @spec run(term()) :: {:ok, Shape.t()} | {:error, Shape.error()}
 
@@ -24,13 +25,15 @@ defmodule Refract.Shape.FromMap do
          {:ok, version} <- version(Map.get(map, "version", 1)),
          {:ok, markers} <- markers(Map.get(map, "markers", %{})),
          {:ok, spec} <- spec(map),
-         {:ok, validation} <- validation(Map.get(map, "validation", %{})) do
+         {:ok, validation} <- validation(Map.get(map, "validation", %{})),
+         {:ok, fields} <- fields(Map.get(map, "fields", %{})) do
       build_shape(
         name: name,
         version: version,
         spec: spec,
         markers: markers,
-        validation: validation
+        validation: validation,
+        fields: fields
       )
     end
   end
@@ -38,7 +41,7 @@ defmodule Refract.Shape.FromMap do
   defp build_shape(opts) do
     {:ok, Shape.new(opts)}
   rescue
-    error in ArgumentError -> {:error, {:invalid_validation, Exception.message(error)}}
+    error in ArgumentError -> {:error, {:invalid_shape, Exception.message(error)}}
   end
 
   defp name(%{"name" => name}) when is_binary(name) do
@@ -179,6 +182,54 @@ defmodule Refract.Shape.FromMap do
   defp rule(_path, "date"), do: {:ok, :date}
   defp rule(_path, "datetime"), do: {:ok, :datetime}
   defp rule(path, value), do: regex_only(path, value)
+
+  defp fields(fields) when is_map(fields), do: fields(Map.to_list(fields), %{})
+  defp fields(fields), do: invalid("fields", fields)
+
+  defp fields([], parsed), do: {:ok, parsed}
+
+  defp fields([{name, field} | rest], parsed) when is_binary(name) and is_map(field) do
+    case field("fields." <> name, present(field)) do
+      {:ok, opts} -> fields(rest, Map.put(parsed, name, opts))
+      error -> error
+    end
+  end
+
+  defp fields([{name, field} | _rest], _parsed), do: invalid("fields.#{name}", field)
+
+  defp field(path, field) do
+    with :ok <- known_keys(field, @field_keys, path),
+         {:ok, rules} <- field_rules(path <> ".rules", Map.get(field, "rules", [])),
+         {:ok, find} <- field_find(path, field) do
+      {:ok, [rules: rules] ++ find}
+    end
+  end
+
+  defp field_rules(path, rules) when is_list(rules), do: validation_rules(path, rules, [])
+  defp field_rules(path, rules), do: invalid(path, rules)
+
+  defp field_find(path, field) do
+    with {:ok, label} <- field_label(path <> ".label", Map.get(field, "label")),
+         {:ok, take} <- field_take(path <> ".take", Map.get(field, "take", "right")) do
+      {:ok, label ++ take ++ take_opts(field, at: "at")}
+    end
+  end
+
+  defp field_label(_path, nil), do: {:ok, []}
+
+  defp field_label(path, label) when is_binary(label) do
+    case to_regex(label) do
+      :plain -> {:ok, [label: label]}
+      {:ok, regex} -> {:ok, [label: regex]}
+      {:error, _reason} -> invalid(path, label)
+    end
+  end
+
+  defp field_label(path, label), do: invalid(path, label)
+
+  defp field_take(_path, "right"), do: {:ok, [take: :right]}
+  defp field_take(_path, "below"), do: {:ok, [take: :below]}
+  defp field_take(path, take), do: invalid(path, take)
 
   defp validation(validation) when is_map(validation) do
     validation = present(validation)

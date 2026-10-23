@@ -23,8 +23,8 @@ defmodule Refract.Validate.Rules do
 
   def new!(opts, column_names) do
     opts = Keyword.validate!(opts, columns: %{}, rows: [])
-    columns = Keyword.get(opts, :columns)
-    rows = Keyword.get(opts, :rows)
+    columns = Keyword.fetch!(opts, :columns)
+    rows = Keyword.fetch!(opts, :rows)
 
     validate_columns(columns, column_names)
     Enum.each(rows, &validate_row_rule/1)
@@ -32,10 +32,18 @@ defmodule Refract.Validate.Rules do
     %__MODULE__{columns: columns, rows: rows}
   end
 
+  @spec validate_rules!([rule()]) :: :ok
+
+  def validate_rules!(rules) when is_list(rules), do: Enum.each(rules, &validate_rule/1)
+
+  def validate_rules!(rules) do
+    raise ArgumentError, "rules must be a list, got: #{inspect(rules)}"
+  end
+
   defp validate_columns(columns, column_names) do
     Enum.each(columns, fn {column, rules} ->
       validate_column(column, column_names)
-      Enum.each(rules, &validate_rule/1)
+      validate_rules!(rules)
     end)
   end
 

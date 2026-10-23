@@ -26,6 +26,14 @@ defmodule Refract.Grid.Lookup do
     fetch(rows, x, y)
   end
 
+  @spec validate_ref!(String.t()) :: :ok
+
+  def validate_ref!(ref) do
+    parse_ref(ref)
+
+    :ok
+  end
+
   @spec range(Grid.t(), String.t()) :: [Refract.raw_row()]
 
   def range(%Grid{rows: rows}, range) do
