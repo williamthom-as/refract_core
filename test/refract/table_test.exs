@@ -486,6 +486,44 @@ defmodule Refract.TableTest do
     end
   end
 
+  describe "optional columns with row rules" do
+    defp optional_spec do
+      Table.spec(
+        header: [
+          columns: %{"sku" => ["sku"], "total" => ["total"], "shipped_on" => ["shipped on"]},
+          required: ["sku", "total"],
+          min_matches: 2
+        ],
+        row: [match: %{"total" => :number, "shipped_on" => :date}]
+      )
+    end
+
+    test "a rule for a column the file does not have is skipped, rows are kept" do
+      lines = [["sku", "total"], ["A-100", "3.50"], ["B-200", "4.25"]]
+
+      assert {:ok, table} = Table.locate(lines, optional_spec(), on_miss: :skip)
+
+      assert Enum.to_list(table.rows) == [
+               %{"sku" => "A-100", "total" => "3.50", "shipped_on" => nil},
+               %{"sku" => "B-200", "total" => "4.25", "shipped_on" => nil}
+             ]
+    end
+
+    test "the column present but blank still fails its rule" do
+      lines = [["sku", "total", "shipped on"], ["A-100", "3.50", ""]]
+
+      assert {:ok, table} = Table.locate(lines, optional_spec(), on_miss: :skip)
+      assert Enum.to_list(table.rows) == []
+    end
+
+    test "match_row skips a rule for a column the row does not have" do
+      assert Table.match_row(optional_spec(), %{"sku" => "A-100", "total" => "3.50"}) == :ok
+
+      assert {:error, %{failed: [{"shipped_on", :date}]}} =
+               Table.match_row(optional_spec(), %{"total" => "3.50", "shipped_on" => nil})
+    end
+  end
+
   describe "match_row/2" do
     test "passes when every rule passes" do
       assert Table.match_row(row_spec(match: @rules), @line) == :ok
@@ -653,10 +691,17 @@ defmodule Refract.TableTest do
       assert report.columns["total"] == %Column{passed: true, rule: :number, cell: "8"}
     end
 
-    test "a missing cell fails its rule" do
-      report = row_report([match: @rules], Map.delete(@line, "sku"), values: true)
+    test "a nil cell fails its rule" do
+      report = row_report([match: @rules], Map.put(@line, "sku", nil), values: true)
 
       assert report.columns["sku"] == %Column{passed: false, rule: :integer, cell: nil}
+    end
+
+    test "a rule for a column the row does not have is skipped" do
+      report = row_report([match: @rules], Map.delete(@line, "sku"), values: true)
+
+      refute Map.has_key?(report.columns, "sku")
+      assert report.passed
     end
 
     test "no rules passes with nothing to report" do

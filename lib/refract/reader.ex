@@ -1,7 +1,8 @@
 defmodule Refract.Reader do
   @moduledoc """
   behaviour for tabular readers. to use, implement `open/2` and return arrays of cells
-  `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3`, `suggest/3` and `load/2`.
+  `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3`, `suggest/3`, `validate/3`,
+  `fields/3` and `load/2`.
   implement `extensions/0` to be picked by file extension in `Refract.Classify.folder/3`.
 
   options go to `open/2`, bar the names refract keeps for itself, so a reader picks other names:
@@ -9,7 +10,8 @@ defmodule Refract.Reader do
   - `locate`: `within`, `on_miss`, `header_row`
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
   - `suggest`: `within`, `header_row`
-  - `load`: `max_bytes`
+  - `validate`: `within`, `header_row`, `values` (and `max_bytes` when the shape has fields)
+  - `load`, `fields`: `max_bytes`
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
 
@@ -39,10 +41,12 @@ defmodule Refract.Reader do
   alias Refract.Classify.Score
   alias Refract.Errors.ParseError
   alias Refract.Grid
+  alias Refract.Shape
   alias Refract.Source
   alias Refract.Table
   alias Refract.Table.Locate
   alias Refract.Table.Spec
+  alias Refract.Validate
 
   import Refract.File.Utils, only: [size_check: 3]
 
@@ -71,6 +75,18 @@ defmodule Refract.Reader do
 
       def suggest(source, shape, opts \\ []),
         do: Refract.Reader.suggest(__MODULE__, source, shape, opts)
+
+      @spec validate(Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+              {:ok, Refract.Validate.Result.t()} | {:error, term()}
+
+      def validate(source, shape, opts \\ []),
+        do: Refract.Reader.validate(__MODULE__, source, shape, opts)
+
+      @spec fields(Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+              {:ok, %{String.t() => Refract.cell()}} | {:error, term()}
+
+      def fields(source, shape, opts \\ []),
+        do: Refract.Reader.fields(__MODULE__, source, shape, opts)
 
       @spec load(Refract.source(), keyword()) :: {:ok, Refract.Grid.t()} | {:error, term()}
 
@@ -156,6 +172,43 @@ defmodule Refract.Reader do
       {:error, _reason} = error ->
         error
     end
+  end
+
+  @spec validate(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+          {:ok, Refract.Validate.Result.t()} | {:error, term()}
+
+  def validate(reader, source, shape, opts) do
+    {validate_opts, read_opts} = Keyword.split(opts, [:within, :header_row, :values])
+
+    shape
+    |> Shape.resolve()
+    |> validate_with(reader, source, validate_opts, read_opts)
+  end
+
+  defp validate_with(
+         %Refract.Shape{fields: fields} = shape,
+         reader,
+         source,
+         validate_opts,
+         open_opts
+       )
+       when map_size(fields) == 0 do
+    case reader.open(source, open_opts) do
+      {:ok, raw} -> parse_error_as_error(fn -> Validate.source(raw, shape, validate_opts) end)
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp validate_with(shape, reader, source, validate_opts, load_opts) do
+    with {:ok, grid} <- load(reader, source, load_opts),
+         do: Grid.validate(grid, shape, validate_opts)
+  end
+
+  @spec fields(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+          {:ok, %{String.t() => Refract.cell()}} | {:error, term()}
+
+  def fields(reader, source, shape, opts) do
+    with {:ok, grid} <- load(reader, source, opts), do: {:ok, Grid.fields(grid, shape)}
   end
 
   @type reader_entry :: Lookup.reader_entry()

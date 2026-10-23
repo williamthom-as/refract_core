@@ -10,9 +10,11 @@ defmodule Refract.Shape do
       Refract.Shape.load("shapes/invoice.yml")
   """
 
+  alias Refract.Shape.Field
   alias Refract.Shape.FromMap
   alias Refract.Shape.Load
   alias Refract.Table.Spec
+  alias Refract.Validate.Rules
 
   import Refract.String.Utils, only: [blank?: 1]
 
@@ -22,16 +24,20 @@ defmodule Refract.Shape do
           name: String.t(),
           version: pos_integer(),
           spec: Spec.t(),
-          markers: [marker()]
+          markers: [marker()],
+          validation: Rules.t(),
+          fields: %{String.t() => Field.t()}
         }
 
-  defstruct [:name, :version, :spec, :markers]
+  defstruct [:name, :version, :spec, :markers, :validation, fields: %{}]
 
   @type opt ::
           {:name, String.t()}
           | {:spec, Spec.t()}
           | {:version, pos_integer()}
           | {:markers, [marker()]}
+          | {:validation, keyword()}
+          | {:fields, %{String.t() => keyword()}}
 
   @type error ::
           {:not_a_map, term()}
@@ -39,6 +45,7 @@ defmodule Refract.Shape do
           | {:unknown_key, String.t()}
           | {:invalid_value, {String.t(), term()}}
           | {:invalid_spec, String.t()}
+          | {:invalid_shape, String.t()}
 
   @type load_error ::
           error()
@@ -88,7 +95,8 @@ defmodule Refract.Shape do
   @spec new([opt()]) :: t()
 
   def new(opts) do
-    opts = Keyword.validate!(opts, [:name, :spec, version: 1, markers: []])
+    opts =
+      Keyword.validate!(opts, [:name, :spec, version: 1, markers: [], validation: [], fields: %{}])
 
     name = Keyword.get(opts, :name)
     spec = Keyword.get(opts, :spec)
@@ -101,12 +109,30 @@ defmodule Refract.Shape do
     validate_version(version)
     validate_markers(markers)
 
+    validation = Rules.new!(Keyword.get(opts, :validation), spec.header.columns)
+    fields = fields(Keyword.get(opts, :fields))
+
     %__MODULE__{
       name: name,
       version: version,
       spec: spec,
-      markers: markers
+      markers: markers,
+      validation: validation,
+      fields: fields
     }
+  end
+
+  defp fields(fields) when is_map(fields),
+    do: Map.new(fields, fn {name, opts} -> {field_name(name), Field.new!(opts)} end)
+
+  defp fields(fields) do
+    raise ArgumentError, "fields must be a map of names to field options, got: #{inspect(fields)}"
+  end
+
+  defp field_name(name) when is_binary(name), do: name
+
+  defp field_name(name) do
+    raise ArgumentError, "a field name must be a string, got: #{inspect(name)}"
   end
 
   @spec from_map(term()) :: {:ok, t()} | {:error, error()}

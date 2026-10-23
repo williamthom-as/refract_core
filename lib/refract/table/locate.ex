@@ -26,9 +26,29 @@ defmodule Refract.Table.Locate do
     end
   end
 
+  @spec header(Enumerable.t(), Spec.t(), keyword()) ::
+          {:ok, pos_integer(), Header.positions()} | {:error, {:header_not_found, header_miss()}}
+
+  def header(raw, %Spec{} = spec, opts) do
+    opts = Keyword.validate!(opts, within: 100, header_row: nil)
+    within = Keyword.fetch!(opts, :within)
+    header_row = Keyword.fetch!(opts, :header_row)
+
+    validate_within(within)
+    validate_header_row(header_row)
+
+    raw
+    |> find_header(spec, within, header_row)
+    |> header_found()
+  end
+
+  @spec absent(Spec.t(), Header.positions()) :: %{String.t() => nil}
+
+  def absent(spec, positions), do: spec |> missing_columns(positions) |> Map.new(&{&1, nil})
+
   defp table(raw, spec, header_row, positions, on_miss) do
     missing = missing_columns(spec, positions)
-    absent = Map.new(missing, &{&1, nil})
+    absent = absent(spec, positions)
 
     rows =
       raw
@@ -95,6 +115,10 @@ defmodule Refract.Table.Locate do
     |> Enum.map(&%{&1 | row: header_row})
     |> first_passing()
   end
+
+  defp header_found({:error, best}), do: {:error, {:header_not_found, best}}
+
+  defp header_found(found), do: found
 
   defp first_passing(scanned) do
     case Enum.find(scanned, & &1.passed) do

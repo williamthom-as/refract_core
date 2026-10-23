@@ -113,14 +113,6 @@ defmodule Refract.Table.Spec.Row do
 
   def report(row_spec, row, opts \\ [])
 
-  def report(%__MODULE__{match: rules}, _row, opts) when map_size(rules) == 0 do
-    opts = Keyword.validate!(opts, values: false)
-
-    validate_values(Keyword.fetch!(opts, :values))
-
-    %Report.Line{check: :row, passed: true}
-  end
-
   def report(%__MODULE__{match: rules} = row_spec, row, opts) do
     opts = Keyword.validate!(opts, values: false)
 
@@ -128,6 +120,15 @@ defmodule Refract.Table.Spec.Row do
 
     validate_values(values)
 
+    rules
+    |> Map.filter(fn {column, _rule} -> Map.has_key?(row, column) end)
+    |> line_report(row_spec, row, values)
+  end
+
+  defp line_report(rules, _row_spec, _row, _values) when map_size(rules) == 0,
+    do: %Report.Line{check: :row, passed: true}
+
+  defp line_report(rules, row_spec, row, values) do
     column_reports =
       Map.new(rules, fn {column, rule} ->
         {column, column_report(row, column, rule, values)}

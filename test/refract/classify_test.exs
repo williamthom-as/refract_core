@@ -46,6 +46,25 @@ defmodule Refract.ClassifyTest do
       assert %Result{verdict: :match, reason: nil, shape: %Shape{name: "invoice"}} = result
     end
 
+    test "a row rule on an optional column the file lacks does not fail its rows" do
+      shape =
+        Shape.new(
+          name: "order",
+          spec:
+            Table.spec(
+              header: [
+                columns: %{"sku" => ["sku"], "total" => ["total"], "shipped_on" => ["shipped on"]},
+                required: ["sku", "total"],
+                min_matches: 2
+              ],
+              row: [match: %{"total" => :number, "shipped_on" => :date}]
+            )
+        )
+
+      assert %Result{verdict: :match} =
+               Classify.lines([["sku", "total"], ["A-100", "3.50"]], [shape])
+    end
+
     test "header cells wrapped in literal quotes match" do
       assert %Result{verdict: :match, shape: %Shape{name: "invoice"}} =
                classify("quoted_header.csv", ["invoice", "aws_bill"])
