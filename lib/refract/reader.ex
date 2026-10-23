@@ -10,7 +10,7 @@ defmodule Refract.Reader do
   - `locate`: `within`, `on_miss`, `header_row`
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
   - `suggest`: `within`, `header_row`
-  - `validate`: `within`, `header_row`, `values`
+  - `validate`: `within`, `header_row`, `values` (and `max_bytes` when the shape has fields)
   - `load`, `fields`: `max_bytes`
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
@@ -41,6 +41,7 @@ defmodule Refract.Reader do
   alias Refract.Classify.Score
   alias Refract.Errors.ParseError
   alias Refract.Grid
+  alias Refract.Shape
   alias Refract.Source
   alias Refract.Table
   alias Refract.Table.Locate
@@ -177,12 +178,30 @@ defmodule Refract.Reader do
           {:ok, Refract.Validate.Result.t()} | {:error, term()}
 
   def validate(reader, source, shape, opts) do
-    {validate_opts, open_opts} = Keyword.split(opts, [:within, :header_row, :values])
+    {validate_opts, read_opts} = Keyword.split(opts, [:within, :header_row, :values])
 
+    shape
+    |> Shape.resolve()
+    |> validate_with(reader, source, validate_opts, read_opts)
+  end
+
+  defp validate_with(
+         %Refract.Shape{fields: fields} = shape,
+         reader,
+         source,
+         validate_opts,
+         open_opts
+       )
+       when map_size(fields) == 0 do
     case reader.open(source, open_opts) do
       {:ok, raw} -> parse_error_as_error(fn -> Validate.source(raw, shape, validate_opts) end)
       {:error, _reason} = error -> error
     end
+  end
+
+  defp validate_with(shape, reader, source, validate_opts, load_opts) do
+    with {:ok, grid} <- load(reader, source, load_opts),
+         do: Grid.validate(grid, shape, validate_opts)
   end
 
   @spec fields(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::

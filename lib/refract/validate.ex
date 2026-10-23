@@ -6,6 +6,7 @@ defmodule Refract.Validate do
   """
 
   alias Refract.Shape
+  alias Refract.Shape.Field
   alias Refract.Table.Body
   alias Refract.Table.Locate
   alias Refract.Table.Report
@@ -64,6 +65,34 @@ defmodule Refract.Validate do
 
       {:ok, %Result{valid: issues == [], rows: length(steps), issues: issues}}
     end
+  end
+
+  @spec fields(
+          Result.t(),
+          %{String.t() => {Refract.cell(), pos_integer() | nil}},
+          Shape.t() | module(),
+          keyword()
+        ) :: Result.t()
+
+  def fields(%Result{issues: issues} = result, located, shape, opts) do
+    %Shape{fields: fields} = Shape.resolve(shape)
+    values = Keyword.get(opts, :values, false)
+
+    field_issues =
+      for {name, %Field{rules: rules}} <- Enum.sort(fields),
+          {cell, line} = Map.fetch!(located, name),
+          rule = first_failed(rules, cell),
+          rule != nil,
+          do: %Issue{line: line, field: name, rule: rule_name(rule), value: shown(values, cell)}
+
+    issues = field_issues ++ issues
+
+    %{
+      result
+      | fields: Map.new(located, fn {name, {cell, _line}} -> {name, cell} end),
+        issues: issues,
+        valid: issues == []
+    }
   end
 
   defp step_issues(

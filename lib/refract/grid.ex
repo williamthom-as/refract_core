@@ -73,14 +73,23 @@ defmodule Refract.Grid do
   def validate(%__MODULE__{height: height} = grid, shape, opts \\ []) do
     opts = Keyword.put_new(opts, :within, height)
 
-    grid
-    |> rows_as_list()
-    |> Validate.source(shape, opts)
+    with {:ok, result} <- grid |> rows_as_list() |> Validate.source(shape, opts) do
+      {:ok, Validate.fields(result, located_fields(grid, shape), shape, opts)}
+    end
   end
 
   @spec fields(t(), Shape.t() | module()) :: %{String.t() => Refract.cell()}
 
   def fields(%__MODULE__{} = grid, shape) do
+    grid
+    |> located_fields(shape)
+    |> Map.new(fn {name, {value, _line}} -> {name, value} end)
+  end
+
+  @spec located_fields(t(), Shape.t() | module()) ::
+          %{String.t() => {Refract.cell(), pos_integer() | nil}}
+
+  def located_fields(%__MODULE__{} = grid, shape) do
     %Shape{fields: fields} = Shape.resolve(shape)
 
     Map.new(fields, fn {name, field} -> {name, field_value(grid, field)} end)
@@ -117,7 +126,7 @@ defmodule Refract.Grid do
   end
 
   defp field_value(grid, %Field{at: nil, label: label, take: take}),
-    do: Lookup.value(grid, label: label, take: take)
+    do: Lookup.value_line(grid, label: label, take: take)
 
-  defp field_value(grid, %Field{at: at}), do: Lookup.cell(grid, at)
+  defp field_value(grid, %Field{at: at}), do: Lookup.cell_line(grid, at)
 end

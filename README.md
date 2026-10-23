@@ -338,6 +338,59 @@ validation:
     line_total: [required, number, {max: 10000}]
 ```
 
+### Fields (around the table)
+
+Not all tabular formats are tidy, some have fields inside the file, above or below the content/table.
+
+Use fields to read/validate them.
+
+`acme_invoice_0413.csv` as a grid:
+
+| | A | B | C | D | E |
+|---|---|---|---|---|---|
+| **1** | ACME PTY LTD - Tax Invoice | | | | |
+| **2** | **Invoice No** | INV-1002 | | | |
+| **3** | | | | | |
+| **4** | SKU | Description | Qty | Unit Price | Line Total |
+| **5** | A-100 | widget | 2 | 12.50 | 25.00 |
+| **6** | C-300 | press | 1 | 12500.00 | 12500.00 |
+| **7** | B-200 | gadget | 4 | 99.00 | 369.00 |
+| **8** | x-1 | bolt | | 0.50 | 0.50 |
+| **9** | | | | | |
+| **10** | **Total** | | | | 12894.50 |
+
+The table is lines 4 to 8 (found by its header). The invoice number sits right of its label (ln 2), the total right of its label on (ln 10), and there is a missing invoice date field.
+
+```elixir
+invoice =
+  Refract.Shape.new(
+    name: "acme_invoice",
+    spec: Refract.Table.spec(...),
+    validation: [...],
+    fields: %{
+      "invoice_no" => [label: "invoice no", rules: [:required, ~r/^INV-\d+$/]],
+      "issued_on" => [label: "invoice date", rules: [:required, :date]],
+      "total" => [label: "total", rules: [:required, :number]]
+    }
+  )
+
+Refract.CSV.fields("acme_invoice_0413.csv", invoice)
+#=> {:ok, %{"invoice_no" => "INV-1002", "issued_on" => nil, "total" => "12894.50"}}
+
+{:ok, result} = Refract.CSV.validate("acme_invoice_0413.csv", invoice)
+
+result.fields
+#=> %{"invoice_no" => "INV-1002", "issued_on" => nil, "total" => "12894.50"}
+
+hd(result.issues)
+#=> %Refract.Validate.Issue{field: "issued_on", rule: :required, line: nil}
+```
+
+- **find content by** - `label:` (the cell right (or `take: :below`) of the label, can be a string or a regex) or `at: "B2"` (spreadsheet style cell reference).
+- **rules** - the same rules as columns, a field breaking one is an issue with `field:` and its labels line (nil when the label is missing, as here: this invoice has no date)
+- **reading only** - `fields/3` on any reader, `Refract.Grid.fields(grid, shape)` on a loaded grid
+- **memory** - a shape with fields is validated on the whole file in memory (forms are small, `max_bytes:` guards it)
+
 ### A folder: classify, then validate
 
 Each kind of file is one shape (one module), csv or xlsx alike. Classify the folder, validate every match, and everything else goes to a person, each with its reason:

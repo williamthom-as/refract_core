@@ -168,4 +168,102 @@ defmodule Refract.FieldsTest do
                Shape.from_map(map)
     end
   end
+
+  describe "validating fields" do
+    defp checked(fields \\ default_fields()) do
+      Shape.new(
+        name: "invoice",
+        spec:
+          Table.spec(
+            header: [
+              columns: %{"sku" => ["sku"], "qty" => ["qty"], "line_total" => ["line total"]}
+            ],
+            stop: [:blank]
+          ),
+        validation: [columns: %{"line_total" => [{:max, 10_000}]}],
+        fields: fields
+      )
+    end
+
+    defp form(invoice_no, line_total) do
+      """
+      Tax Invoice,,
+      Invoice No,#{invoice_no},
+      Invoice Date,,
+      2026-10-05,,
+      Supplier,Acme Pty Ltd,
+      ,,
+      SKU,Qty,Line Total
+      A-100,2,#{line_total}
+      ,,
+      Total Due,,#{line_total}
+      """
+    end
+
+    test "a field breaking its rule is an issue at its label's line" do
+      assert {:ok, result} = Grid.validate(grid!(form("XYZ", "25.00")), checked())
+
+      refute result.valid
+      assert [%{line: 2, field: "invoice_no", column: nil, rule: %Regex{}}] = result.issues
+    end
+
+    test "the values read are on the result" do
+      assert {:ok, result} = Grid.validate(grid!(form("INV-1002", "25.00")), checked())
+
+      assert result.valid
+      assert result.fields["invoice_no"] == "INV-1002"
+      assert result.fields["issued_on"] == "2026-10-05"
+    end
+
+    test "a missing label fails :required with no line, and passes without it" do
+      required = checked(%{"po_number" => [label: "purchase order", rules: [:required]]})
+      optional = checked(%{"po_number" => [label: "purchase order", rules: [~r/^PO/]]})
+      grid = grid!(form("INV-1002", "25.00"))
+
+      assert {:ok, %{issues: [%{field: "po_number", rule: :required, line: nil}]}} =
+               Grid.validate(grid, required)
+
+      assert {:ok, %{valid: true}} = Grid.validate(grid, optional)
+    end
+
+    test "a field found by cell reports that cell's line" do
+      shape = checked(%{"supplier" => [at: "B5", rules: [~r/^Globex/]]})
+
+      assert {:ok, %{issues: [%{field: "supplier", line: 5}]}} =
+               Grid.validate(grid!(form("INV-1002", "25.00")), shape)
+    end
+
+    test "field issues come before table issues" do
+      assert {:ok, result} = Grid.validate(grid!(form("XYZ", "12500.00")), checked())
+
+      assert [%{field: "invoice_no"}, %{column: "line_total", field: nil}] = result.issues
+    end
+
+    test "values: true puts the field's cell in its issue" do
+      assert {:ok, %{issues: [%{field: "invoice_no", value: "XYZ"}]}} =
+               Grid.validate(grid!(form("XYZ", "25.00")), checked(), values: true)
+    end
+
+    test "a reader validates the fields of a shape that has them" do
+      assert {:ok, result} = CSV.validate({:string, form("XYZ", "25.00")}, checked())
+
+      assert [%{field: "invoice_no", line: 2}] = result.issues
+      assert result.fields["supplier"] == "Acme Pty Ltd"
+    end
+
+    test "a reader keeps max_bytes for a shape with fields", %{tmp_dir: dir} do
+      path = Path.join(dir, "form.csv")
+      File.write!(path, form("INV-1002", "25.00"))
+
+      assert {:error, {:max_bytes_exceeded, 10}} = CSV.validate(path, checked(), max_bytes: 10)
+    end
+
+    test "a shape without fields still streams" do
+      shape = checked(%{})
+      chunks = [form("XYZ", "25.00")]
+
+      assert {:ok, %{valid: true, fields: fields}} = CSV.validate({:stream, chunks}, shape)
+      assert fields == %{}
+    end
+  end
 end

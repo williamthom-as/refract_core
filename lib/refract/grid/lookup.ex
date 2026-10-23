@@ -20,10 +20,14 @@ defmodule Refract.Grid.Lookup do
 
   @spec cell(Grid.t(), String.t()) :: Refract.cell()
 
-  def cell(%Grid{rows: rows}, ref) do
+  def cell(grid, ref), do: grid |> cell_line(ref) |> elem(0)
+
+  @spec cell_line(Grid.t(), String.t()) :: {Refract.cell(), pos_integer()}
+
+  def cell_line(%Grid{rows: rows}, ref) do
     {x, y} = parse_ref(ref)
 
-    fetch(rows, x, y)
+    {fetch(rows, x, y), y + 1}
   end
 
   @spec validate_ref!(String.t()) :: :ok
@@ -48,7 +52,11 @@ defmodule Refract.Grid.Lookup do
 
   @spec value(Grid.t(), [value_opt()]) :: Refract.cell()
 
-  def value(%Grid{rows: rows} = grid, opts) do
+  def value(grid, opts), do: grid |> value_line(opts) |> elem(0)
+
+  @spec value_line(Grid.t(), [value_opt()]) :: {Refract.cell(), pos_integer() | nil}
+
+  def value_line(%Grid{rows: rows} = grid, opts) do
     opts = Keyword.validate!(opts, [:label, take: :right])
 
     label = Keyword.get(opts, :label)
@@ -57,10 +65,9 @@ defmodule Refract.Grid.Lookup do
     validate_label(label)
     validate_take(take)
 
-    case find_label(rows, normalise(label)) do
-      nil -> nil
-      {x, y} -> take |> fetch_next(grid, x, y) |> Enum.find(&(not blank?(&1)))
-    end
+    rows
+    |> find_label(normalise(label))
+    |> labelled(grid, take)
   end
 
   @type block_opt :: {:after, label()} | {:until, :blank}
@@ -88,6 +95,11 @@ defmodule Refract.Grid.Lookup do
   end
 
   # privates
+
+  defp labelled(nil, _grid, _take), do: {nil, nil}
+
+  defp labelled({x, y}, grid, take),
+    do: {take |> fetch_next(grid, x, y) |> Enum.find(&(not blank?(&1))), y + 1}
 
   defp corners(%Grid{width: width, height: height}, nil),
     do: {{0, 0}, {width - 1, height - 1}}
