@@ -13,6 +13,7 @@ defmodule Refract.Shape do
   alias Refract.Shape.FromMap
   alias Refract.Shape.Load
   alias Refract.Table.Spec
+  alias Refract.Validate.Rules
 
   import Refract.String.Utils, only: [blank?: 1]
 
@@ -22,10 +23,11 @@ defmodule Refract.Shape do
           name: String.t(),
           version: pos_integer(),
           spec: Spec.t(),
-          markers: [marker()]
+          markers: [marker()],
+          validation: Rules.t()
         }
 
-  defstruct [:name, :version, :spec, :markers]
+  defstruct [:name, :version, :spec, :markers, :validation]
 
   @type opt ::
           {:name, String.t()}
@@ -39,6 +41,7 @@ defmodule Refract.Shape do
           | {:unknown_key, String.t()}
           | {:invalid_value, {String.t(), term()}}
           | {:invalid_spec, String.t()}
+          | {:invalid_validation, String.t()}
 
   @type load_error ::
           error()
@@ -88,7 +91,7 @@ defmodule Refract.Shape do
   @spec new([opt()]) :: t()
 
   def new(opts) do
-    opts = Keyword.validate!(opts, [:name, :spec, version: 1, markers: []])
+    opts = Keyword.validate!(opts, [:name, :spec, version: 1, markers: [], validation: []])
 
     name = Keyword.get(opts, :name)
     spec = Keyword.get(opts, :spec)
@@ -101,11 +104,14 @@ defmodule Refract.Shape do
     validate_version(version)
     validate_markers(markers)
 
+    validation = Rules.new!(Keyword.get(opts, :validation), spec.header.columns)
+
     %__MODULE__{
       name: name,
       version: version,
       spec: spec,
-      markers: markers
+      markers: markers,
+      validation: validation
     }
   end
 

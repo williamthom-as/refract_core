@@ -10,6 +10,7 @@ Each one of the features can be used on its own, or work together to build compl
 - [**Classify**](#classify): say which shape an unknown file is, or why it isnt one. Works on a single file or across a whole folder at once.
 - [**Suggest**](#suggest): propose how a new sources columns map onto a shape, from their names and values.
 - [**Drift**](#drift): flag missing, extra and duplicated columns on every classified (known) file.
+- [**Validate**](#validate): validate file content against its known shapes rules, per cell and across each row, reporting issues found.
 - [**Grid**](#grid): read small form-esque files by cell position or by the label next to a value.
 - [**Rows**](#rows): transform row streams: rename, fill down, group, pivot, run in parallel.
 - [**Parse and clean**](#parse-and-clean): turn messy cells into numbers, dates and booleans.
@@ -239,6 +240,140 @@ result.drift
 
 ---
 
+## Validate
+
+Validate says whether its content is acceptable for that shape (which can be derived from `classify`). The same shape holds both: `row:` recognises the table (loose, so bad content does not stop a file being recognised), `validation:` accepts its content (strict, every row checked).
+
+`acme_invoice_0413.csv`:
+
+```
+ACME PTY LTD - Tax Invoice,,,,
+Invoice No,INV-1002,,,
+,,,,
+SKU,Description,Qty,Unit Price,Line Total
+A-100,widget,2,12.50,25.00
+C-300,press,1,12500.00,12500.00
+B-200,gadget,4,99.00,369.00
+x-1,bolt,,0.50,0.50
+,,,,
+Total,,,,12894.50
+```
+
+```elixir
+invoice =
+  Refract.Shape.new(
+    name: "acme_invoice",
+    spec:
+      Refract.Table.spec(
+        header: [
+          columns: %{
+            "sku" => ["sku"],
+            "description" => ["description"],
+            "qty" => ["qty"],
+            "unit_price" => ["unit price"],
+            "line_total" => ["line total"]
+          },
+          required: ["sku", "line_total"]
+        ],
+        row: [match: %{"line_total" => :number}],
+        stop: [:blank]
+      ),
+    validation: [
+      columns: %{
+        "sku" => [:required, ~r/^[A-Z]-\d{3}$/],
+        "qty" => [:required, :integer, {:min, 1}],
+        "line_total" => [:required, :number, {:max, 10_000}]
+      },
+      rows: [{:line_total_adds_up, &line_total_adds_up?/1}]
+    ]
+  )
+
+{:ok, result} = Refract.CSV.validate("acme_invoice_0413.csv", invoice, values: true)
+
+result
+#=> %Refract.Validate.Result{
+#=>   valid: false,
+#=>   rows: 4,
+#=>   issues: [
+#=>     %Refract.Validate.Issue{line: 6, column: "line_total", rule: {:max, 10_000}, value: "12500.00"},
+#=>     %Refract.Validate.Issue{line: 7, column: nil, rule: :line_total_adds_up, value: nil},
+#=>     %Refract.Validate.Issue{line: 8, column: "qty", rule: :required, value: ""},
+#=>     %Refract.Validate.Issue{line: 8, column: "sku", rule: ~r/^[A-Z]-\d{3}$/, value: "x-1"},
+#=>     %Refract.Validate.Issue{line: 8, column: nil, rule: :line_total_adds_up, value: nil}
+#=>   ]
+#=> }
+```
+
+`line_total_adds_up?/1` (custom fun) runs on each row verifying qty times unit price equals the line total.
+
+| line | column | rule | value | why |
+|---|---|---|---|---|
+| 6 | line_total | `{:max, 10_000}` | `12500.00` | over the 10,000 limit |
+| 7 | | `:line_total_adds_up` | | 4 x 99.00 is 396.00, the line says 369.00 |
+| 8 | qty | `:required` | `""` | qty is blank |
+| 8 | sku | `~r/^[A-Z]-\d{3}$/` | `x-1` | not a capital letter, a dash and three digits |
+| 8 | | `:line_total_adds_up` | | with no qty the line cannot add up |
+
+- **column rules** - `:required`, `:integer`, `:number`, `:date`, `:datetime`, a regex, `{:min, n}` / `{:max, n}` (numbers in any form, or dates), `{:in, values}`, a named function `{:name, fun}`; a column reports its first failing rule; a blank cell fails only `:required`
+- **row rules** - named functions over the whole row (reported by name)
+- **lines** - issues report the line in the file, failures are reported and the rows after it are still checked
+- **values** - issues carry no cell values unless `values: true`
+
+Rows already in a pipeline, split good from bad:
+
+```elixir
+{good, bad} =
+  table.rows
+  |> Refract.Validate.rows(invoice)
+  |> Enum.split_with(&match?({:ok, _row}, &1))
+```
+
+In YAML, column rules go under `validation:` (row rules are Elixir only):
+
+```yaml
+validation:
+  columns:
+    sku: [required, /^[A-Z]-\d{3}$/]
+    qty: [required, integer, {min: 1}]
+    line_total: [required, number, {max: 10000}]
+```
+
+### A folder: classify, then validate
+
+Each kind of file is one shape (one module), csv or xlsx alike. Classify the folder, validate every match, and everything else goes to a person, each with its reason:
+
+```elixir
+{:ok, results} = Refract.Classify.folder("inbox", formats, readers: [Refract.XLSX, Refract.CSV])
+
+Enum.each(results, fn
+  {path, {:ok, %{verdict: :match} = result}} ->
+    {:ok, {reader, opts}} = Refract.Reader.for_path(path, [Refract.XLSX])
+    {:ok, validation} = reader.validate(path, result.shape, opts)
+
+    if validation.valid,
+      do: accept(path, result),
+      else: needs_human(path, validation.issues)
+
+  {path, other} ->
+    needs_human(path, other)
+end)
+```
+
+| file | shape | outcome |
+|---|---|---|
+| acme_0412.csv | acme_invoice | accepted |
+| acme_0413.csv | acme_invoice | needs a person: line 5 `line_total` over the limit, line 6 does not add up |
+| globex_nov.csv | globex_usage | needs a person: line 2 `account` is not 12 digits |
+| globex_oct.csv | globex_usage | accepted |
+| notes.csv | | needs a person: `:unknown`, no shape fits |
+
+- **`:unknown`** - a new kind of file: [`suggest`](#suggest) its mapping, then write one module
+- **`:ambiguous`** - two shapes fit: give one a marker
+- **drift** on a match - missing, extra or duplicated columns ([Drift](#drift))
+- **`validation.issues`** - the line, column and rule that failed
+
+---
+
 ## Grid
 
 Small, form-esqe files, read by position or by label. `invoice_form.csv`:
@@ -273,7 +408,11 @@ line_spec = Refract.Table.spec(header: [columns: %{"sku" => ["sku"], "item" => [
 
 Enum.to_list(lines.rows)
 #=> [%{"sku" => "78632478", "item" => "apple", "total" => "3.50"}]
+
+{:ok, result} = Refract.Grid.validate(grid, invoice)
 ```
+
+`Grid.validate` works as [`CSV.validate`](#validate) does, issue lines are lines in the grid.
 
 ---
 
@@ -428,7 +567,22 @@ result =
 
 ## Plugins
 
-Each plugin works with every tool above.
+Every reader (built in or via plugin) has same: `stream`, `locate`, `classify`, `suggest`, `validate` and `load`. Its own options pass straight through.
+
+| reader | files | impl options |
+|---|---|---|
+| `Refract.CSV` (built in) | `.csv`, `.tsv` | `separator:` (detected by default) |
+| `Refract.XLSX` (`refract_xlsx`) | `.xlsx`, `.xlsm` | `sheet:` (a name or a position), `hidden:` |
+| `Refract.JSON` (`refract_json`) | `.json` | `at:`, `keyed:`, `unnest:`, `keep:` |
+| `Refract.JSONL` (`refract_json`) | `.jsonl`, `.ndjson` | `scan:`, `columns:`, `unnest:`, `keep:` |
+
+```elixir
+Refract.XLSX.suggest("new_source.xlsx", bill, sheet: "Billing")
+Refract.JSON.validate("export.json", bill, at: ["data"])
+Refract.Classify.folder("inbox", shapes, readers: [Refract.XLSX, Refract.JSON, Refract.JSONL])
+```
+
+Writers are the same, all wth (`write`, `write_chunks`).
 
 **`refract_xlsx`** - workbooks, one sheet at a time (cells are typed):
 

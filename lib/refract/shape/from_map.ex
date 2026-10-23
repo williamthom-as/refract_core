@@ -6,10 +6,11 @@ defmodule Refract.Shape.FromMap do
   alias Refract.Shape
   alias Refract.Table
 
-  @keys ~w(name version markers header row stop max_misses)
+  @keys ~w(name version markers header row stop max_misses validation)
   @header_keys ~w(columns required min_matches)
   @row_keys ~w(match min_score)
   @marker_keys ~w(file content)
+  @validation_keys ~w(columns)
 
   @spec run(term()) :: {:ok, Shape.t()} | {:error, Shape.error()}
 
@@ -22,9 +23,22 @@ defmodule Refract.Shape.FromMap do
          {:ok, name} <- name(map),
          {:ok, version} <- version(Map.get(map, "version", 1)),
          {:ok, markers} <- markers(Map.get(map, "markers", %{})),
-         {:ok, spec} <- spec(map) do
-      {:ok, Shape.new(name: name, version: version, spec: spec, markers: markers)}
+         {:ok, spec} <- spec(map),
+         {:ok, validation} <- validation(Map.get(map, "validation", %{})) do
+      build_shape(
+        name: name,
+        version: version,
+        spec: spec,
+        markers: markers,
+        validation: validation
+      )
     end
+  end
+
+  defp build_shape(opts) do
+    {:ok, Shape.new(opts)}
+  rescue
+    error in ArgumentError -> {:error, {:invalid_validation, Exception.message(error)}}
   end
 
   defp name(%{"name" => name}) when is_binary(name) do
@@ -165,6 +179,68 @@ defmodule Refract.Shape.FromMap do
   defp rule(_path, "date"), do: {:ok, :date}
   defp rule(_path, "datetime"), do: {:ok, :datetime}
   defp rule(path, value), do: regex_only(path, value)
+
+  defp validation(validation) when is_map(validation) do
+    validation = present(validation)
+
+    with :ok <- known_keys(validation, @validation_keys, "validation"),
+         {:ok, columns} <- validation_columns(Map.get(validation, "columns", %{})) do
+      {:ok, [columns: columns]}
+    end
+  end
+
+  defp validation(validation), do: invalid("validation", validation)
+
+  defp validation_columns(columns) when is_map(columns),
+    do: validation_columns(Map.to_list(columns), %{})
+
+  defp validation_columns(columns), do: invalid("validation.columns", columns)
+
+  defp validation_columns([], parsed), do: {:ok, parsed}
+
+  defp validation_columns([{column, rules} | rest], parsed) when is_list(rules) do
+    case validation_rules("validation.columns.#{column}", rules, []) do
+      {:ok, rules} -> validation_columns(rest, Map.put(parsed, column, rules))
+      error -> error
+    end
+  end
+
+  defp validation_columns([{column, rules} | _rest], _parsed),
+    do: invalid("validation.columns.#{column}", rules)
+
+  defp validation_rules(_path, [], parsed), do: {:ok, Enum.reverse(parsed)}
+
+  defp validation_rules(path, [rule | rest], parsed) do
+    case validation_rule(path, rule) do
+      {:ok, rule} -> validation_rules(path, rest, [rule | parsed])
+      error -> error
+    end
+  end
+
+  defp validation_rule(_path, "required"), do: {:ok, :required}
+
+  defp validation_rule(path, %{"min" => bound} = rule) when map_size(rule) == 1,
+    do: bound(path, :min, bound)
+
+  defp validation_rule(path, %{"max" => bound} = rule) when map_size(rule) == 1,
+    do: bound(path, :max, bound)
+
+  defp validation_rule(_path, %{"in" => values} = rule)
+       when map_size(rule) == 1 and is_list(values),
+       do: {:ok, {:in, values}}
+
+  defp validation_rule(path, rule), do: rule(path, rule)
+
+  defp bound(_path, side, bound) when is_number(bound), do: {:ok, {side, bound}}
+
+  defp bound(path, side, bound) when is_binary(bound) do
+    case Date.from_iso8601(bound) do
+      {:ok, date} -> {:ok, {side, date}}
+      {:error, _reason} -> invalid(path, %{Atom.to_string(side) => bound})
+    end
+  end
+
+  defp bound(path, side, bound), do: invalid(path, %{Atom.to_string(side) => bound})
 
   defp stop([], parsed), do: {:ok, Enum.reverse(parsed)}
   defp stop(["blank" | rest], parsed), do: stop(rest, [:blank | parsed])

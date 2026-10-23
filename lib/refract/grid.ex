@@ -5,7 +5,7 @@ defmodule Refract.Grid do
   streams.
 
   cells and ranges are accessed by a1 refs, values and blocks by nearby labels.
-  `locate`, `classify` and `explain` work the same as on a stream
+  `locate`, `validate`, `classify` and `explain` work the same as on a stream
 
       {:ok, grid} = Refract.CSV.load("invoice.csv")
 
@@ -18,9 +18,11 @@ defmodule Refract.Grid do
   alias Refract.Grid.Classify
   alias Refract.Grid.Lookup
 
+  alias Refract.Shape
   alias Refract.Table
   alias Refract.Table.Locate
   alias Refract.Table.Spec
+  alias Refract.Validate
 
   defstruct [:rows, :height, :width]
 
@@ -61,6 +63,17 @@ defmodule Refract.Grid do
     converted_rows = rows_as_list(grid)
 
     Table.locate(converted_rows, spec, opts)
+  end
+
+  @spec validate(t(), Shape.t() | module(), keyword()) ::
+          {:ok, Validate.Result.t()} | {:error, {:header_not_found, Locate.header_miss()}}
+
+  def validate(%__MODULE__{height: height} = grid, shape, opts \\ []) do
+    opts = Keyword.put_new(opts, :within, height)
+
+    grid
+    |> rows_as_list()
+    |> Validate.source(shape, opts)
   end
 
   @spec cell(t(), String.t()) :: Refract.cell()
