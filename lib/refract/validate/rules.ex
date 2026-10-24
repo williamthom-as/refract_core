@@ -1,6 +1,8 @@
 defmodule Refract.Validate.Rules do
   @moduledoc false
 
+  alias Refract.Validate.Validator
+
   @type rule ::
           :required
           | :integer
@@ -12,6 +14,8 @@ defmodule Refract.Validate.Rules do
           | {:in, [term()]}
           | {atom(), (Refract.cell() -> as_boolean(term()))}
           | (Refract.cell() -> as_boolean(term()))
+          | module()
+          | {module(), keyword()}
 
   @type row_rule :: {atom(), (Refract.row() -> as_boolean(term()))}
 
@@ -62,8 +66,22 @@ defmodule Refract.Validate.Rules do
   defp validate_rule({name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
   defp validate_rule(fun) when is_function(fun, 1), do: :ok
 
+  defp validate_rule({module, opts} = rule) when is_atom(module) and is_list(opts),
+    do: validate_validator(Validator.validator?(module), Keyword.keyword?(opts), rule)
+
+  defp validate_rule(module) when is_atom(module),
+    do: validate_validator(Validator.validator?(module), true, module)
+
   defp validate_rule(rule) do
     raise ArgumentError, "unknown validation rule #{inspect(rule)}"
+  end
+
+  defp validate_validator(true, true, _rule), do: :ok
+
+  defp validate_validator(_validator, _keyword, rule) do
+    raise ArgumentError,
+          "unknown validation rule #{inspect(rule)}, a module rule must implement " <>
+            "Refract.Validate.Validator and take a keyword list of options"
   end
 
   defp validate_row_rule({name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok

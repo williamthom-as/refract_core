@@ -20,6 +20,13 @@ defmodule Refract.Validate.Check do
   def passes?({name, fun}, cell) when is_atom(name) and is_function(fun, 1),
     do: holds?(fun, cell)
 
+  def passes?({module, opts}, cell) when is_atom(module) and is_list(opts),
+    do: holds?(&module.valid?(&1, opts), cell)
+
+  def passes?(module, cell)
+      when is_atom(module) and module not in [:integer, :number, :date, :datetime],
+      do: holds?(&module.valid?(&1, []), cell)
+
   def passes?(rule, cell), do: Row.passes?(rule, cell)
 
   @spec holds?((term() -> as_boolean(term())), term()) :: boolean()
