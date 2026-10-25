@@ -5,11 +5,11 @@ defmodule Refract.Shape.Load do
 
   alias Refract.Shape
 
-  @spec run(Path.t()) :: {:ok, Shape.t()} | {:error, Shape.load_error()}
+  @spec run(Path.t(), [Shape.from_map_opt()]) :: {:ok, Shape.t()} | {:error, Shape.load_error()}
 
-  def run(path) do
+  def run(path, opts) do
     with {:ok, map} <- open_yaml_file(path) do
-      Shape.from_map(map)
+      Shape.from_map(map, opts)
     end
   end
 

@@ -8,6 +8,11 @@ defmodule Refract.Shape do
       Refract.Shape.new(name: "invoice", spec: Refract.Table.spec(header: [columns: %{"sku" => ["sku"]}]))
       Refract.Shape.from_map(%{"name" => "invoice", "header" => %{"columns" => %{"sku" => ["sku"]}}})
       Refract.Shape.load("shapes/invoice.yml")
+
+  a yaml or map shape names custom validators through a registry, `validators:` on
+  `from_map/2` and `load/2`, then uses the names in column and field rules
+
+      Refract.Shape.load("shapes/order.yml", validators: %{"abn" => MyApp.Validators.ABN})
   """
 
   alias Refract.Shape.Field
@@ -38,6 +43,8 @@ defmodule Refract.Shape do
           | {:markers, [marker()]}
           | {:validation, keyword()}
           | {:fields, %{String.t() => keyword()}}
+
+  @type from_map_opt :: {:validators, %{String.t() => module()}}
 
   @type error ::
           {:not_a_map, term()}
@@ -135,14 +142,14 @@ defmodule Refract.Shape do
     raise ArgumentError, "a field name must be a string, got: #{inspect(name)}"
   end
 
-  @spec from_map(term()) :: {:ok, t()} | {:error, error()}
+  @spec from_map(term(), [from_map_opt()]) :: {:ok, t()} | {:error, error()}
 
-  def from_map(map), do: FromMap.run(map)
+  def from_map(map, opts \\ []), do: FromMap.run(map, opts)
 
-  @spec from_map!(term()) :: t()
+  @spec from_map!(term(), [from_map_opt()]) :: t()
 
-  def from_map!(map) do
-    case from_map(map) do
+  def from_map!(map, opts \\ []) do
+    case from_map(map, opts) do
       {:ok, shape} ->
         shape
 
@@ -151,14 +158,14 @@ defmodule Refract.Shape do
     end
   end
 
-  @spec load(Path.t()) :: {:ok, t()} | {:error, load_error()}
+  @spec load(Path.t(), [from_map_opt()]) :: {:ok, t()} | {:error, load_error()}
 
-  def load(path), do: Load.run(path)
+  def load(path, opts \\ []), do: Load.run(path, opts)
 
-  @spec load!(Path.t()) :: t()
+  @spec load!(Path.t(), [from_map_opt()]) :: t()
 
-  def load!(path) do
-    case load(path) do
+  def load!(path, opts \\ []) do
+    case load(path, opts) do
       {:ok, shape} ->
         shape
 
