@@ -1,0 +1,14 @@
+name: order
+header:
+  columns:
+    supplier_abn: [supplier abn]
+    po: [po]
+    qty: [qty]
+validation:
+  columns:
+    supplier_abn: [required, abn]
+    po: [prefix: {prefix: PO-}]
+fields:
+  abn:
+    at: B1
+    rules: [abn]

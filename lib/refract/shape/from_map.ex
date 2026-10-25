@@ -5,6 +5,7 @@ defmodule Refract.Shape.FromMap do
 
   alias Refract.Shape
   alias Refract.Table
+  alias Refract.Validate.Validator
 
   @keys ~w(name version markers header row stop max_misses validation fields)
   @header_keys ~w(columns required min_matches)
@@ -12,12 +13,48 @@ defmodule Refract.Shape.FromMap do
   @marker_keys ~w(file content)
   @validation_keys ~w(columns)
   @field_keys ~w(label take at rules)
+  @rule_names ~w(required integer number date datetime min max in)
 
-  @spec run(term()) :: {:ok, Shape.t()} | {:error, Shape.error()}
+  @spec run(term(), [Shape.from_map_opt()]) :: {:ok, Shape.t()} | {:error, Shape.error()}
 
-  def run(map) when not is_map(map), do: {:error, {:not_a_map, map}}
+  def run(map, opts) do
+    opts = Keyword.validate!(opts, validators: %{})
+    validators = Keyword.fetch!(opts, :validators)
+    validate_validators(validators)
 
-  def run(map) do
+    shape(map, validators)
+  end
+
+  defp validate_validators(validators) when is_map(validators),
+    do: Enum.each(validators, &validate_validator/1)
+
+  defp validate_validators(validators) do
+    raise ArgumentError,
+          "validators must be a map of names to validator modules, got: #{inspect(validators)}"
+  end
+
+  defp validate_validator({name, _module}) when name in @rule_names do
+    raise ArgumentError, "validators name #{inspect(name)} is a built in rule"
+  end
+
+  defp validate_validator({name, module}) when is_binary(name),
+    do: validate_module(Validator.validator?(module), name, module)
+
+  defp validate_validator({name, _module}) do
+    raise ArgumentError, "validators names must be strings, got: #{inspect(name)}"
+  end
+
+  defp validate_module(true, _name, _module), do: :ok
+
+  defp validate_module(false, name, module) do
+    raise ArgumentError,
+          "validators #{inspect(name)} must implement Refract.Validate.Validator, " <>
+            "got: #{inspect(module)}"
+  end
+
+  defp shape(map, _validators) when not is_map(map), do: {:error, {:not_a_map, map}}
+
+  defp shape(map, validators) do
     map = present(map)
 
     with :ok <- known_keys(map, @keys, nil),
@@ -25,8 +62,8 @@ defmodule Refract.Shape.FromMap do
          {:ok, version} <- version(Map.get(map, "version", 1)),
          {:ok, markers} <- markers(Map.get(map, "markers", %{})),
          {:ok, spec} <- spec(map),
-         {:ok, validation} <- validation(Map.get(map, "validation", %{})),
-         {:ok, fields} <- fields(Map.get(map, "fields", %{})) do
+         {:ok, validation} <- validation(Map.get(map, "validation", %{}), validators),
+         {:ok, fields} <- fields(Map.get(map, "fields", %{}), validators) do
       build_shape(
         name: name,
         version: version,
@@ -183,30 +220,36 @@ defmodule Refract.Shape.FromMap do
   defp rule(_path, "datetime"), do: {:ok, :datetime}
   defp rule(path, value), do: regex_only(path, value)
 
-  defp fields(fields) when is_map(fields), do: fields(Map.to_list(fields), %{})
-  defp fields(fields), do: invalid("fields", fields)
+  defp fields(fields, validators) when is_map(fields),
+    do: fields(Map.to_list(fields), validators, %{})
 
-  defp fields([], parsed), do: {:ok, parsed}
+  defp fields(fields, _validators), do: invalid("fields", fields)
 
-  defp fields([{name, field} | rest], parsed) when is_binary(name) and is_map(field) do
-    case field("fields." <> name, present(field)) do
-      {:ok, opts} -> fields(rest, Map.put(parsed, name, opts))
+  defp fields([], _validators, parsed), do: {:ok, parsed}
+
+  defp fields([{name, field} | rest], validators, parsed)
+       when is_binary(name) and is_map(field) do
+    case field("fields." <> name, present(field), validators) do
+      {:ok, opts} -> fields(rest, validators, Map.put(parsed, name, opts))
       error -> error
     end
   end
 
-  defp fields([{name, field} | _rest], _parsed), do: invalid("fields.#{name}", field)
+  defp fields([{name, field} | _rest], _validators, _parsed),
+    do: invalid("fields.#{name}", field)
 
-  defp field(path, field) do
+  defp field(path, field, validators) do
     with :ok <- known_keys(field, @field_keys, path),
-         {:ok, rules} <- field_rules(path <> ".rules", Map.get(field, "rules", [])),
+         {:ok, rules} <- field_rules(path <> ".rules", Map.get(field, "rules", []), validators),
          {:ok, find} <- field_find(path, field) do
       {:ok, [rules: rules] ++ find}
     end
   end
 
-  defp field_rules(path, rules) when is_list(rules), do: validation_rules(path, rules, [])
-  defp field_rules(path, rules), do: invalid(path, rules)
+  defp field_rules(path, rules, validators) when is_list(rules),
+    do: validation_rules(path, rules, validators, [])
+
+  defp field_rules(path, rules, _validators), do: invalid(path, rules)
 
   defp field_find(path, field) do
     with {:ok, label} <- field_label(path <> ".label", Map.get(field, "label")),
@@ -231,56 +274,90 @@ defmodule Refract.Shape.FromMap do
   defp field_take(_path, "below"), do: {:ok, [take: :below]}
   defp field_take(path, take), do: invalid(path, take)
 
-  defp validation(validation) when is_map(validation) do
+  defp validation(validation, validators) when is_map(validation) do
     validation = present(validation)
 
     with :ok <- known_keys(validation, @validation_keys, "validation"),
-         {:ok, columns} <- validation_columns(Map.get(validation, "columns", %{})) do
+         {:ok, columns} <- validation_columns(Map.get(validation, "columns", %{}), validators) do
       {:ok, [columns: columns]}
     end
   end
 
-  defp validation(validation), do: invalid("validation", validation)
+  defp validation(validation, _validators), do: invalid("validation", validation)
 
-  defp validation_columns(columns) when is_map(columns),
-    do: validation_columns(Map.to_list(columns), %{})
+  defp validation_columns(columns, validators) when is_map(columns),
+    do: validation_columns(Map.to_list(columns), validators, %{})
 
-  defp validation_columns(columns), do: invalid("validation.columns", columns)
+  defp validation_columns(columns, _validators), do: invalid("validation.columns", columns)
 
-  defp validation_columns([], parsed), do: {:ok, parsed}
+  defp validation_columns([], _validators, parsed), do: {:ok, parsed}
 
-  defp validation_columns([{column, rules} | rest], parsed) when is_list(rules) do
-    case validation_rules("validation.columns.#{column}", rules, []) do
-      {:ok, rules} -> validation_columns(rest, Map.put(parsed, column, rules))
+  defp validation_columns([{column, rules} | rest], validators, parsed) when is_list(rules) do
+    case validation_rules("validation.columns.#{column}", rules, validators, []) do
+      {:ok, rules} -> validation_columns(rest, validators, Map.put(parsed, column, rules))
       error -> error
     end
   end
 
-  defp validation_columns([{column, rules} | _rest], _parsed),
+  defp validation_columns([{column, rules} | _rest], _validators, _parsed),
     do: invalid("validation.columns.#{column}", rules)
 
-  defp validation_rules(_path, [], parsed), do: {:ok, Enum.reverse(parsed)}
+  defp validation_rules(_path, [], _validators, parsed), do: {:ok, Enum.reverse(parsed)}
 
-  defp validation_rules(path, [rule | rest], parsed) do
-    case validation_rule(path, rule) do
-      {:ok, rule} -> validation_rules(path, rest, [rule | parsed])
+  defp validation_rules(path, [rule | rest], validators, parsed) do
+    case validation_rule(path, rule, validators) do
+      {:ok, rule} -> validation_rules(path, rest, validators, [rule | parsed])
       error -> error
     end
   end
 
-  defp validation_rule(_path, "required"), do: {:ok, :required}
+  defp validation_rule(_path, "required", _validators), do: {:ok, :required}
 
-  defp validation_rule(path, %{"min" => bound} = rule) when map_size(rule) == 1,
+  defp validation_rule(_path, name, validators) when is_map_key(validators, name),
+    do: {:ok, Map.fetch!(validators, name)}
+
+  defp validation_rule(path, %{"min" => bound} = rule, _validators) when map_size(rule) == 1,
     do: bound(path, :min, bound)
 
-  defp validation_rule(path, %{"max" => bound} = rule) when map_size(rule) == 1,
+  defp validation_rule(path, %{"max" => bound} = rule, _validators) when map_size(rule) == 1,
     do: bound(path, :max, bound)
 
-  defp validation_rule(_path, %{"in" => values} = rule)
+  defp validation_rule(_path, %{"in" => values} = rule, _validators)
        when map_size(rule) == 1 and is_list(values),
        do: {:ok, {:in, values}}
 
-  defp validation_rule(path, rule), do: rule(path, rule)
+  defp validation_rule(path, rule, validators) when is_map(rule) and map_size(rule) == 1 do
+    [{name, options}] = Map.to_list(rule)
+    validator(path, rule, Map.fetch(validators, name), options)
+  end
+
+  defp validation_rule(path, rule, _validators), do: rule(path, rule)
+
+  defp validator(path, rule, {:ok, module}, options) when is_map(options) do
+    case validator_opts(Map.to_list(options), []) do
+      {:ok, opts} -> {:ok, {module, opts}}
+      :error -> invalid(path, rule)
+    end
+  end
+
+  defp validator(path, rule, _module, _options), do: invalid(path, rule)
+
+  defp validator_opts([], parsed), do: {:ok, Enum.reverse(parsed)}
+
+  defp validator_opts([{name, value} | rest], parsed) when is_binary(name) do
+    case existing_atom(name) do
+      {:ok, name} -> validator_opts(rest, [{name, value} | parsed])
+      :error -> :error
+    end
+  end
+
+  defp validator_opts(_options, _parsed), do: :error
+
+  defp existing_atom(name) do
+    {:ok, String.to_existing_atom(name)}
+  rescue
+    ArgumentError -> :error
+  end
 
   defp bound(_path, side, bound) when is_number(bound), do: {:ok, {side, bound}}
 

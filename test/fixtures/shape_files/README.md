@@ -11,3 +11,5 @@ list.yml      top level list not a map                       not a map
 typed.yml     yes and no stay strings in yaml 1.2            invalid value header columns rate 1.0
               1.0 is a float not an alias
 sparse.yml    optional keys left empty load as null          same shape as the minimal ids map
+validated.yml registered validator names                      abn bare and prefix with options
+              without a registry abn is unknown              invalid value validation columns po
