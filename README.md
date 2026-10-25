@@ -249,7 +249,7 @@ Validate says whether its content is acceptable for that shape (which can be der
 ```
 ACME PTY LTD - Tax Invoice,,,,
 Invoice No,INV-1002,,,
-,,,,
+ABN,51 824 753 557,,,
 SKU,Description,Qty,Unit Price,Line Total
 A-100,widget,2,12.50,25.00
 C-300,press,1,12500.00,12500.00
@@ -314,7 +314,7 @@ result
 | 8 | sku | `~r/^[A-Z]-\d{3}$/` | `x-1` | not a capital letter, a dash and three digits |
 | 8 | | `:line_total_adds_up` | | with no qty the line cannot add up |
 
-- **column rules** - `:required`, `:integer`, `:number`, `:date`, `:datetime`, a regex, `{:min, n}` / `{:max, n}` (numbers in any form, or dates), `{:in, values}`, a named function `{:name, fun}`; a column reports its first failing rule; a blank cell fails only `:required`
+- **column rules** - `:required`, `:integer`, `:number`, `:date`, `:datetime`, a regex, `{:min, n}` / `{:max, n}` (numbers in any form, or dates), `{:in, values}`, a named function `{:name, fun}`, a [validator module](#custom-validators); a column reports its first failing rule; a blank cell fails only `:required`
 - **row rules** - named functions over the whole row (reported by name)
 - **lines** - issues report the line in the file, failures are reported and the rows after it are still checked
 - **values** - issues carry no cell values unless `values: true`
@@ -350,7 +350,7 @@ Use fields to read/validate them.
 |---|---|---|---|---|---|
 | **1** | ACME PTY LTD - Tax Invoice | | | | |
 | **2** | **Invoice No** | INV-1002 | | | |
-| **3** | | | | | |
+| **3** | ABN | 51 824 753 557 | | | |
 | **4** | SKU | Description | Qty | Unit Price | Line Total |
 | **5** | A-100 | widget | 2 | 12.50 | 25.00 |
 | **6** | C-300 | press | 1 | 12500.00 | 12500.00 |
@@ -391,9 +391,73 @@ hd(result.issues)
 - **reading only** - `fields/3` on any reader, `Refract.Grid.fields(grid, shape)` on a loaded grid
 - **memory** - a shape with fields is validated on the whole file in memory (forms are small, `max_bytes:` guards it)
 
-### A folder: classify, then validate
+### Custom validators
 
-Each kind of file is one shape (one module), csv or xlsx alike. Classify the folder, validate every match, and everything else goes to a person, each with its reason:
+If the shipped validators do not satifsy yuor requirements, you can always impl your own `Refract.Validate.Validator`:
+
+```elixir
+defmodule MyApp.Validators.ABN do
+  @behaviour Refract.Validate.Validator
+
+  @weights [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+
+  @impl true
+  def valid?(cell, _opts) do
+    digits =
+      cell
+      |> to_string()
+      |> Refract.Clean.digits()
+      |> String.graphemes()
+      |> Enum.map(&String.to_integer/1)
+
+    length(digits) == 11 and checksum(digits) == 0
+  end
+
+  defp checksum([first | rest]) do
+    [first - 1 | rest]
+    |> Enum.zip(@weights)
+    |> Enum.map(fn {digit, weight} -> digit * weight end)
+    |> Enum.sum()
+    |> rem(89)
+  end
+end
+```
+
+The supplier ABN on line 3 of `acme_invoice_0413.csv` fails its checksum:
+
+```elixir
+invoice =
+  Refract.Shape.new(
+    name: "acme_invoice",
+    spec: Refract.Table.spec(...),
+    fields: %{"supplier_abn" => [label: "abn", rules: [:required, MyApp.Validators.ABN]]}
+  )
+
+{:ok, result} = Refract.CSV.validate("acme_invoice_0413.csv", invoice)
+
+hd(result.issues)
+#=> %Refract.Validate.Issue{field: "supplier_abn", rule: MyApp.Validators.ABN, line: 3}
+```
+
+In YAML, name validators are available through a registry, passed at load time:
+
+```yaml
+fields:
+  supplier_abn:
+    label: abn
+    rules: [required, abn]
+```
+
+```elixir
+Refract.Shape.load!("shapes/acme_invoice.yml", validators: %{"abn" => MyApp.Validators.ABN})
+```
+
+- **options** - `{abn: {strict: true}}` arrives as `[strict: true]` (option names the validator uses)
+- **names** - an unregistered name is `{:invalid_value, {"fields.supplier_abn.rules", "abn"}}`; a registry name cannot shadow a built in rule (`number` always means number); registered names work in `validation:` and `fields:`, not in `row:`
+
+### A folder: classify then validate
+
+Each kind of file is one shape (one module), csv or xlsx alike. Classify the folder, validate every match:
 
 ```elixir
 {:ok, results} = Refract.Classify.folder("inbox", formats, readers: [Refract.XLSX, Refract.CSV])

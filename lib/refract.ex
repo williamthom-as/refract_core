@@ -4,7 +4,16 @@ defmodule Refract do
   # communal types
 
   # data
-  @type cell :: String.t() | number() | boolean() | Date.t() | DateTime.t() | nil
+  @type cell ::
+          String.t()
+          | number()
+          | Decimal.t()
+          | boolean()
+          | Date.t()
+          | DateTime.t()
+          | NaiveDateTime.t()
+          | Time.t()
+          | nil
   @type raw_row :: [cell()]
   @type row :: %{optional(String.t()) => cell()}
 
