@@ -2,7 +2,7 @@
 
 Refract is a swiss army knife for working with all kinds of tabular data, from clean to messy. 
 
-At its core, it has been designed/architected to solve common problems that you might face with CSV files (think both machine generated, streamable formats through to hideous, 'table inside a table' invoice style formats). As ultimately everything resolves to rows of key -> value pairs, plguins will bring most of the same features to other formats (XLSX, JSON, <your custom format>).
+At its core, it has been designed to solve common problems that you might face with CSV files (think both machine generated, streamable formats through to hideous, 'table inside a table' invoice style formats). As everything resolves to rows of key -> value pairs, plugins can bring most of the same features to other formats (XLSX, JSON, <your custom format>).
 
 Each one of the features can be used on its own, or work together to build complex data pipelines.
 
@@ -258,7 +258,7 @@ C-300,press,1,12500.00,12500.00
 B-200,gadget,4,99.00,369.00
 x-1,bolt,,0.50,0.50
 ,,,,
-Total,,,,12894.50
+Total,,,,12984.50
 ```
 
 ```elixir
@@ -359,7 +359,7 @@ Use fields to read/validate them.
 | **7** | B-200 | gadget | 4 | 99.00 | 369.00 |
 | **8** | x-1 | bolt | | 0.50 | 0.50 |
 | **9** | | | | | |
-| **10** | **Total** | | | | 12894.50 |
+| **10** | **Total** | | | | 12984.50 |
 
 The table is lines 4 to 8 (found by its header). The invoice number sits right of its label (ln 2), the total right of its label on (ln 10), and there is a missing invoice date field.
 
@@ -377,12 +377,12 @@ invoice =
   )
 
 Refract.CSV.fields("acme_invoice_0413.csv", invoice)
-#=> {:ok, %{"invoice_no" => "INV-1002", "issued_on" => nil, "total" => "12894.50"}}
+#=> {:ok, %{"invoice_no" => "INV-1002", "issued_on" => nil, "total" => "12984.50"}}
 
 {:ok, result} = Refract.CSV.validate("acme_invoice_0413.csv", invoice)
 
 result.fields
-#=> %{"invoice_no" => "INV-1002", "issued_on" => nil, "total" => "12894.50"}
+#=> %{"invoice_no" => "INV-1002", "issued_on" => nil, "total" => "12984.50"}
 
 hd(result.issues)
 #=> %Refract.Validate.Issue{field: "issued_on", rule: :required, line: nil}
@@ -392,6 +392,41 @@ hd(result.issues)
 - **rules** - the same rules as columns, a field breaking one is an issue with `field:` and its labels line (nil when the label is missing, as here: this invoice has no date)
 - **reading only** - `fields/3` on any reader, `Refract.Grid.fields(grid, shape)` on a loaded grid
 - **memory** - a shape with fields is validated on the whole file in memory (forms are small, `max_bytes:` guards it)
+
+### Document rules
+
+Some checks need to look at the whole file to know if it is valid. `acme_invoice_0413.csv` says its total is 12,984.50, but its line totals add up to 12,894.50. This is not something that could be observed by a column or row rule, the total sits outside the table and the sum spans every row.
+
+```elixir
+total_matches_lines = fn %{fields: %{"total" => total}, rows: rows} ->
+  rows
+  |> Enum.map(&Refract.Parse.number!(&1["line_total"]))
+  |> Enum.reduce(Decimal.new(0), &Decimal.add/2)
+  |> Decimal.eq?(Refract.Parse.number!(total))
+end
+
+invoice =
+  Refract.Shape.new(
+    name: "acme_invoice",
+    spec: Refract.Table.spec(...),
+    validation: [
+      columns: %{...},
+      document: [{:total_matches_lines, total_matches_lines}]
+    ],
+    fields: %{"total" => [label: "total", rules: [:required, :number]]}
+  )
+
+{:ok, result} = Refract.CSV.validate("acme_invoice_0413.csv", invoice)
+
+List.last(result.issues)
+#=> %Refract.Validate.Issue{rule: :total_matches_lines, line: nil, column: nil, field: nil}
+```
+
+- **input** - a map with `fields` (the field values) and `rows` (every row in table)
+- **result** - return true to pass; false or a raise adds an issue named after the rule, with no line
+- **always runs** - doc checks are run last, and will always run even if previous failures
+- **whole file** - the file is read into memory, like fields (use `max_bytes:` sets the limit)
+- **Elixir only** - not available in YAML shapes
 
 ### Custom validators
 
