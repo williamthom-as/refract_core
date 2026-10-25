@@ -47,6 +47,7 @@ defmodule Refract.Reader do
   alias Refract.Table.Locate
   alias Refract.Table.Spec
   alias Refract.Validate
+  alias Refract.Validate.Rules
 
   import Refract.File.Utils, only: [size_check: 3]
 
@@ -186,13 +187,13 @@ defmodule Refract.Reader do
   end
 
   defp validate_with(
-         %Refract.Shape{fields: fields} = shape,
+         %Refract.Shape{fields: fields, validation: %Rules{document: document}} = shape,
          reader,
          source,
          validate_opts,
          open_opts
        )
-       when map_size(fields) == 0 do
+       when map_size(fields) == 0 and document == [] do
     case reader.open(source, open_opts) do
       {:ok, raw} -> parse_error_as_error(fn -> Validate.source(raw, shape, validate_opts) end)
       {:error, _reason} = error -> error

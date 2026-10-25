@@ -73,8 +73,11 @@ defmodule Refract.Grid do
   def validate(%__MODULE__{height: height} = grid, shape, opts \\ []) do
     opts = Keyword.put_new(opts, :within, height)
 
-    with {:ok, result} <- grid |> rows_as_list() |> Validate.source(shape, opts) do
-      {:ok, Validate.fields(result, located_fields(grid, shape), shape, opts)}
+    with {:ok, result, rows} <- grid |> rows_as_list() |> Validate.table(shape, opts) do
+      {:ok,
+       result
+       |> Validate.fields(located_fields(grid, shape), shape, opts)
+       |> Validate.document(rows, shape)}
     end
   end
 

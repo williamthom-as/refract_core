@@ -2,6 +2,8 @@
 
 Refract is a swiss army knife for working with all kinds of tabular data, from clean to messy. 
 
+At its core, it has been designed/architected to solve common problems that you might face with CSV files (think both machine generated, streamable formats through to hideous, 'table inside a table' invoice style formats). As ultimately everything resolves to rows of key -> value pairs, plguins will bring most of the same features to other formats (XLSX, JSON, <your custom format>).
+
 Each one of the features can be used on its own, or work together to build complex data pipelines.
 
 - [**Read**](#read): stream any file as lazy row maps, including separator detection and encoding/BOM issues handled for you.
