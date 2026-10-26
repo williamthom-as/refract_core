@@ -478,7 +478,7 @@ defmodule Refract.ValidateTest do
       assert {:ok, %{valid: true, rows: 2, issues: []}} = CSV.validate(source, shape)
     end
 
-    test "a :required rule on an optional column the file lacks fails every row" do
+    test "a :required rule on an optional column the file lacks is one issue at the header" do
       shape =
         Shape.new(
           name: "invoice",
@@ -492,12 +492,42 @@ defmodule Refract.ValidateTest do
 
       source = csv(["SKU,Line Total", "A-100,25.00", "B-200,396.00"])
 
-      assert {:ok, %{valid: false, rows: 2, issues: issues}} = CSV.validate(source, shape)
+      assert {:ok, %{valid: false, rows: 2, issues: [issue]}} = CSV.validate(source, shape)
+      assert %{line: 1, column: "qty", rule: :column_missing} = issue
+    end
 
-      assert [
-               %{line: 2, column: "qty", rule: :required},
-               %{line: 3, column: "qty", rule: :required}
-             ] = issues
+    test "format rules on an optional column the file lacks report nothing" do
+      shape =
+        Shape.new(
+          name: "invoice",
+          spec:
+            Table.spec(
+              header: [columns: @columns, required: ["sku", "line_total"], min_matches: 2],
+              row: [match: %{"line_total" => :number}]
+            ),
+          validation: [columns: %{"qty" => [:integer, {:min, 1}]}]
+        )
+
+      source = csv(["SKU,Line Total", "A-100,25.00", "B-200,396.00"])
+
+      assert {:ok, %{valid: true, rows: 2, issues: []}} = CSV.validate(source, shape)
+    end
+
+    test "a named recognition rule is reported by its name" do
+      shape =
+        Shape.new(
+          name: "invoice",
+          spec:
+            Table.spec(
+              header: [columns: @columns, required: ["sku", "line_total"], min_matches: 2],
+              row: [match: %{"sku" => {:sku_code, &String.match?(&1, ~r/^[A-Z]-\d{3}$/)}}]
+            )
+        )
+
+      source = csv(["SKU,Line Total", "A-100,25.00", "x-1,396.00"])
+
+      assert {:ok, %{issues: [%{line: 3, column: "sku", rule: {:recognition, :sku_code}}]}} =
+               CSV.validate(source, shape)
     end
 
     test "a nil cell in the table fails :required" do

@@ -6,7 +6,7 @@ defmodule Refract.Validate.Issue do
 
   defstruct [:line, :column, :field, :rule, :value]
 
-  @type rule :: Rules.rule() | atom() | {:recognition, Row.rule()}
+  @type rule :: Rules.rule() | atom() | {:recognition, Row.rule() | atom()}
 
   @type t :: %__MODULE__{
           line: pos_integer() | nil,

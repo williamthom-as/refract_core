@@ -15,7 +15,7 @@ defmodule Refract.Table.Spec.Row do
           | :date
           | :datetime
           | Regex.t()
-          | (Refract.cell() -> as_boolean(term()))
+          | {atom(), (Refract.cell() -> as_boolean(term()))}
 
   @type rules :: %{String.t() => rule()}
 
@@ -45,18 +45,25 @@ defmodule Refract.Table.Spec.Row do
         raise ArgumentError, "column names must be strings"
       end
 
-      if not valid_rule?(rule) do
-        raise ArgumentError, "invalid rule for column #{column}: #{inspect(rule)}"
-      end
+      validate_rule(column, rule)
     end)
   end
 
   defp validate_rules(_), do: raise(ArgumentError, "match rules must be a map")
 
-  defp valid_rule?(rule) when rule in [:integer, :number, :date, :datetime], do: true
-  defp valid_rule?(%Regex{}), do: true
-  defp valid_rule?(fun) when is_function(fun, 1), do: true
-  defp valid_rule?(_), do: false
+  defp validate_rule(_column, rule) when rule in [:integer, :number, :date, :datetime], do: :ok
+  defp validate_rule(_column, %Regex{}), do: :ok
+  defp validate_rule(_column, {name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
+
+  defp validate_rule(column, fun) when is_function(fun) do
+    raise ArgumentError,
+          "a function rule must be named, {name, fn cell -> boolean end}, " <>
+            "got: #{inspect(fun)} for column #{column}"
+  end
+
+  defp validate_rule(column, rule) do
+    raise ArgumentError, "invalid rule for column #{column}: #{inspect(rule)}"
+  end
 
   defp validate_min_score(min_score)
        when is_number(min_score) and min_score >= 0 and min_score <= 1,
@@ -99,9 +106,7 @@ defmodule Refract.Table.Spec.Row do
 
   def passes?(%Regex{} = regex, value), do: Regex.match?(regex, text(value))
 
-  def passes?(fun, value) when is_function(fun, 1) do
-    truthy?(fun.(value))
-  end
+  def passes?({_name, fun}, value) when is_function(fun, 1), do: truthy?(fun.(value))
 
   def passes?(_, _), do: false
 

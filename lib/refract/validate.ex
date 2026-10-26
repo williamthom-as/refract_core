@@ -45,9 +45,9 @@ defmodule Refract.Validate do
           {:ok, Result.t()} | {:error, {:header_not_found, Locate.header_miss()}}
 
   def source(raw, shape, opts) do
-    with {:ok, steps} <- steps(raw, shape, opts) do
+    with {:ok, missing, steps} <- steps(raw, shape, opts) do
       {count, issues} =
-        Enum.reduce(steps, {0, []}, fn {_row, issues}, {count, found} ->
+        Enum.reduce(steps, {0, Enum.reverse(missing)}, fn {_row, issues}, {count, found} ->
           {count + 1, Enum.reverse(issues, found)}
         end)
 
@@ -60,10 +60,10 @@ defmodule Refract.Validate do
           {:ok, Result.t(), [Refract.row()]} | {:error, {:header_not_found, Locate.header_miss()}}
 
   def table(raw, shape, opts) do
-    with {:ok, steps} <- steps(raw, shape, opts) do
+    with {:ok, missing, steps} <- steps(raw, shape, opts) do
       {rows, issues} = Enum.unzip(steps)
 
-      {:ok, result(length(rows), List.flatten(issues)), rows}
+      {:ok, result(length(rows), missing ++ List.flatten(issues)), rows}
     end
   end
 
@@ -78,9 +78,9 @@ defmodule Refract.Validate do
 
     with {:ok, header_row, positions} <- Locate.header(raw, spec, header_opts) do
       absent = Locate.absent(spec, positions)
-      columns = Enum.sort(columns)
+      {missing, columns} = columns |> Enum.sort() |> Enum.split_with(&missing?(&1, absent))
 
-      {:ok,
+      {:ok, Enum.map(missing, &missing_issue(&1, header_row)),
        raw
        |> Stream.with_index(1)
        |> Stream.drop(header_row)
@@ -91,6 +91,11 @@ defmodule Refract.Validate do
        end)}
     end
   end
+
+  defp missing?({column, rules}, absent), do: is_map_key(absent, column) and :required in rules
+
+  defp missing_issue({column, _rules}, header_row),
+    do: %Issue{line: header_row, column: column, rule: :column_missing}
 
   defp result(count, issues), do: %Result{valid: issues == [], rows: count, issues: issues}
 
@@ -150,7 +155,7 @@ defmodule Refract.Validate do
           do: %Issue{
             line: line,
             column: column,
-            rule: {:recognition, rule},
+            rule: {:recognition, rule_name(rule)},
             value: shown(values, Map.get(row, column))
           }
 
@@ -167,7 +172,6 @@ defmodule Refract.Validate do
     for {column, rules} <- columns,
         cell <- [Map.get(row, column)],
         rule = first_failed(rules, cell),
-        rule != nil,
         do: %Issue{line: line, column: column, rule: rule_name(rule), value: shown(values, cell)}
   end
 

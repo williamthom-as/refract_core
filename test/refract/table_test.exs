@@ -480,6 +480,15 @@ defmodule Refract.TableTest do
       assert_raise ArgumentError, fn -> row_spec(match: %{"sku" => :uuid}) end
     end
 
+    test "a function rule must be named, so a failure can report it" do
+      assert_raise ArgumentError, ~r/function rule must be named/, fn ->
+        row_spec(match: %{"sku" => &is_binary/1})
+      end
+
+      assert %{match: %{"sku" => {:text, _fun}}} =
+               row_spec(match: %{"sku" => {:text, &is_binary/1}}).row
+    end
+
     test "raises when min_score is outside 0 to 1" do
       assert_raise ArgumentError, fn -> row_spec(match: @rules, min_score: 1.5) end
       assert_raise ArgumentError, fn -> row_spec(match: @rules, min_score: -0.1) end
@@ -633,9 +642,9 @@ defmodule Refract.TableTest do
       refute passes?(~r/.*/, nil)
     end
 
-    test "function rules pass on a truthy result" do
-      assert passes?(&(&1 == "apple"), "apple")
-      refute passes?(&(&1 == "apple"), "pear")
+    test "named function rules pass on a truthy result" do
+      assert passes?({:apple, &(&1 == "apple")}, "apple")
+      refute passes?({:apple, &(&1 == "apple")}, "pear")
     end
   end
 
