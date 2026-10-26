@@ -19,21 +19,33 @@ defmodule Refract.Validate.Rules do
 
   @type row_rule :: {atom(), (Refract.row() -> as_boolean(term()))}
 
-  @type t :: %__MODULE__{columns: %{String.t() => [rule()]}, rows: [row_rule()]}
+  @type document :: %{fields: %{String.t() => Refract.cell()}, rows: [Refract.row()]}
 
-  defstruct columns: %{}, rows: []
+  @type document_rule :: {atom(), (document() -> as_boolean(term()))}
+
+  @type t :: %__MODULE__{
+          columns: %{String.t() => [rule()]},
+          rows: [row_rule()],
+          document: [document_rule()]
+        }
+
+  defstruct columns: %{}, rows: [], document: []
 
   @spec new!(keyword(), %{String.t() => term()}) :: t()
 
   def new!(opts, column_names) do
-    opts = Keyword.validate!(opts, columns: %{}, rows: [])
+    opts = Keyword.validate!(opts, columns: %{}, rows: [], document: [])
+
     columns = Keyword.fetch!(opts, :columns)
     rows = Keyword.fetch!(opts, :rows)
+    document = Keyword.fetch!(opts, :document)
 
     validate_columns(columns, column_names)
-    Enum.each(rows, &validate_row_rule/1)
 
-    %__MODULE__{columns: columns, rows: rows}
+    Enum.each(rows, &validate_row_rule/1)
+    Enum.each(document, &validate_document_rule/1)
+
+    %__MODULE__{columns: columns, rows: rows, document: document}
   end
 
   @spec validate_rules!([rule()]) :: :ok
@@ -88,5 +100,12 @@ defmodule Refract.Validate.Rules do
 
   defp validate_row_rule(rule) do
     raise ArgumentError, "a row rule must be {name, fn row -> boolean end}, got: #{inspect(rule)}"
+  end
+
+  defp validate_document_rule({name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
+
+  defp validate_document_rule(rule) do
+    raise ArgumentError,
+          "a document rule must be {name, fn document -> boolean end}, got: #{inspect(rule)}"
   end
 end

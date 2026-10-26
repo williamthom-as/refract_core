@@ -1,8 +1,10 @@
 defmodule Refract.Validate do
   @moduledoc """
-  validate a file against a set of rules applied to each row/column.
+  validate a files content against its shapes `validation:` and `fields:` ruleset.
 
-  can be per cell or across entire row
+  - column rules per cell and row rules across a row, issues by line (raw file line num)
+  - field rules on the values read around the table (can be found anywhere)
+  - document rules over the field values and every table row together
   """
 
   alias Refract.Shape
@@ -42,6 +44,14 @@ defmodule Refract.Validate do
           {:ok, Result.t()} | {:error, {:header_not_found, Locate.header_miss()}}
 
   def source(raw, shape, opts) do
+    with {:ok, result, _rows} <- table(raw, shape, opts), do: {:ok, result}
+  end
+
+  @doc false
+  @spec table(Enumerable.t(), Shape.t() | module(), keyword()) ::
+          {:ok, Result.t(), [Refract.row()]} | {:error, {:header_not_found, Locate.header_miss()}}
+
+  def table(raw, shape, opts) do
     {header_opts, opts} = Keyword.split(opts, [:within, :header_row])
 
     opts = Keyword.validate!(opts, values: false)
@@ -59,12 +69,26 @@ defmodule Refract.Validate do
         |> Stream.with_index(1)
         |> Stream.drop(header_row)
         |> Body.run(spec, positions, false, misses: :unlimited)
-        |> Enum.to_list()
+        |> Enum.map(fn {kind, row, report} -> {kind, Map.merge(row, absent), report} end)
 
-      issues = Enum.flat_map(steps, &step_issues(&1, absent, columns, row_rules, values))
+      issues = Enum.flat_map(steps, &step_issues(&1, columns, row_rules, values))
+      rows = Enum.map(steps, fn {_kind, row, _report} -> row end)
 
-      {:ok, %Result{valid: issues == [], rows: length(steps), issues: issues}}
+      {:ok, %Result{valid: issues == [], rows: length(steps), issues: issues}, rows}
     end
+  end
+
+  @spec document(Result.t(), [Refract.row()], Shape.t() | module()) :: Result.t()
+
+  def document(%Result{issues: issues, fields: fields} = result, rows, shape) do
+    %Shape{validation: %Rules{document: rules}} = Shape.resolve(shape)
+
+    document = %{fields: fields, rows: rows}
+
+    issues =
+      issues ++ for {name, fun} <- rules, not Check.holds?(fun, document), do: %Issue{rule: name}
+
+    %{result | issues: issues, valid: issues == []}
   end
 
   @spec fields(
@@ -97,12 +121,10 @@ defmodule Refract.Validate do
 
   defp step_issues(
          {_kind, row, %Report.Line{row: line, columns: recognised}},
-         absent,
          columns,
          row_rules,
          values
        ) do
-    row = Map.merge(row, absent)
     validation = column_issues(row, line, columns, values)
     covered = Enum.map(validation, & &1.column)
 
