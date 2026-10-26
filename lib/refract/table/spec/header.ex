@@ -17,6 +17,8 @@ defmodule Refract.Table.Spec.Header do
 
   @type rank :: {0 | 1, non_neg_integer()}
 
+  @spec new(keyword()) :: t()
+
   def new(opts) do
     opts = Keyword.validate!(opts, [:columns, :min_matches, required: []])
 
@@ -34,7 +36,7 @@ defmodule Refract.Table.Spec.Header do
           end)
       end
 
-    required = Keyword.get(opts, :required)
+    required = Keyword.fetch!(opts, :required)
     min_matches = Keyword.get(opts, :min_matches, map_size(columns))
 
     validate_columns(columns)

@@ -97,7 +97,9 @@ defmodule Refract.Validate do
   defp missing_issue({column, _rules}, header_row),
     do: %Issue{line: header_row, column: column, rule: :column_missing}
 
-  defp result(count, issues), do: %Result{valid: issues == [], rows: count, issues: issues}
+  defp result(count, issues), do: with_issues(%Result{rows: count}, issues)
+
+  defp with_issues(result, issues), do: %{result | issues: issues, valid: issues == []}
 
   @spec document(Result.t(), [Refract.row()], Shape.t() | module()) :: Result.t()
 
@@ -109,7 +111,7 @@ defmodule Refract.Validate do
     issues =
       issues ++ for {name, fun} <- rules, not Check.holds?(fun, document), do: %Issue{rule: name}
 
-    %{result | issues: issues, valid: issues == []}
+    with_issues(result, issues)
   end
 
   @spec fields(
@@ -127,16 +129,11 @@ defmodule Refract.Validate do
       for {name, %Field{rules: rules}} <- Enum.sort(fields),
           {cell, line} = Map.fetch!(located, name),
           rule = first_failed(rules, cell),
-          rule != nil,
           do: %Issue{line: line, field: name, rule: rule_name(rule), value: shown(values, cell)}
 
-    issues = field_issues ++ issues
-
     %{
-      result
-      | fields: Map.new(located, fn {name, {cell, _line}} -> {name, cell} end),
-        issues: issues,
-        valid: issues == []
+      with_issues(result, field_issues ++ issues)
+      | fields: Map.new(located, fn {name, {cell, _line}} -> {name, cell} end)
     }
   end
 

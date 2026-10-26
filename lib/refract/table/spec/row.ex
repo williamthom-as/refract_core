@@ -26,11 +26,13 @@ defmodule Refract.Table.Spec.Row do
           min_score: number()
         }
 
-  def new(opts) do
-    opts = Keyword.validate!(opts, [:match, :min_score])
+  @spec new(keyword()) :: t()
 
-    match = Keyword.get(opts, :match, %{})
-    min_score = Keyword.get(opts, :min_score, 1.0)
+  def new(opts) do
+    opts = Keyword.validate!(opts, match: %{}, min_score: 1.0)
+
+    match = Keyword.fetch!(opts, :match)
+    min_score = Keyword.fetch!(opts, :min_score)
 
     validate_min_score(min_score)
     validate_rules(match)

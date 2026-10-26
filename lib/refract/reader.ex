@@ -50,8 +50,6 @@ defmodule Refract.Reader do
   alias Refract.Validate
   alias Refract.Validate.Rules
 
-  import Refract.File.Utils, only: [size_check: 3]
-
   defmacro __using__(_opts) do
     quote do
       @behaviour Refract.Reader
@@ -129,10 +127,7 @@ defmodule Refract.Reader do
     {locate_opts, open_opts} = Keyword.split(opts, [:within, :on_miss, :header_row])
     locate_opts = Locate.validate_opts!(locate_opts)
 
-    case reader.open(source, open_opts) do
-      {:ok, raw} -> parse_error_as_error(fn -> Table.locate(raw, spec, locate_opts) end)
-      {:error, _reason} = error -> error
-    end
+    read(reader, source, open_opts, &Table.locate(&1, spec, locate_opts))
   end
 
   @spec classify(reader :: module(), Refract.source(), [Refract.Shape.t() | module()], keyword()) ::
@@ -147,18 +142,12 @@ defmodule Refract.Reader do
       |> Keyword.put_new(:name, Source.name(source))
       |> Score.validate_opts!()
 
-    case reader.open(source, open_opts) do
-      {:ok, raw} ->
-        parse_error_as_error(fn ->
-          {:ok,
-           raw
-           |> Classify.lines(shapes, classify_opts)
-           |> Facts.Source.add(reader, source, open_opts)}
-        end)
-
-      {:error, _reason} = error ->
-        error
-    end
+    read(reader, source, open_opts, fn raw ->
+      {:ok,
+       raw
+       |> Classify.lines(shapes, classify_opts)
+       |> Facts.Source.add(reader, source, open_opts)}
+    end)
   end
 
   @spec suggest(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::
@@ -167,13 +156,7 @@ defmodule Refract.Reader do
   def suggest(reader, source, shape, opts) do
     {suggest_opts, open_opts} = Keyword.split(opts, [:within, :header_row])
 
-    case reader.open(source, open_opts) do
-      {:ok, raw} ->
-        parse_error_as_error(fn -> {:ok, Classify.suggest(raw, shape, suggest_opts)} end)
-
-      {:error, _reason} = error ->
-        error
-    end
+    read(reader, source, open_opts, &{:ok, Classify.suggest(&1, shape, suggest_opts)})
   end
 
   @spec validate(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::
@@ -195,10 +178,7 @@ defmodule Refract.Reader do
          open_opts
        )
        when map_size(fields) == 0 and document == [] do
-    case reader.open(source, open_opts) do
-      {:ok, raw} -> parse_error_as_error(fn -> Validate.source(raw, shape, validate_opts) end)
-      {:error, _reason} = error -> error
-    end
+    read(reader, source, open_opts, &Validate.source(&1, shape, validate_opts))
   end
 
   defp validate_with(shape, reader, source, validate_opts, load_opts) do
@@ -232,11 +212,24 @@ defmodule Refract.Reader do
 
     max_bytes = Keyword.get(grid_opts, :max_bytes, 10_000_000)
 
-    with :ok <- size_check(source, max_bytes, streams_allowed: false),
-         {:ok, raw} <- reader.open(source, open_opts) do
-      parse_error_as_error(fn -> {:ok, Grid.new(Enum.to_list(raw))} end)
-    end
+    with :ok <- source |> Source.size() |> within_size(source, max_bytes),
+         do: read(reader, source, open_opts, &{:ok, Grid.new(&1)})
   end
+
+  defp read(reader, source, open_opts, fun) do
+    with {:ok, raw} <- reader.open(source, open_opts),
+         do: parse_error_as_error(fn -> fun.(raw) end)
+  end
+
+  defp within_size({:ok, :unknown}, source, _max_bytes),
+    do: {:error, {:stream_not_allowed, source}}
+
+  defp within_size({:ok, size}, _source, max_bytes) when size <= max_bytes, do: :ok
+
+  defp within_size({:ok, _size}, _source, max_bytes),
+    do: {:error, {:max_bytes_exceeded, max_bytes}}
+
+  defp within_size({:error, _reason} = error, _source, _max_bytes), do: error
 
   defp parse_error_as_error(read) do
     read.()

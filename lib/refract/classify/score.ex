@@ -4,6 +4,7 @@ defmodule Refract.Classify.Score do
   alias Refract.Classify.Candidate
   alias Refract.Classify.Ctx
   alias Refract.Classify.Drift
+  alias Refract.Classify.Facts
   alias Refract.Classify.Markers
   alias Refract.Classify.Result
   alias Refract.Classify.Verdict
@@ -70,7 +71,7 @@ defmodule Refract.Classify.Score do
 
     %Result{candidates: candidates} = result = pick(pick, resolved_shapes, ctx)
 
-    facts = %Refract.Classify.Facts{
+    facts = %Facts{
       lines_sampled: length(sample),
       blank_lines: blank_lines(sample),
       widths: Enum.frequencies_by(sample, &length/1),

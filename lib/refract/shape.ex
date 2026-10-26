@@ -103,21 +103,28 @@ defmodule Refract.Shape do
 
   def new(opts) do
     opts =
-      Keyword.validate!(opts, [:name, :spec, version: 1, markers: [], validation: [], fields: %{}])
+      Keyword.validate!(opts,
+        name: nil,
+        spec: nil,
+        version: 1,
+        markers: [],
+        validation: [],
+        fields: %{}
+      )
 
-    name = Keyword.get(opts, :name)
-    spec = Keyword.get(opts, :spec)
+    name = Keyword.fetch!(opts, :name)
+    spec = Keyword.fetch!(opts, :spec)
 
-    version = Keyword.get(opts, :version)
-    markers = Keyword.get(opts, :markers)
+    version = Keyword.fetch!(opts, :version)
+    markers = Keyword.fetch!(opts, :markers)
 
     validate_name(name)
     validate_spec(spec)
     validate_version(version)
     validate_markers(markers)
 
-    validation = Rules.new!(Keyword.get(opts, :validation), spec.header.columns)
-    fields = fields(Keyword.get(opts, :fields))
+    validation = Rules.new!(Keyword.fetch!(opts, :validation), spec.header.columns)
+    fields = fields(Keyword.fetch!(opts, :fields))
 
     %__MODULE__{
       name: name,

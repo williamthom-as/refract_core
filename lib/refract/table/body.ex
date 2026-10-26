@@ -20,7 +20,7 @@ defmodule Refract.Table.Body do
           misses: :limited | :unlimited
         }
 
-  @spec run(Enumerable.t(), Spec.t(), Header.positions(), boolean()) :: Enumerable.t()
+  @spec run(Enumerable.t(), Spec.t(), Header.positions(), boolean(), keyword()) :: Enumerable.t()
 
   def run(numbered_lines, %Spec{} = spec, positions, values, opts \\ []) do
     opts = Keyword.validate!(opts, misses: :limited)
@@ -34,46 +34,46 @@ defmodule Refract.Table.Body do
 
   defp step(_numbered_line, :ended, _body), do: {:halt, :ended}
 
-  defp step({line, row}, misses, %__MODULE__{spec: spec} = body) do
+  defp step({line, row}, missed, %__MODULE__{spec: spec} = body) do
     spec
     |> Table.match_stop(line)
-    |> line_step(line, row, misses, body)
+    |> line_step(line, row, missed, body)
   end
 
-  defp line_step({:stop, _condition}, _line, _row, misses, _body), do: {:halt, misses}
+  defp line_step({:stop, _condition}, _line, _row, missed, _body), do: {:halt, missed}
 
-  defp line_step(:continue, line, row, misses, body) do
+  defp line_step(:continue, line, row, missed, body) do
     if blank_line?(line) do
-      {[], misses}
+      {[], missed}
     else
-      scored(line, row, misses, body)
+      scored(line, row, missed, body)
     end
   end
 
   defp scored(
          line,
          row,
-         misses,
+         missed,
          %__MODULE__{spec: spec, positions: positions, values: values} = body
        ) do
     mapped_row = Table.ordered_row(line, positions)
     report = %{Row.report(spec.row, mapped_row, values: values) | row: row}
 
-    counted(report, mapped_row, misses, limit(body))
+    counted(report, mapped_row, missed, limit(body))
   end
 
   defp limit(%__MODULE__{misses: :unlimited}), do: :unlimited
   defp limit(%__MODULE__{spec: spec}), do: spec.max_misses
 
-  defp counted(%Report.Line{passed: true} = report, mapped_row, misses, _limit),
-    do: {[{:hit, mapped_row, report}], misses}
+  defp counted(%Report.Line{passed: true} = report, mapped_row, missed, _limit),
+    do: {[{:hit, mapped_row, report}], missed}
 
-  defp counted(report, mapped_row, misses, :unlimited),
-    do: {[{:miss, mapped_row, report}], misses + 1}
+  defp counted(report, mapped_row, missed, :unlimited),
+    do: {[{:miss, mapped_row, report}], missed + 1}
 
-  defp counted(report, mapped_row, misses, limit) when misses < limit,
-    do: {[{:miss, mapped_row, report}], misses + 1}
+  defp counted(report, mapped_row, missed, limit) when missed < limit,
+    do: {[{:miss, mapped_row, report}], missed + 1}
 
-  defp counted(report, mapped_row, _misses, _limit),
+  defp counted(report, mapped_row, _missed, _limit),
     do: {[{:end, mapped_row, report}], :ended}
 end

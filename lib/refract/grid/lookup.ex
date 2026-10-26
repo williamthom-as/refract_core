@@ -9,8 +9,8 @@ defmodule Refract.Grid.Lookup do
   @spec table(Grid.t(), keyword()) :: [Refract.row()]
 
   def table(%Grid{rows: rows} = grid, opts) do
-    opts = Keyword.validate!(opts, [:at])
-    {start, finish} = corners(grid, opts[:at])
+    opts = Keyword.validate!(opts, at: nil)
+    {start, finish} = corners(grid, Keyword.fetch!(opts, :at))
 
     case area(rows, start, finish) do
       [] -> []
@@ -57,10 +57,10 @@ defmodule Refract.Grid.Lookup do
   @spec value_line(Grid.t(), [value_opt()]) :: {Refract.cell(), pos_integer() | nil}
 
   def value_line(%Grid{rows: rows} = grid, opts) do
-    opts = Keyword.validate!(opts, [:label, take: :right])
+    opts = Keyword.validate!(opts, label: nil, take: :right)
 
-    label = Keyword.get(opts, :label)
-    take = Keyword.get(opts, :take)
+    label = Keyword.fetch!(opts, :label)
+    take = Keyword.fetch!(opts, :take)
 
     validate_label(label)
     validate_take(take)
@@ -75,10 +75,10 @@ defmodule Refract.Grid.Lookup do
   @spec block(Grid.t(), [block_opt()]) :: [Refract.cell()] | nil
 
   def block(%Grid{rows: rows} = grid, opts) do
-    opts = Keyword.validate!(opts, [:after, until: :blank])
+    opts = Keyword.validate!(opts, after: nil, until: :blank)
 
-    after_label = Keyword.get(opts, :after)
-    until = Keyword.get(opts, :until)
+    after_label = Keyword.fetch!(opts, :after)
+    until = Keyword.fetch!(opts, :until)
 
     validate_label(after_label)
     validate_until(until)
@@ -175,22 +175,23 @@ defmodule Refract.Grid.Lookup do
         "invalid cell ref #{inspect(ref)}, expected a column and row like \"B4\""
       )
 
-  defp validate_label(label) when is_binary(label) or is_struct(label, Regex), do: label
+  defp validate_label(label) when is_binary(label) or is_struct(label, Regex), do: :ok
 
-  defp validate_label(label),
-    do: raise(ArgumentError, "label must be a string or regex, got: #{inspect(label)}")
+  defp validate_label(label) do
+    raise ArgumentError, "label must be a string or regex, got: #{inspect(label)}"
+  end
 
-  defp validate_take(value) when value not in [:right, :below],
-    do: raise(ArgumentError, "take must be :right or :below, got: #{inspect(value)}")
+  defp validate_take(take) when take in [:right, :below], do: :ok
 
-  defp validate_take(value), do: value
+  defp validate_take(take) do
+    raise ArgumentError, "take must be :right or :below, got: #{inspect(take)}"
+  end
 
-  defp validate_until(value) when value not in [:blank],
-    do: raise(ArgumentError, "until must be :blank, got: #{inspect(value)}")
+  defp validate_until(:blank), do: :ok
 
-  defp validate_until(value), do: value
-
-  @spec find_label(tuple(), label()) :: {non_neg_integer(), non_neg_integer()} | nil
+  defp validate_until(until) do
+    raise ArgumentError, "until must be :blank, got: #{inspect(until)}"
+  end
 
   defp find_label(rows, label) do
     Enum.find_value(0..(tuple_size(rows) - 1)//1, fn y ->
