@@ -13,7 +13,6 @@ defmodule Refract.Validate.Rules do
           | {:min | :max, number() | Decimal.t() | Date.t()}
           | {:in, [term()]}
           | {atom(), (Refract.cell() -> as_boolean(term()))}
-          | (Refract.cell() -> as_boolean(term()))
           | module()
           | {module(), keyword()}
 
@@ -76,7 +75,11 @@ defmodule Refract.Validate.Rules do
   defp validate_rule({bound, %Date{}}) when bound in [:min, :max], do: :ok
   defp validate_rule({:in, values}) when is_list(values), do: :ok
   defp validate_rule({name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
-  defp validate_rule(fun) when is_function(fun, 1), do: :ok
+
+  defp validate_rule(fun) when is_function(fun) do
+    raise ArgumentError,
+          "a function rule must be named, {name, fn cell -> boolean end}, got: #{inspect(fun)}"
+  end
 
   defp validate_rule({module, opts} = rule) when is_atom(module) and is_list(opts),
     do: validate_validator(Validator.validator?(module), Keyword.keyword?(opts), rule)

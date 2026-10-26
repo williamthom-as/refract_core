@@ -10,7 +10,8 @@ defmodule Refract.Reader do
   - `locate`: `within`, `on_miss`, `header_row`
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
   - `suggest`: `within`, `header_row`
-  - `validate`: `within`, `header_row`, `values` (and `max_bytes` when the shape has fields)
+  - `validate`: `within`, `header_row`, `values` (and `max_bytes` when the shape has fields or
+    document rules, as the whole file is read)
   - `load`, `fields`: `max_bytes`
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`

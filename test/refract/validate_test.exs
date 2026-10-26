@@ -110,6 +110,23 @@ defmodule Refract.ValidateTest do
       assert %{line: 1, column: "line_total", rule: :required, value: nil} = issue
     end
 
+    test "a nil cell is blank, it fails :required and other rules skip it" do
+      row = line(%{"unit_price" => nil, "line_total" => nil})
+
+      assert [{:invalid, ^row, [issue]}] =
+               validate([row], invoice(columns: default_validation()[:columns]))
+
+      assert %{line: 1, column: "line_total", rule: :required, value: nil} = issue
+    end
+
+    test "a false cell is checked like any other" do
+      pattern = ~r/^[A-Z]-\d{3}$/
+      shape = invoice(columns: %{"sku" => [:required, pattern]})
+
+      assert [%{column: "sku", rule: ^pattern}] =
+               issues(validate([line(%{"sku" => false})], shape))
+    end
+
     test "min and max compare numbers, whatever their form" do
       shape = invoice(columns: %{"line_total" => [{:min, 1}, {:max, 10_000}]})
 
@@ -245,6 +262,20 @@ defmodule Refract.ValidateTest do
             {:named, &Kernel.+/2}
           ] do
         assert_raise ArgumentError, ~r/rule/, fn -> invoice(columns: %{"sku" => [rule]}) end
+      end
+    end
+
+    test "a function rule must be named, so issues can report it" do
+      message = ~r/function rule must be named/
+
+      assert_raise ArgumentError, message, fn -> invoice(columns: %{"sku" => [&is_binary/1]}) end
+
+      assert_raise ArgumentError, message, fn ->
+        Shape.new(
+          name: "form",
+          spec: spec(),
+          fields: %{"total" => [at: "B1", rules: [&is_binary/1]]}
+        )
       end
     end
 
@@ -445,6 +476,42 @@ defmodule Refract.ValidateTest do
       source = csv(["SKU,Line Total", "A-100,25.00", "B-200,396.00"])
 
       assert {:ok, %{valid: true, rows: 2, issues: []}} = CSV.validate(source, shape)
+    end
+
+    test "a :required rule on an optional column the file lacks fails every row" do
+      shape =
+        Shape.new(
+          name: "invoice",
+          spec:
+            Table.spec(
+              header: [columns: @columns, required: ["sku", "line_total"], min_matches: 2],
+              row: [match: %{"qty" => :number, "line_total" => :number}]
+            ),
+          validation: [columns: %{"qty" => [:required, :integer]}]
+        )
+
+      source = csv(["SKU,Line Total", "A-100,25.00", "B-200,396.00"])
+
+      assert {:ok, %{valid: false, rows: 2, issues: issues}} = CSV.validate(source, shape)
+
+      assert [
+               %{line: 2, column: "qty", rule: :required},
+               %{line: 3, column: "qty", rule: :required}
+             ] = issues
+    end
+
+    test "a nil cell in the table fails :required" do
+      shape =
+        Shape.new(name: "invoice", spec: spec(), validation: [columns: %{"sku" => [:required]}])
+
+      raw = [
+        ["sku", "description", "qty", "unit price", "line total"],
+        [nil, "widget", "2", "12.50", "25.00"],
+        ["B-200", "gadget", "1", "396.00", "396.00"]
+      ]
+
+      assert {:ok, %{valid: false, issues: [%{line: 2, column: "sku", rule: :required}]}} =
+               Validate.source(raw, shape, [])
     end
 
     test "a malformed file is a parse error" do
