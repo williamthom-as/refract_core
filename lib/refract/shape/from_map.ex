@@ -347,13 +347,6 @@ defmodule Refract.Shape.FromMap do
   defp validation_rule(_path, name, validators) when is_map_key(validators, name),
     do: {:ok, Map.fetch!(validators, name)}
 
-  defp validation_rule(path, %{"date" => formats} = rule, _validators) when map_size(rule) == 1,
-    do: dated(path, :date, formats, rule)
-
-  defp validation_rule(path, %{"datetime" => formats} = rule, _validators)
-       when map_size(rule) == 1,
-       do: dated(path, :datetime, formats, rule)
-
   defp validation_rule(path, %{"min" => bound} = rule, _validators) when map_size(rule) == 1,
     do: bound(path, :min, bound)
 
@@ -378,7 +371,8 @@ defmodule Refract.Shape.FromMap do
     end
   end
 
-  defp validator(path, rule, _module, _options), do: invalid(path, rule)
+  defp validator(path, rule, :error, _options), do: rule(path, rule)
+  defp validator(path, rule, {:ok, _module}, _options), do: invalid(path, rule)
 
   defp validator_opts([], parsed), do: {:ok, Enum.reverse(parsed)}
 

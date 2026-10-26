@@ -2,7 +2,10 @@ defmodule Refract.Validate.Rules do
   @moduledoc false
 
   alias Refract.Parse.Date, as: DateParser
+  alias Refract.Table.Spec.Row
   alias Refract.Validate.Validator
+
+  import Refract.Table.Spec.Row, only: [is_type_rule: 1]
 
   @type rule ::
           :required
@@ -70,16 +73,13 @@ defmodule Refract.Validate.Rules do
     raise ArgumentError, "validation rule for unknown column #{column}"
   end
 
-  defp validate_rule(rule) when rule in [:required, :integer, :number, :date, :datetime], do: :ok
+  defp validate_rule(:required), do: :ok
+  defp validate_rule(rule) when is_type_rule(rule), do: Row.validate_type_rule!(rule)
   defp validate_rule(%Regex{}), do: :ok
   defp validate_rule({bound, n}) when bound in [:min, :max] and is_number(n), do: :ok
   defp validate_rule({bound, %Decimal{}}) when bound in [:min, :max], do: :ok
   defp validate_rule({bound, %Date{}}) when bound in [:min, :max], do: :ok
   defp validate_rule({:in, values}) when is_list(values), do: :ok
-
-  defp validate_rule({kind, formats}) when kind in [:date, :datetime] and is_list(formats),
-    do: DateParser.validate_formats!(formats)
-
   defp validate_rule({name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
 
   defp validate_rule(fun) when is_function(fun) do

@@ -19,6 +19,11 @@ defmodule Refract.Table.Spec.Row do
           | Regex.t()
           | {atom(), (Refract.cell() -> as_boolean(term()))}
 
+  defguard is_type_rule(rule)
+           when rule in [:integer, :number, :date, :datetime] or
+                  (is_tuple(rule) and tuple_size(rule) == 2 and
+                     elem(rule, 0) in [:date, :datetime] and is_list(elem(rule, 1)))
+
   @type rules :: %{String.t() => rule()}
 
   @type t :: %__MODULE__{
@@ -55,13 +60,8 @@ defmodule Refract.Table.Spec.Row do
 
   defp validate_rules(_), do: raise(ArgumentError, "match rules must be a map")
 
-  defp validate_rule(_column, rule) when rule in [:integer, :number, :date, :datetime], do: :ok
+  defp validate_rule(_column, rule) when is_type_rule(rule), do: validate_type_rule!(rule)
   defp validate_rule(_column, %Regex{}), do: :ok
-
-  defp validate_rule(_column, {kind, formats})
-       when kind in [:date, :datetime] and is_list(formats),
-       do: DateParser.validate_formats!(formats)
-
   defp validate_rule(_column, {name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
 
   defp validate_rule(column, fun) when is_function(fun) do
@@ -80,6 +80,11 @@ defmodule Refract.Table.Spec.Row do
 
   defp validate_min_score(_),
     do: raise(ArgumentError, "min_score must be a number between 0 and 1")
+
+  @spec validate_type_rule!(term()) :: :ok
+
+  def validate_type_rule!({_kind, formats}), do: DateParser.validate_formats!(formats)
+  def validate_type_rule!(_rule), do: :ok
 
   @type miss :: %{score: float(), failed: [{String.t(), rule()}]}
 
