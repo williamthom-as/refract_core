@@ -9,13 +9,19 @@ defmodule Refract.Classify.Facts.Source do
   @spec add(Result.t(), module(), Refract.source(), keyword()) :: Result.t()
 
   def add(%Result{file: %Facts{} = facts} = result, reader, source, opts) do
-    {:ok, size} = size(source)
-
     %{
       result
-      | file: %Facts{facts | path: path(source), size: size, format: format(reader, source, opts)}
+      | file: %Facts{
+          facts
+          | path: path(source),
+            size: size_or_unknown(size(source)),
+            format: format(reader, source, opts)
+        }
     }
   end
+
+  defp size_or_unknown({:ok, size}), do: size
+  defp size_or_unknown({:error, _reason}), do: :unknown
 
   defp format(_reader, {:stream, _chunks}, _opts), do: %{}
 

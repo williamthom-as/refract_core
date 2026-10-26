@@ -62,15 +62,7 @@ defmodule Refract.Parse do
 
   @spec number!(term(), [number_opt()]) :: Decimal.t()
 
-  def number!(value, opts \\ []) do
-    case number(value, opts) do
-      {:ok, decimal} ->
-        decimal
-
-      {:error, reason} ->
-        raise ArgumentError, "cannot parse #{inspect(value)} as a number: #{inspect(reason)}"
-    end
-  end
+  def number!(value, opts \\ []), do: value |> number(opts) |> unwrap!(value, "a number")
 
   defp validate_currency(currency) when is_boolean(currency), do: :ok
 
@@ -146,15 +138,7 @@ defmodule Refract.Parse do
 
   @spec date!(term(), [DateParser.opt()]) :: Date.t()
 
-  def date!(value, opts \\ []) do
-    case date(value, opts) do
-      {:ok, date} ->
-        date
-
-      {:error, reason} ->
-        raise ArgumentError, "cannot parse #{inspect(value)} as a date: #{inspect(reason)}"
-    end
-  end
+  def date!(value, opts \\ []), do: value |> date(opts) |> unwrap!(value, "a date")
 
   @spec datetime(term(), [DateParser.datetime_opt()]) ::
           {:ok, NaiveDateTime.t()} | {:error, DateParser.datetime_error()}
@@ -163,15 +147,7 @@ defmodule Refract.Parse do
 
   @spec datetime!(term(), [DateParser.datetime_opt()]) :: NaiveDateTime.t()
 
-  def datetime!(value, opts \\ []) do
-    case datetime(value, opts) do
-      {:ok, naive} ->
-        naive
-
-      {:error, reason} ->
-        raise ArgumentError, "cannot parse #{inspect(value)} as a datetime: #{inspect(reason)}"
-    end
-  end
+  def datetime!(value, opts \\ []), do: value |> datetime(opts) |> unwrap!(value, "a datetime")
 
   # boolean
 
@@ -185,15 +161,7 @@ defmodule Refract.Parse do
 
   @spec boolean!(term(), keyword()) :: boolean()
 
-  def boolean!(value, opts \\ []) do
-    case boolean(value, opts) do
-      {:ok, bool} ->
-        bool
-
-      {:error, reason} ->
-        raise ArgumentError, "cannot parse #{inspect(value)} as a boolean: #{inspect(reason)}"
-    end
-  end
+  def boolean!(value, opts \\ []), do: value |> boolean(opts) |> unwrap!(value, "a boolean")
 
   defp parse_boolean(value) when is_boolean(value), do: {:ok, value}
 
@@ -223,15 +191,7 @@ defmodule Refract.Parse do
 
   @spec integer!(term(), keyword()) :: integer()
 
-  def integer!(value, opts \\ []) do
-    case integer(value, opts) do
-      {:ok, int} ->
-        int
-
-      {:error, reason} ->
-        raise ArgumentError, "cannot parse #{inspect(value)} as an integer: #{inspect(reason)}"
-    end
-  end
+  def integer!(value, opts \\ []), do: value |> integer(opts) |> unwrap!(value, "an integer")
 
   defp parse_integer(value) when is_integer(value), do: {:ok, value}
 
@@ -253,4 +213,10 @@ defmodule Refract.Parse do
   end
 
   defp parse_integer(value), do: {:error, {:not_an_integer, value}}
+
+  defp unwrap!({:ok, parsed}, _value, _type), do: parsed
+
+  defp unwrap!({:error, reason}, value, type) do
+    raise ArgumentError, "cannot parse #{inspect(value)} as #{type}: #{inspect(reason)}"
+  end
 end

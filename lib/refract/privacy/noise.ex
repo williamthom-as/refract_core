@@ -26,52 +26,33 @@ defmodule Refract.Privacy.Noise do
 
   @spec relative(value(), number(), [opt()]) :: value()
 
-  def relative(value, fraction, opts) do
-    opts = Keyword.validate!(opts, [:seed, :domain, :keyring, :round])
-
-    seed = Keyword.fetch!(opts, :seed)
-    domain = Keyword.fetch!(opts, :domain)
-    keyring = Keyword.fetch!(opts, :keyring)
-    round = Keyword.get(opts, :round)
-
-    validate_amount(fraction)
-    validate_round(round)
-
-    factor =
-      seed
-      |> spread(domain, keyring)
-      |> Decimal.mult(to_decimal(fraction))
-      |> Decimal.add(1)
-
-    value
-    |> to_decimal()
-    |> Decimal.mult(factor)
-    |> from_decimal(value, round)
-  end
+  def relative(value, fraction, opts), do: shift(:relative, value, fraction, opts)
 
   @spec absolute(value(), number(), [opt()]) :: value()
 
-  def absolute(value, amount, opts) do
-    opts = Keyword.validate!(opts, [:seed, :domain, :keyring, :round])
+  def absolute(value, amount, opts), do: shift(:absolute, value, amount, opts)
+
+  defp shift(kind, value, amount, opts) do
+    opts = Keyword.validate!(opts, [:seed, :domain, :keyring, round: nil])
 
     seed = Keyword.fetch!(opts, :seed)
     domain = Keyword.fetch!(opts, :domain)
     keyring = Keyword.fetch!(opts, :keyring)
-    round = Keyword.get(opts, :round)
+    round = Keyword.fetch!(opts, :round)
 
     validate_amount(amount)
     validate_round(round)
 
-    shift =
-      seed
-      |> spread(domain, keyring)
-      |> Decimal.mult(to_decimal(amount))
+    offset = seed |> spread(domain, keyring) |> Decimal.mult(to_decimal(amount))
 
     value
     |> to_decimal()
-    |> Decimal.add(shift)
+    |> shifted(kind, offset)
     |> from_decimal(value, round)
   end
+
+  defp shifted(decimal, :relative, offset), do: Decimal.mult(decimal, Decimal.add(offset, 1))
+  defp shifted(decimal, :absolute, offset), do: Decimal.add(decimal, offset)
 
   defp spread(seed, domain, keyring) do
     <<top::64, _rest::binary>> = Keyed.bytes(seed, domain, keyring)

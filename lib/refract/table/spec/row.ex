@@ -5,6 +5,7 @@ defmodule Refract.Table.Spec.Row do
   import Refract.Utils, only: [truthy?: 1]
 
   alias Refract.Parse
+  alias Refract.Parse.Date, as: DateParser
   alias Refract.Table.Report
 
   defstruct [:match, :min_score]
@@ -14,8 +15,14 @@ defmodule Refract.Table.Spec.Row do
           | :number
           | :date
           | :datetime
+          | {:date | :datetime, [DateParser.format()]}
           | Regex.t()
-          | (Refract.cell() -> as_boolean(term()))
+          | {atom(), (Refract.cell() -> as_boolean(term()))}
+
+  defguard is_type_rule(rule)
+           when rule in [:integer, :number, :date, :datetime] or
+                  (is_tuple(rule) and tuple_size(rule) == 2 and
+                     elem(rule, 0) in [:date, :datetime] and is_list(elem(rule, 1)))
 
   @type rules :: %{String.t() => rule()}
 
@@ -24,11 +31,13 @@ defmodule Refract.Table.Spec.Row do
           min_score: number()
         }
 
-  def new(opts) do
-    opts = Keyword.validate!(opts, [:match, :min_score])
+  @spec new(keyword()) :: t()
 
-    match = Keyword.get(opts, :match, %{})
-    min_score = Keyword.get(opts, :min_score, 1.0)
+  def new(opts) do
+    opts = Keyword.validate!(opts, match: %{}, min_score: 1.0)
+
+    match = Keyword.fetch!(opts, :match)
+    min_score = Keyword.fetch!(opts, :min_score)
 
     validate_min_score(min_score)
     validate_rules(match)
@@ -45,18 +54,25 @@ defmodule Refract.Table.Spec.Row do
         raise ArgumentError, "column names must be strings"
       end
 
-      if not valid_rule?(rule) do
-        raise ArgumentError, "invalid rule for column #{column}: #{inspect(rule)}"
-      end
+      validate_rule(column, rule)
     end)
   end
 
   defp validate_rules(_), do: raise(ArgumentError, "match rules must be a map")
 
-  defp valid_rule?(rule) when rule in [:integer, :number, :date, :datetime], do: true
-  defp valid_rule?(%Regex{}), do: true
-  defp valid_rule?(fun) when is_function(fun, 1), do: true
-  defp valid_rule?(_), do: false
+  defp validate_rule(_column, rule) when is_type_rule(rule), do: validate_type_rule!(rule)
+  defp validate_rule(_column, %Regex{}), do: :ok
+  defp validate_rule(_column, {name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
+
+  defp validate_rule(column, fun) when is_function(fun) do
+    raise ArgumentError,
+          "a function rule must be named, {name, fn cell -> boolean end}, " <>
+            "got: #{inspect(fun)} for column #{column}"
+  end
+
+  defp validate_rule(column, rule) do
+    raise ArgumentError, "invalid rule for column #{column}: #{inspect(rule)}"
+  end
 
   defp validate_min_score(min_score)
        when is_number(min_score) and min_score >= 0 and min_score <= 1,
@@ -64,6 +80,11 @@ defmodule Refract.Table.Spec.Row do
 
   defp validate_min_score(_),
     do: raise(ArgumentError, "min_score must be a number between 0 and 1")
+
+  @spec validate_type_rule!(term()) :: :ok
+
+  def validate_type_rule!({_kind, formats}), do: DateParser.validate_formats!(formats)
+  def validate_type_rule!(_rule), do: :ok
 
   @type miss :: %{score: float(), failed: [{String.t(), rule()}]}
 
@@ -97,11 +118,15 @@ defmodule Refract.Table.Spec.Row do
 
   def passes?(:datetime, value), do: match?({:ok, _}, Parse.datetime(value, offset: :utc))
 
+  def passes?({:date, formats}, value) when is_list(formats),
+    do: match?({:ok, _}, Parse.date(value, formats: formats))
+
+  def passes?({:datetime, formats}, value) when is_list(formats),
+    do: match?({:ok, _}, Parse.datetime(value, offset: :utc, formats: formats))
+
   def passes?(%Regex{} = regex, value), do: Regex.match?(regex, text(value))
 
-  def passes?(fun, value) when is_function(fun, 1) do
-    truthy?(fun.(value))
-  end
+  def passes?({_name, fun}, value) when is_function(fun, 1), do: truthy?(fun.(value))
 
   def passes?(_, _), do: false
 
@@ -118,11 +143,19 @@ defmodule Refract.Table.Spec.Row do
 
     values = Keyword.fetch!(opts, :values)
 
-    validate_values(values)
+    validate_values!(values)
 
     rules
     |> Map.filter(fn {column, _rule} -> Map.has_key?(row, column) end)
     |> line_report(row_spec, row, values)
+  end
+
+  @spec validate_values!(term()) :: :ok
+
+  def validate_values!(values) when is_boolean(values), do: :ok
+
+  def validate_values!(values) do
+    raise ArgumentError, "values must be true or false, got: #{inspect(values)}"
   end
 
   defp line_report(rules, _row_spec, _row, _values) when map_size(rules) == 0,
@@ -152,12 +185,6 @@ defmodule Refract.Table.Spec.Row do
       rule: rule,
       cell: cell(value, values)
     }
-  end
-
-  defp validate_values(values) when is_boolean(values), do: :ok
-
-  defp validate_values(values) do
-    raise ArgumentError, "values must be true or false, got: #{inspect(values)}"
   end
 
   defp cell(value, true), do: value

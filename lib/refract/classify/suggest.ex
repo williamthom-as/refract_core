@@ -3,6 +3,7 @@ defmodule Refract.Classify.Suggest do
 
   alias Refract.Shape
 
+  alias Refract.Table.Locate
   alias Refract.Table.Report.Column
   alias Refract.Table.Report.Line
 
@@ -11,7 +12,7 @@ defmodule Refract.Classify.Suggest do
 
   import Refract.String.Utils, only: [blank?: 1, blank_line?: 1, normalise: 1]
 
-  @type opt :: {:within, pos_integer()} | {:header_row, pos_integer() | nil}
+  @type opt :: {:within, non_neg_integer()} | {:header_row, pos_integer() | nil}
 
   @spec run(Enumerable.t(), Shape.t() | module(), [opt()]) :: Line.t()
 
@@ -20,8 +21,8 @@ defmodule Refract.Classify.Suggest do
     within = Keyword.fetch!(opts, :within)
     header_row = Keyword.fetch!(opts, :header_row)
 
-    validate_within(within)
-    validate_header_row(header_row)
+    Locate.validate_within!(within)
+    Locate.validate_header_row!(header_row)
 
     resolved_shape = Shape.resolve(shape)
     header = resolved_shape.spec.header
@@ -194,19 +195,4 @@ defmodule Refract.Classify.Suggest do
   end
 
   defp column_report(found, column), do: Map.get(found, column, %Column{})
-
-  defp validate_within(within) when is_integer(within) and within > 0, do: :ok
-
-  defp validate_within(within),
-    do: raise(ArgumentError, "within must be a positive integer, got: #{inspect(within)}")
-
-  defp validate_header_row(nil), do: :ok
-  defp validate_header_row(header_row) when is_integer(header_row) and header_row > 0, do: :ok
-
-  defp validate_header_row(header_row) do
-    raise(
-      ArgumentError,
-      "header_row must be a positive integer or nil, got: #{inspect(header_row)}"
-    )
-  end
 end

@@ -33,17 +33,8 @@ defmodule Refract.Privacy.Pseudonym do
 
   def apply(value, domain, keyring, opts \\ [])
 
-  def apply(value, domain, keyring, opts) when is_binary(value) do
-    opts = Keyword.validate!(opts, alphabet: :digits, canonical: & &1, min_domain: 1_000_000)
-
-    canonical = Keyword.fetch!(opts, :canonical)
-    alphabet = opts |> Keyword.fetch!(:alphabet) |> alphabet()
-    ff1_opts = Keyword.take(opts, [:min_domain])
-
-    {_version, key} = Keyring.key(keyring, domain)
-
-    FF1.encrypt(key, to_string(domain), alphabet, canonical.(value), ff1_opts)
-  end
+  def apply(value, domain, keyring, opts) when is_binary(value),
+    do: run(&FF1.encrypt/5, value, domain, keyring, opts)
 
   def apply(value, _domain, _keyring, _opts), do: {:error, {:not_a_string, value}}
 
@@ -60,17 +51,8 @@ defmodule Refract.Privacy.Pseudonym do
 
   def reverse(value, domain, keyring, opts \\ [])
 
-  def reverse(value, domain, keyring, opts) when is_binary(value) do
-    opts = Keyword.validate!(opts, alphabet: :digits, canonical: & &1, min_domain: 1_000_000)
-
-    canonical = Keyword.fetch!(opts, :canonical)
-    alphabet = opts |> Keyword.fetch!(:alphabet) |> alphabet()
-    ff1_opts = Keyword.take(opts, [:min_domain])
-
-    {_version, key} = Keyring.key(keyring, domain)
-
-    FF1.decrypt(key, to_string(domain), alphabet, canonical.(value), ff1_opts)
-  end
+  def reverse(value, domain, keyring, opts) when is_binary(value),
+    do: run(&FF1.decrypt/5, value, domain, keyring, opts)
 
   def reverse(value, _domain, _keyring, _opts), do: {:error, {:not_a_string, value}}
 
@@ -80,6 +62,18 @@ defmodule Refract.Privacy.Pseudonym do
     value
     |> __MODULE__.reverse(domain, keyring, opts)
     |> unwrap_result()
+  end
+
+  defp run(cipher, value, domain, keyring, opts) do
+    opts = Keyword.validate!(opts, alphabet: :digits, canonical: & &1, min_domain: 1_000_000)
+
+    canonical = Keyword.fetch!(opts, :canonical)
+    alphabet = opts |> Keyword.fetch!(:alphabet) |> alphabet()
+    ff1_opts = Keyword.take(opts, [:min_domain])
+
+    {_version, key} = Keyring.key(keyring, domain)
+
+    cipher.(key, to_string(domain), alphabet, canonical.(value), ff1_opts)
   end
 
   defp unwrap_result({:ok, result}), do: result

@@ -33,7 +33,7 @@ defmodule Refract.Query do
 
     validate_engine(engine)
 
-    with {:ok, state} <- engine.open(Keyword.delete(engine_opts, :engine)) do
+    with {:ok, state} <- engine.open(engine_opts) do
       {:ok, %__MODULE__{engine: engine, state: state}}
     end
   end
@@ -66,12 +66,8 @@ defmodule Refract.Query do
           :ok | {:error, term()}
 
   def view(%__MODULE__{engine: engine, state: state}, name, glob, opts \\ []) do
-    opts = Keyword.validate!(opts, types: :text, format: "csv")
-    types = Keyword.fetch!(opts, :types)
-    format = Keyword.fetch!(opts, :format)
+    opts = validate_view_opts!(opts)
 
-    validate_types(types)
-    validate_format(format)
     validate_name(name)
 
     engine.view(state, name, glob, opts)
@@ -81,12 +77,8 @@ defmodule Refract.Query do
           {:ok, [String.t()]} | {:error, term()}
 
   def views(%__MODULE__{} = query, dir, opts \\ []) do
-    opts = Keyword.validate!(opts, types: :text, format: "csv")
-    types = Keyword.fetch!(opts, :types)
+    opts = validate_view_opts!(opts)
     format = Keyword.fetch!(opts, :format)
-
-    validate_types(types)
-    validate_format(format)
 
     with {:ok, entries} <- File.ls(dir) do
       entries
@@ -96,6 +88,15 @@ defmodule Refract.Query do
       |> Enum.reduce_while({:ok, []}, &add_view(&1, &2, query, dir, opts))
       |> in_order()
     end
+  end
+
+  defp validate_view_opts!(opts) do
+    opts = Keyword.validate!(opts, types: :text, format: "csv")
+
+    validate_types(Keyword.fetch!(opts, :types))
+    validate_format(Keyword.fetch!(opts, :format))
+
+    opts
   end
 
   defp holds_format?(path, format) do

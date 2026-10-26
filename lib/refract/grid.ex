@@ -56,8 +56,8 @@ defmodule Refract.Grid do
 
   def table(%__MODULE__{} = grid, opts \\ []), do: Lookup.table(grid, opts)
 
-  @spec locate(Refract.Grid.t(), Spec.t()) ::
-          {:error, {:header_not_found, Locate.header_miss()}} | {:ok, Table.t()}
+  @spec locate(t(), Spec.t(), keyword()) ::
+          {:ok, Table.t()} | {:error, {:header_not_found, Locate.header_miss()}}
 
   def locate(%__MODULE__{height: height} = grid, spec, opts \\ []) do
     opts = Keyword.put_new(opts, :within, height)

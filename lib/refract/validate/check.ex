@@ -6,6 +6,7 @@ defmodule Refract.Validate.Check do
   alias Refract.Validate.Rules
 
   import Refract.String.Utils, only: [blank?: 1, text: 1]
+  import Refract.Table.Spec.Row, only: [is_type_rule: 1]
   import Refract.Utils, only: [truthy?: 1]
 
   @spec passes?(Rules.rule(), Refract.cell()) :: boolean()
@@ -16,10 +17,7 @@ defmodule Refract.Validate.Check do
   def passes?({:min, bound}, cell), do: number_compare(cell, bound) in [:eq, :gt]
   def passes?({:max, bound}, cell), do: number_compare(cell, bound) in [:eq, :lt]
   def passes?({:in, values}, cell), do: text(cell) in Enum.map(values, &text/1)
-  def passes?(:integer, cell), do: Row.passes?(:integer, cell)
-  def passes?(:number, cell), do: Row.passes?(:number, cell)
-  def passes?(:date, cell), do: Row.passes?(:date, cell)
-  def passes?(:datetime, cell), do: Row.passes?(:datetime, cell)
+  def passes?(rule, cell) when is_type_rule(rule), do: Row.passes?(rule, cell)
 
   def passes?({name, fun}, cell) when is_atom(name) and is_function(fun, 1),
     do: holds?(fun, cell)

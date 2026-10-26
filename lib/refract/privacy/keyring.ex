@@ -77,29 +77,29 @@ defmodule Refract.Privacy.Keyring do
       raise ArgumentError, "no keys provided"
     end
 
-    for {version, key} <- keys do
-      unless is_integer(version) and version > 0 do
+    Enum.each(keys, fn {version, key} ->
+      if not (is_integer(version) and version > 0) do
         raise ArgumentError, "invalid version #{inspect(version)}"
       end
 
-      unless is_binary(key) and byte_size(key) == 32 do
+      if not (is_binary(key) and byte_size(key) == 32) do
         raise ArgumentError, "key for version #{version} must be a 32 byte binary"
       end
-    end
+    end)
   end
 
   defp validate_pins!(pins, keys) do
-    for {domain, version} <- pins do
-      unless is_integer(version) and version > 0 do
+    Enum.each(pins, fn {domain, version} ->
+      if not (is_integer(version) and version > 0) do
         raise ArgumentError,
               "invalid pinned version #{inspect(version)} for domain #{inspect(domain)}"
       end
 
-      unless Map.has_key?(keys, version) do
+      if not Map.has_key?(keys, version) do
         raise ArgumentError,
               "pinned version #{version} for domain #{inspect(domain)} does not exist in keys"
       end
-    end
+    end)
   end
 
   defimpl Inspect do

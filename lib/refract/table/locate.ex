@@ -34,8 +34,8 @@ defmodule Refract.Table.Locate do
     within = Keyword.fetch!(opts, :within)
     header_row = Keyword.fetch!(opts, :header_row)
 
-    validate_within(within)
-    validate_header_row(header_row)
+    validate_within!(within)
+    validate_header_row!(header_row)
 
     raw
     |> find_header(spec, within, header_row)
@@ -74,30 +74,35 @@ defmodule Refract.Table.Locate do
   def validate_opts!(opts) do
     opts = Keyword.validate!(opts, within: 100, on_miss: :skip, header_row: nil)
 
-    validate_within(Keyword.fetch!(opts, :within))
+    validate_within!(Keyword.fetch!(opts, :within))
     validate_on_miss(Keyword.fetch!(opts, :on_miss))
-    validate_header_row(Keyword.fetch!(opts, :header_row))
+    validate_header_row!(Keyword.fetch!(opts, :header_row))
 
     opts
   end
 
-  defp validate_within(within) when is_integer(within) and within >= 0, do: :ok
+  @spec validate_within!(term()) :: :ok
 
-  defp validate_within(within) do
+  def validate_within!(within) when is_integer(within) and within >= 0, do: :ok
+
+  def validate_within!(within) do
     raise ArgumentError, "within must be a non negative integer, got: #{inspect(within)}"
+  end
+
+  @spec validate_header_row!(term()) :: :ok
+
+  def validate_header_row!(nil), do: :ok
+  def validate_header_row!(header_row) when is_integer(header_row) and header_row > 0, do: :ok
+
+  def validate_header_row!(header_row) do
+    raise ArgumentError,
+          "header_row must be a positive integer or nil, got: #{inspect(header_row)}"
   end
 
   defp validate_on_miss(on_miss) when on_miss in [:skip, :keep], do: :ok
 
   defp validate_on_miss(on_miss) do
     raise ArgumentError, "unknown on_miss: #{inspect(on_miss)}"
-  end
-
-  defp validate_header_row(nil), do: :ok
-  defp validate_header_row(header_row) when is_integer(header_row) and header_row > 0, do: :ok
-
-  defp validate_header_row(header_row) do
-    raise ArgumentError, "header_row must be a positive integer, got: #{inspect(header_row)}"
   end
 
   defp find_header(raw, spec, within, nil) do
