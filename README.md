@@ -6,20 +6,28 @@ At its core, it has been designed to solve common problems that you might face w
 
 Each one of the features can be used on its own, or work together to build complex data pipelines.
 
-- [**Read**](#read): stream any file as lazy row maps, including separator detection and encoding/BOM issues handled for you.
-- [**Locate**](#locate): find a table by its column names, wherever it sits in a messy/unordered file.
-- [**Shapes**](#shapes): describe/fingerprint a known table: its columns, their aliases, its row rules.
-- [**Classify**](#classify): say which shape an unknown file is, or why it isnt one. Works on a single file or across a whole folder at once.
-- [**Suggest**](#suggest): propose how a new sources columns map onto a shape, from their names and values.
-- [**Drift**](#drift): flag missing, extra and duplicated columns on every classified (known) file.
-- [**Validate**](#validate): validate file content against its known shapes rules, per cell and across each row, reporting issues found.
-- [**Grid**](#grid): read small form-esque files by cell position or by the label next to a value.
-- [**Rows**](#rows): transform row streams: rename, fill down, group, pivot, run in parallel.
-- [**Parse and clean**](#parse-and-clean): turn messy cells into numbers, dates and booleans.
-- [**Privacy**](#privacy): two-way pseudonymise private data (think data for demos), add consistent noise to amounts (jitter numbers stochastically), redact free text.
-- [**Write**](#write): write rows to one file or many, with optional chunking.
-- [**Query**](#query): run SQL over folders of files and the tables you've found, through an engine plugin. Think querying tabular data using SQL without needing to load it into a database first. Useful for joins, aggregations, and filtering across multiple files.
-- [**Plugins**](#plugins): extend Refract with new file formats (XLSX, JSON already available) or query engines (DuckDB available)
+- [**Read**](#read)
+  - [Stream](#stream): stream any file as lazy row maps, including separator detection and encoding/BOM issues handled for you.
+- [**Write**](#write)
+  - [Files](#files): write rows to one file or many, with optional chunking.
+- [**Find**](#find)
+  - [Locate](#locate): find a table by its column names, wherever it sits in a messy/unordered file.
+  - [Grid](#grid): read small form-esque files by cell position or by the label next to a value.
+- [**Know what a file is**](#know-what-a-file-is)
+  - [Shapes](#shapes): describe/fingerprint a known table: its columns, their aliases, its row rules.
+  - [Classify](#classify): say which shape an unknown file is, or why it isnt one. Works on a single file or across a whole folder at once.
+  - [Suggest](#suggest): propose how a new sources columns map onto a shape, from their names and values.
+  - [Drift](#drift): flag missing, extra and duplicated columns on every classified (known) file.
+- [**Check it's acceptable**](#check-its-acceptable)
+  - [Validate](#validate): validate file content against its known shapes rules, per cell and across each row, reporting issues found.
+- [**Transform**](#transform)
+  - [Rows](#rows): transform row streams: rename, fill down, group, pivot, run in parallel.
+  - [Parse and clean](#parse-and-clean): turn messy cells into numbers, dates and booleans.
+- [**Protect**](#protect)
+  - [Privacy](#privacy): two-way pseudonymise private data (think data for demos), add consistent noise to amounts (jitter numbers stochastically), redact free text.
+- [**Extend**](#extend)
+  - [Query](#query): run SQL over folders of files and the tables you've found, through an engine plugin. Think querying tabular data using SQL without needing to load it into a database first. Useful for joins, aggregations, and filtering across multiple files.
+  - [Plugins](#plugins): extend Refract with new file formats (XLSX, JSON already available) or query engines (DuckDB available)
 
 Note: Refract started as a port of the `Cure` project (https://www.github.com/williamthom-as/cure) to the Elixir ecosystem. It now offers major QoL improvements over the original, whilst being fully feature compatible with it.
 
@@ -30,6 +38,8 @@ Note: Refract started as a port of the `Cure` project (https://www.github.com/wi
 ---
 
 ## Read
+
+### Stream
 
 `bills.csv`, semicolon separated, with a byte order mark:
 
@@ -54,12 +64,40 @@ Rows are lazy, so it can handle huge file streams in constant memory. Any reader
 
 ```elixir
 Refract.CSV.facts("bills.csv")
-#=> {:ok, %{delimiter: ";", delimiter_source: :detected, bom: true, line_endings: :lf, trailing_newline: true, ...}}
+#=> {:ok, %{encoding: :utf8, delimiter: ";", delimiter_source: :detected, bom: true, line_endings: :lf, trailing_newline: true, ...}}
+```
+
+- **encodings** - `encoding: :auto` (default) keeps every line that is valid UTF-8 and reads any other as Windows-1252, so `Renée` and `€` from an old export arrive intact, even in a file mixing both; `:utf8`, `:latin1` and `:windows_1252` force one; a UTF-16 file is `{:error, {:unsupported_encoding, :utf16}}`
+- **writing for Excel** - `Refract.CSV.write(rows, path, bom: true)` starts the file with a UTF-8 BOM, so Excel shows `Renée`, not `RenÃ©e`
+
+---
+
+## Write
+
+### Files
+
+```elixir
+:ok = Refract.CSV.write(table.rows, "out/bill/october.csv", header: ["account", "customer", "cost"])
+```
+
+```
+account,customer,cost
+123456789012,alice,1.50
+123456789013,bob,2.25
+```
+
+```elixir
+{:ok, paths} = Refract.CSV.write_chunks(rows, "out/numbers", prefix: "part", rows_per_file: 2)
+#=> {:ok, ["out/numbers/part_1.csv", "out/numbers/part_2.csv", "out/numbers/part_3.csv"]}
 ```
 
 ---
 
-## Locate
+## Find
+
+Find a table, or a value, wherever it sits.
+
+### Locate
 
 Finding content in a messy invoice export, `export.csv`:
 
@@ -96,9 +134,53 @@ Enum.to_list(table.rows)
 
 The header is found by its definition, columns come back under the supplied names and the table ends at the blank line.
 
+### Grid
+
+Small, form-esqe files, read by position or by label. `invoice_form.csv`:
+
+```
+Tax Invoice,,
+Invoice No,INV-42,
+Date,2026-10-05,
+,,
+Bill To,,
+Acme Pty Ltd,,
+1 Main St,,
+,,
+sku,item,total
+78632478,apple,3.50
+```
+
+```elixir
+{:ok, grid} = Refract.CSV.load("invoice_form.csv")
+
+Refract.Grid.value(grid, label: "invoice no")
+#=> "INV-42"
+
+Refract.Grid.block(grid, after: "bill to")
+#=> ["Acme Pty Ltd", "1 Main St"]
+
+Refract.Grid.cell(grid, "B3")
+#=> "2026-10-05"
+
+line_spec = Refract.Table.spec(header: [columns: %{"sku" => ["sku"], "item" => ["item"], "total" => ["total"]}])
+{:ok, lines} = Refract.Grid.locate(grid, line_spec)
+
+Enum.to_list(lines.rows)
+#=> [%{"sku" => "78632478", "item" => "apple", "total" => "3.50"}]
+
+{:ok, result} = Refract.Grid.validate(grid, invoice)
+```
+
+`Grid.validate` works as [`CSV.validate`](#validate) does, issue lines are lines in the grid.
+
 ---
 
-## Shapes
+## Know what a file is
+
+Describe each kind of file once, then recognise it.
+
+### Shapes
 
 A shape is a named table spec: columns with aliases, what makes it that shape, how its rows look. Either in YAML or Elixir, see below:
 
@@ -153,9 +235,7 @@ bill =
 - **row rules** - `integer`, `number`, `date`, `datetime`, a regex, or a function
 - **markers** - `file:` and `content:` regexes that break a tie between lookalike shapes
 
----
-
-## Classify
+### Classify
 
 ```elixir
 shapes = [Refract.Shape.load!("shapes/bill.yml"), Refract.Shape.load!("shapes/invoice.yml")]
@@ -183,9 +263,7 @@ A whole folder, every file read by the reader its extension asks for:
 - **why** - every shape is a ranked candidate with its header and row reports
 - **cheap and fast** - only the first 100 lines are read, so file size does not matter
 
----
-
-## Suggest
+### Suggest
 
 A new source names and orders the same columns its own way, so it comes back `:unknown`. `new_source.csv`:
 
@@ -214,9 +292,7 @@ bob,123456789013,2026-10-04,0.75
 - **one to one** - 12 digit ids pass both the `account` regex and `cost`'s `number`, but go to `account` only
 - **nothing is applied** - add the cells as aliases to the shape and the source matches from then on
 
----
-
-## Drift
+### Drift
 
 Classify result says how the file is different from the provided shape. `drifting.csv`:
 
@@ -242,7 +318,9 @@ result.drift
 
 ---
 
-## Validate
+## Check it's acceptable
+
+### Validate
 
 Validate says whether its content is acceptable for that shape (which can be derived from `classify`). The same shape holds both: `row:` recognises the table (loose, so bad content does not stop a file being recognised), `validation:` accepts its content (strict, every row checked).
 
@@ -340,7 +418,7 @@ validation:
     line_total: [required, number, {max: 10000}]
 ```
 
-### Fields (around the table)
+#### Fields (around the table)
 
 Not all tabular formats are tidy, some have fields inside the file, above or below the content/table.
 
@@ -393,7 +471,7 @@ hd(result.issues)
 - **reading only** - `fields/3` on any reader, `Refract.Grid.fields(grid, shape)` on a loaded grid
 - **memory** - a shape with fields is validated on the whole file in memory (forms are small, `max_bytes:` guards it)
 
-### Document rules
+#### Document rules
 
 Some checks need to look at the whole file to know if it is valid. `acme_invoice_0413.csv` says its total is 12,984.50, but its line totals add up to 12,894.50. This is not something that could be observed by a column or row rule, the total sits outside the table and the sum spans every row.
 
@@ -428,7 +506,7 @@ List.last(result.issues)
 - **whole file** - the file is read into memory, like fields (use `max_bytes:` sets the limit)
 - **Elixir only** - not available in YAML shapes
 
-### Custom validators
+#### Custom validators
 
 If the shipped validators do not satifsy yuor requirements, you can always impl your own `Refract.Validate.Validator`:
 
@@ -492,7 +570,7 @@ Refract.Shape.load!("shapes/acme_invoice.yml", validators: %{"abn" => MyApp.Vali
 - **options** - `{abn: {strict: true}}` arrives as `[strict: true]` (option names the validator uses)
 - **names** - an unregistered name is `{:invalid_value, {"fields.supplier_abn.rules", "abn"}}`; a registry name cannot shadow a built in rule (`number` always means number); registered names work in `validation:` and `fields:`, not in `row:`
 
-### A folder: classify then validate
+#### A folder: classify then validate
 
 Each kind of file is one shape (one module), csv or xlsx alike. Classify the folder, validate every match:
 
@@ -528,49 +606,11 @@ end)
 
 ---
 
-## Grid
+## Transform
 
-Small, form-esqe files, read by position or by label. `invoice_form.csv`:
+Reshape rows and clean their cells.
 
-```
-Tax Invoice,,
-Invoice No,INV-42,
-Date,2026-10-05,
-,,
-Bill To,,
-Acme Pty Ltd,,
-1 Main St,,
-,,
-sku,item,total
-78632478,apple,3.50
-```
-
-```elixir
-{:ok, grid} = Refract.CSV.load("invoice_form.csv")
-
-Refract.Grid.value(grid, label: "invoice no")
-#=> "INV-42"
-
-Refract.Grid.block(grid, after: "bill to")
-#=> ["Acme Pty Ltd", "1 Main St"]
-
-Refract.Grid.cell(grid, "B3")
-#=> "2026-10-05"
-
-line_spec = Refract.Table.spec(header: [columns: %{"sku" => ["sku"], "item" => ["item"], "total" => ["total"]}])
-{:ok, lines} = Refract.Grid.locate(grid, line_spec)
-
-Enum.to_list(lines.rows)
-#=> [%{"sku" => "78632478", "item" => "apple", "total" => "3.50"}]
-
-{:ok, result} = Refract.Grid.validate(grid, invoice)
-```
-
-`Grid.validate` works as [`CSV.validate`](#validate) does, issue lines are lines in the grid.
-
----
-
-## Rows
+### Rows
 
 Lazy transforms over row maps
 
@@ -607,9 +647,7 @@ Refract.Rows.pivot(cleaned, by: "account", key: "month", value: "cost", columns:
 
 Also `put`, `copy`, `rename`, `drop`, `take`, `distinct`, `reject_blank`, `from` / `until`, `group`, and `parallel` to run a pipeline across cores with order kept.
 
----
-
-## Parse and clean
+### Parse and clean
 
 ```elixir
 Refract.Parse.number("$1,234.50", currency: true)            #=> {:ok, Decimal.new("1234.50")}
@@ -629,7 +667,9 @@ Every parser has a bang version.
 
 ---
 
-## Privacy
+## Protect
+
+### Privacy
 
 Good for demo data, or for adding noise to amounts before sharing. `bills.csv`:
 
@@ -667,26 +707,11 @@ Keys come from `REFRACT_KEY_1`, `REFRACT_KEY_2`, ... (versioned, rotate by addin
 
 ---
 
-## Write
+## Extend
 
-```elixir
-:ok = Refract.CSV.write(table.rows, "out/bill/october.csv", header: ["account", "customer", "cost"])
-```
+Add engines and file formats.
 
-```
-account,customer,cost
-123456789012,alice,1.50
-123456789013,bob,2.25
-```
-
-```elixir
-{:ok, paths} = Refract.CSV.write_chunks(rows, "out/numbers", prefix: "part", rows_per_file: 2)
-#=> {:ok, ["out/numbers/part_1.csv", "out/numbers/part_2.csv", "out/numbers/part_3.csv"]}
-```
-
----
-
-## Query
+### Query
 
 With an engine plugin (`refract_duckdb`), every folder of files is a table, and any rows can be loaded beside them:
 
@@ -717,15 +742,13 @@ result =
 - **params** - `Refract.Query.run!(query, "SELECT customer FROM bill WHERE account = $1", ["123456789013"])`
 - **results** - a lazy stream of maps, columns in select order
 
----
+### Plugins
 
-## Plugins
-
-Every reader (built in or via plugin) has same: `stream`, `locate`, `classify`, `suggest`, `validate` and `load`. Its own options pass straight through.
+Every reader (built in or via plugin) has the same functions: `stream`, `locate`, `classify`, `suggest`, `validate`, `fields`, `facts` and `load`. Its own options pass straight through.
 
 | reader | files | impl options |
 |---|---|---|
-| `Refract.CSV` (built in) | `.csv`, `.tsv` | `separator:` (detected by default) |
+| `Refract.CSV` (built in) | `.csv`, `.tsv` | `separator:` (detected by default), `encoding:` (`:auto` by default) |
 | `Refract.XLSX` (`refract_xlsx`) | `.xlsx`, `.xlsm` | `sheet:` (a name or a position), `hidden:` |
 | `Refract.JSON` (`refract_json`) | `.json` | `at:`, `keyed:`, `unnest:`, `keep:` |
 | `Refract.JSONL` (`refract_json`) | `.jsonl`, `.ndjson` | `scan:`, `columns:`, `unnest:`, `keep:` |
@@ -736,7 +759,7 @@ Refract.JSON.validate("export.json", bill, at: ["data"])
 Refract.Classify.folder("inbox", shapes, readers: [Refract.XLSX, Refract.JSON, Refract.JSONL])
 ```
 
-Writers are the same, all wth (`write`, `write_chunks`).
+Writers are the same, all with `write` and `write_chunks`; `Refract.CSV` also takes `bom: true`, `Refract.XLSX` takes `sheet:`.
 
 **`refract_xlsx`** - workbooks, one sheet at a time (cells are typed):
 

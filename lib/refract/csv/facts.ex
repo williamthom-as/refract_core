@@ -1,6 +1,8 @@
 defmodule Refract.CSV.Facts do
   @moduledoc false
 
+  alias Refract.CSV.Encoding
+
   @head_bytes 65_536
 
   @separators [",", ";", "\t", "|"]
@@ -15,7 +17,15 @@ defmodule Refract.CSV.Facts do
 
   @type line_endings :: line_ending() | :mixed | :none
 
+  @type encoding :: Encoding.t() | :mixed | :utf16
+
+  @type encoding_source :: :detected | :given
+
+  @type format :: %{separator: separator(), line_endings: line_endings(), utf16: boolean()}
+
   @type t :: %{
+          encoding: encoding(),
+          encoding_source: encoding_source(),
           bom: boolean(),
           delimiter: separator(),
           delimiter_source: separator_source(),
@@ -28,15 +38,21 @@ defmodule Refract.CSV.Facts do
 
   def run(source, opts) do
     separator = Keyword.get(opts, :separator, :detect)
+    encoding = Keyword.get(opts, :encoding, :auto)
+
+    Encoding.validate!(encoding)
 
     with {:ok, head} <- head(source),
          {:ok, trailing_newline} <- trailing_newline(source) do
       {bom, body} = bom(head)
       {counts, lines} = scan(body, false, %{}, %{}, [])
       {delimiter, delimiter_source} = delimiter(separator, lines)
+      {encoding, encoding_source} = encoding(encoding, head, body)
 
       {:ok,
        %{
+         encoding: encoding,
+         encoding_source: encoding_source,
          bom: bom,
          delimiter: delimiter,
          delimiter_source: delimiter_source,
@@ -47,17 +63,24 @@ defmodule Refract.CSV.Facts do
     end
   end
 
-  @spec separator(Refract.source()) :: {:ok, separator()} | {:error, term()}
+  @spec format(Refract.source(), separator() | :detect) :: {:ok, format()} | {:error, term()}
 
-  def separator(source) do
+  def format({:stream, _chunks}, separator),
+    do: {:ok, %{separator: stream_separator(separator), line_endings: :none, utf16: false}}
+
+  def format(source, separator) do
     with {:ok, head} <- head(source) do
       {_bom, body} = bom(head)
-      {_counts, lines} = scan(body, false, %{}, %{}, [])
-      {separator, _source} = detect(lines)
+      {counts, lines} = scan(body, false, %{}, %{}, [])
+      {separator, _source} = delimiter(separator, lines)
 
-      {:ok, separator}
+      {:ok,
+       %{separator: separator, line_endings: line_endings(counts), utf16: Encoding.utf16?(head)}}
     end
   end
+
+  defp stream_separator(:detect), do: ","
+  defp stream_separator(separator), do: separator
 
   defp head({:string, string}),
     do: {:ok, binary_part(string, 0, min(byte_size(string), @head_bytes))}
@@ -107,6 +130,30 @@ defmodule Refract.CSV.Facts do
   end
 
   defp line_ending?(byte), do: byte in [?\n, ?\r]
+
+  defp encoding(:auto, head, body),
+    do: {detect_encoding(Encoding.utf16?(head), head, body), :detected}
+
+  defp encoding(given, _head, _body), do: {given, :given}
+
+  defp detect_encoding(true, _head, _body), do: :utf16
+
+  defp detect_encoding(false, head, body) do
+    lines = body |> String.split(["\r\n", "\n", "\r"]) |> whole_lines(byte_size(head))
+
+    lines
+    |> Enum.reject(&String.valid?/1)
+    |> detected_encoding(Enum.any?(lines, &wide?/1))
+  end
+
+  defp whole_lines(lines, size) when size >= @head_bytes, do: Enum.drop(lines, -1)
+  defp whole_lines(lines, _size), do: lines
+
+  defp wide?(line), do: String.valid?(line) and byte_size(line) != String.length(line)
+
+  defp detected_encoding([], _wide), do: :utf8
+  defp detected_encoding(_invalid, true), do: :mixed
+  defp detected_encoding(_invalid, false), do: :windows_1252
 
   defp bom("\uFEFF" <> body), do: {true, body}
   defp bom(body), do: {false, body}
