@@ -45,10 +45,12 @@ defmodule Refract.CSV do
 
   @impl true
   def encode(rows, opts) do
-    {:ok, parser} = Parsers.for_separator(Keyword.get(opts, :separator, ","))
+    opts = Keyword.validate!(opts, separator: ",", header: nil)
+
+    parser = opts |> Keyword.fetch!(:separator) |> Parsers.for_separator() |> dump_parser!()
 
     rows
-    |> Writer.cells(Keyword.get(opts, :header))
+    |> Writer.cells(Keyword.fetch!(opts, :header))
     |> parser.dump_to_stream()
   end
 
@@ -56,6 +58,13 @@ defmodule Refract.CSV do
 
   @impl true
   def facts(source, opts \\ []), do: Facts.run(source, opts)
+
+  defp dump_parser!({:ok, parser}), do: parser
+
+  defp dump_parser!({:error, {:unsupported_separator, separator}}) do
+    raise ArgumentError,
+          "separator must be one of \",\", \";\", \"\\t\", \"|\", got: #{inspect(separator)}"
+  end
 
   defp separator({:stream, _chunks}, :detect), do: {:ok, ","}
   defp separator(source, :detect), do: Facts.separator(source)

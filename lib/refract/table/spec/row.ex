@@ -138,11 +138,19 @@ defmodule Refract.Table.Spec.Row do
 
     values = Keyword.fetch!(opts, :values)
 
-    validate_values(values)
+    validate_values!(values)
 
     rules
     |> Map.filter(fn {column, _rule} -> Map.has_key?(row, column) end)
     |> line_report(row_spec, row, values)
+  end
+
+  @spec validate_values!(term()) :: :ok
+
+  def validate_values!(values) when is_boolean(values), do: :ok
+
+  def validate_values!(values) do
+    raise ArgumentError, "values must be true or false, got: #{inspect(values)}"
   end
 
   defp line_report(rules, _row_spec, _row, _values) when map_size(rules) == 0,
@@ -172,12 +180,6 @@ defmodule Refract.Table.Spec.Row do
       rule: rule,
       cell: cell(value, values)
     }
-  end
-
-  defp validate_values(values) when is_boolean(values), do: :ok
-
-  defp validate_values(values) do
-    raise ArgumentError, "values must be true or false, got: #{inspect(values)}"
   end
 
   defp cell(value, true), do: value

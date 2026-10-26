@@ -327,9 +327,13 @@ defmodule Refract.Classify.SuggestTest do
     end
 
     test "bad options raise" do
-      for opts <- [[within: 0], [header_row: 0], [header_row: "3"], [colour: :blue]] do
+      for opts <- [[within: -1], [header_row: 0], [header_row: "3"], [colour: :blue]] do
         assert_raise ArgumentError, fn -> suggest([["accountId"]], opts) end
       end
+    end
+
+    test "within: 0 reads no lines" do
+      assert %Table.Report.Line{row: nil} = suggest([["accountId"]], within: 0)
     end
   end
 
