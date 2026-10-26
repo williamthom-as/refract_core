@@ -35,4 +35,59 @@ defmodule Refract.WriterTest do
       assert {:error, :enoent} = StubWriter.write([%{"id" => "1"}], path)
     end
   end
+
+  describe "cells/2" do
+    alias Refract.Writer
+
+    test "without a header, the first row's sorted keys then each row's values in that order" do
+      rows = [%{"sku" => "A-1", "qty" => "2"}, %{"qty" => "5", "sku" => "B-2"}]
+
+      assert rows |> Writer.cells(nil) |> Enum.to_list() == [
+               ["qty", "sku"],
+               ["2", "A-1"],
+               ["5", "B-2"]
+             ]
+    end
+
+    test "a header picks and orders the columns" do
+      rows = [%{"sku" => "A-1", "qty" => "2", "note" => "x"}]
+
+      assert rows |> Writer.cells(["sku", "qty"]) |> Enum.to_list() == [
+               ["sku", "qty"],
+               ["A-1", "2"]
+             ]
+    end
+
+    test "values keep their types" do
+      rows = [%{"total" => Decimal.new("1.50"), "on" => ~D[2026-10-05]}]
+
+      assert [["on", "total"], [~D[2026-10-05], total]] =
+               rows |> Writer.cells(nil) |> Enum.to_list()
+
+      assert Decimal.eq?(total, "1.50")
+    end
+
+    test "a row missing a header column raises" do
+      assert_raise KeyError, fn ->
+        [%{"sku" => "A-1"}] |> Writer.cells(["sku", "qty"]) |> Enum.to_list()
+      end
+
+      assert_raise KeyError, fn ->
+        [%{"sku" => "A-1", "qty" => "2"}, %{"sku" => "B-2"}]
+        |> Writer.cells(nil)
+        |> Enum.to_list()
+      end
+    end
+
+    test "no rows: nothing without a header, the header alone with one" do
+      assert [] |> Writer.cells(nil) |> Enum.to_list() == []
+      assert [] |> Writer.cells(["sku"]) |> Enum.to_list() == [["sku"]]
+    end
+
+    test "lazy" do
+      rows = Stream.repeatedly(fn -> %{"id" => "1"} end)
+
+      assert rows |> Writer.cells(nil) |> Enum.take(3) == [["id"], ["1"], ["1"]]
+    end
+  end
 end

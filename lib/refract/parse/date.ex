@@ -22,9 +22,9 @@ defmodule Refract.Parse.Date do
   def parse(value, opts) do
     opts = Keyword.validate!(opts, formats: [:iso, :ymd])
 
-    formats = Keyword.fetch!(opts, :formats)
+    formats = opts |> Keyword.fetch!(:formats) |> compile_formats()
 
-    case scan(value, compile_formats(formats), :optional) do
+    case iso(value, formats, :optional) || scan(value, formats, :optional) do
       {:ok, date, _time, _offset} -> {:ok, date}
       nil -> {:error, {:not_a_date, value}}
     end
@@ -36,12 +36,12 @@ defmodule Refract.Parse.Date do
   def parse_datetime(value, opts) do
     opts = Keyword.validate!(opts, formats: [:iso, :ymd], offset: :reject)
 
-    formats = Keyword.fetch!(opts, :formats)
+    formats = opts |> Keyword.fetch!(:formats) |> compile_formats()
     offset = Keyword.fetch!(opts, :offset)
 
     validate_offset(offset)
 
-    case scan(value, compile_formats(formats), :required) do
+    case iso(value, formats, :required) || scan(value, formats, :required) do
       {:ok, date, time, seconds} ->
         date
         |> NaiveDateTime.new!(time)
@@ -71,6 +71,33 @@ defmodule Refract.Parse.Date do
   defp compile_format(format) do
     raise ArgumentError, "unknown date format: #{inspect(format)}"
   end
+
+  defp iso(value, [:iso | _formats], rule) when is_binary(value),
+    do: value |> String.trim() |> iso_shape(rule)
+
+  defp iso(_value, _formats, _rule), do: nil
+
+  defp iso_shape(
+         <<_::binary-size(4), ?-, _::binary-size(2), ?-, _::binary-size(2)>> = string,
+         :optional
+       ) do
+    case Date.from_iso8601(string) do
+      {:ok, date} -> {:ok, date, nil, 0}
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp iso_shape(<<date_time::binary-size(19), ?Z>>, rule), do: iso_shape(date_time, rule)
+
+  defp iso_shape(<<_::binary-size(10), separator, _::binary-size(8)>> = string, _rule)
+       when separator in [?T, ?\s] do
+    case NaiveDateTime.from_iso8601(string) do
+      {:ok, naive} -> {:ok, NaiveDateTime.to_date(naive), NaiveDateTime.to_time(naive), 0}
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp iso_shape(_string, _rule), do: nil
 
   defp scan(%Date{} = date, _formats, :optional), do: {:ok, date, nil, 0}
   defp scan(%Date{}, _formats, :required), do: nil

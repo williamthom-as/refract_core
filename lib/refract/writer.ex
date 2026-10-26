@@ -1,7 +1,8 @@
 defmodule Refract.Writer do
   @moduledoc """
   behaviour for writers, implement `encode/2` and `extension/0` to make use of.
-  `use Refract.Writer` injects `write/3` and `write_chunks/3`.
+  `use Refract.Writer` injects `write/3` and `write_chunks/3`. `cells/2` turns row maps into a
+  header line then each row's values in header order, for writers of lines of cells.
 
   note: you can check/verify a custom writer with `Refract.Test.WriterCase`
 
@@ -34,6 +35,24 @@ defmodule Refract.Writer do
   end
 
   @write_buffer_size 1_000
+
+  @spec cells(Enumerable.t(), [String.t()] | nil) :: Enumerable.t()
+
+  def cells(rows, nil) do
+    Stream.transform(rows, nil, fn
+      row, nil ->
+        header = row |> Map.keys() |> Enum.sort()
+
+        {[header, values(row, header)], header}
+
+      row, header ->
+        {[values(row, header)], header}
+    end)
+  end
+
+  def cells(rows, header), do: Stream.concat([header], Stream.map(rows, &values(&1, header)))
+
+  defp values(row, header), do: Enum.map(header, &Map.fetch!(row, &1))
 
   @spec write(module(), Enumerable.t(), Path.t(), keyword()) :: :ok | {:error, term()}
 
