@@ -43,16 +43,16 @@ defmodule Refract.Privacy.Noise do
     validate_amount(amount)
     validate_round(round)
 
-    shift = seed |> spread(domain, keyring) |> Decimal.mult(to_decimal(amount))
+    offset = seed |> spread(domain, keyring) |> Decimal.mult(to_decimal(amount))
 
     value
     |> to_decimal()
-    |> shifted(kind, shift)
+    |> shifted(kind, offset)
     |> from_decimal(value, round)
   end
 
-  defp shifted(decimal, :relative, shift), do: Decimal.mult(decimal, Decimal.add(shift, 1))
-  defp shifted(decimal, :absolute, shift), do: Decimal.add(decimal, shift)
+  defp shifted(decimal, :relative, offset), do: Decimal.mult(decimal, Decimal.add(offset, 1))
+  defp shifted(decimal, :absolute, offset), do: Decimal.add(decimal, offset)
 
   defp spread(seed, domain, keyring) do
     <<top::64, _rest::binary>> = Keyed.bytes(seed, domain, keyring)

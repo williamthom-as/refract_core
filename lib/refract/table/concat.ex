@@ -23,13 +23,16 @@ defmodule Refract.Table.Concat do
     Table.new(nil, header, %{}, rows)
   end
 
-  defp validate_tables(tables) when is_list(tables) do
-    if not Enum.all?(tables, &is_struct(&1, Table)) do
-      raise ArgumentError, "expected a list of tables, got: #{inspect(tables)}"
-    end
-  end
+  defp validate_tables(tables) when is_list(tables),
+    do: tables |> Enum.reject(&is_struct(&1, Table)) |> validate_others()
 
   defp validate_tables(tables) do
     raise ArgumentError, "expected a list of tables, got: #{inspect(tables)}"
+  end
+
+  defp validate_others([]), do: :ok
+
+  defp validate_others([other | _others]) do
+    raise ArgumentError, "expected a list of tables, got: #{inspect(other)} in the list"
   end
 end

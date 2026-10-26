@@ -13,6 +13,8 @@ defmodule Refract.Parse.Date do
 
   @type datetime_error :: {:not_a_datetime, term()} | {:has_offset, term()}
 
+  @default_formats [:iso, :ymd]
+
   @time ~r/^(?<hour>\d{1,2}):(?<minute>\d{2})(?::(?<second>\d{2})(?:\.(?<fraction>\d+))?)?(?<offset>Z|[+-]\d{2}:?\d{2})?$/
 
   @meridiem ~r/(?<=\d)\s*([ap])\.?m\.?$/i
@@ -20,7 +22,7 @@ defmodule Refract.Parse.Date do
   @spec parse(term(), [opt()]) :: {:ok, Date.t()} | {:error, {:not_a_date, term()}}
 
   def parse(value, opts) do
-    opts = Keyword.validate!(opts, formats: [:iso, :ymd])
+    opts = Keyword.validate!(opts, formats: @default_formats)
 
     formats = opts |> Keyword.fetch!(:formats) |> compile_formats()
 
@@ -34,7 +36,7 @@ defmodule Refract.Parse.Date do
           {:ok, NaiveDateTime.t()} | {:error, datetime_error()}
 
   def parse_datetime(value, opts) do
-    opts = Keyword.validate!(opts, formats: [:iso, :ymd], offset: :reject)
+    opts = Keyword.validate!(opts, formats: @default_formats, offset: :reject)
 
     formats = opts |> Keyword.fetch!(:formats) |> compile_formats()
     offset = Keyword.fetch!(opts, :offset)
