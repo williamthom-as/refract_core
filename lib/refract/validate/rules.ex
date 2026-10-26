@@ -1,6 +1,7 @@
 defmodule Refract.Validate.Rules do
   @moduledoc false
 
+  alias Refract.Parse.Date, as: DateParser
   alias Refract.Validate.Validator
 
   @type rule ::
@@ -12,6 +13,7 @@ defmodule Refract.Validate.Rules do
           | Regex.t()
           | {:min | :max, number() | Decimal.t() | Date.t()}
           | {:in, [term()]}
+          | {:date | :datetime, [DateParser.format()]}
           | {atom(), (Refract.cell() -> as_boolean(term()))}
           | module()
           | {module(), keyword()}
@@ -74,6 +76,10 @@ defmodule Refract.Validate.Rules do
   defp validate_rule({bound, %Decimal{}}) when bound in [:min, :max], do: :ok
   defp validate_rule({bound, %Date{}}) when bound in [:min, :max], do: :ok
   defp validate_rule({:in, values}) when is_list(values), do: :ok
+
+  defp validate_rule({kind, formats}) when kind in [:date, :datetime] and is_list(formats),
+    do: DateParser.validate_formats!(formats)
+
   defp validate_rule({name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
 
   defp validate_rule(fun) when is_function(fun) do

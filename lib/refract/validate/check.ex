@@ -21,6 +21,9 @@ defmodule Refract.Validate.Check do
   def passes?(:date, cell), do: Row.passes?(:date, cell)
   def passes?(:datetime, cell), do: Row.passes?(:datetime, cell)
 
+  def passes?({kind, formats} = rule, cell) when kind in [:date, :datetime] and is_list(formats),
+    do: Row.passes?(rule, cell)
+
   def passes?({name, fun}, cell) when is_atom(name) and is_function(fun, 1),
     do: holds?(fun, cell)
 

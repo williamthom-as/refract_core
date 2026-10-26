@@ -5,6 +5,7 @@ defmodule Refract.Table.Spec.Row do
   import Refract.Utils, only: [truthy?: 1]
 
   alias Refract.Parse
+  alias Refract.Parse.Date, as: DateParser
   alias Refract.Table.Report
 
   defstruct [:match, :min_score]
@@ -14,6 +15,7 @@ defmodule Refract.Table.Spec.Row do
           | :number
           | :date
           | :datetime
+          | {:date | :datetime, [DateParser.format()]}
           | Regex.t()
           | {atom(), (Refract.cell() -> as_boolean(term()))}
 
@@ -53,6 +55,11 @@ defmodule Refract.Table.Spec.Row do
 
   defp validate_rule(_column, rule) when rule in [:integer, :number, :date, :datetime], do: :ok
   defp validate_rule(_column, %Regex{}), do: :ok
+
+  defp validate_rule(_column, {kind, formats})
+       when kind in [:date, :datetime] and is_list(formats),
+       do: DateParser.validate_formats!(formats)
+
   defp validate_rule(_column, {name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
 
   defp validate_rule(column, fun) when is_function(fun) do
@@ -103,6 +110,12 @@ defmodule Refract.Table.Spec.Row do
   def passes?(:date, value), do: match?({:ok, _}, Parse.date(value))
 
   def passes?(:datetime, value), do: match?({:ok, _}, Parse.datetime(value, offset: :utc))
+
+  def passes?({:date, formats}, value) when is_list(formats),
+    do: match?({:ok, _}, Parse.date(value, formats: formats))
+
+  def passes?({:datetime, formats}, value) when is_list(formats),
+    do: match?({:ok, _}, Parse.datetime(value, offset: :utc, formats: formats))
 
   def passes?(%Regex{} = regex, value), do: Regex.match?(regex, text(value))
 

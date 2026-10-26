@@ -13,6 +13,8 @@ defmodule Refract.Parse.Date do
 
   @type datetime_error :: {:not_a_datetime, term()} | {:has_offset, term()}
 
+  @default_formats [:iso, :ymd]
+
   @time ~r/^(?<hour>\d{1,2}):(?<minute>\d{2})(?::(?<second>\d{2})(?:\.(?<fraction>\d+))?)?(?<offset>Z|[+-]\d{2}:?\d{2})?$/
 
   @meridiem ~r/(?<=\d)\s*([ap])\.?m\.?$/i
@@ -20,7 +22,7 @@ defmodule Refract.Parse.Date do
   @spec parse(term(), [opt()]) :: {:ok, Date.t()} | {:error, {:not_a_date, term()}}
 
   def parse(value, opts) do
-    opts = Keyword.validate!(opts, formats: [:iso, :ymd])
+    opts = Keyword.validate!(opts, formats: @default_formats)
 
     formats = opts |> Keyword.fetch!(:formats) |> compile_formats()
 
@@ -34,7 +36,7 @@ defmodule Refract.Parse.Date do
           {:ok, NaiveDateTime.t()} | {:error, datetime_error()}
 
   def parse_datetime(value, opts) do
-    opts = Keyword.validate!(opts, formats: [:iso, :ymd], offset: :reject)
+    opts = Keyword.validate!(opts, formats: @default_formats, offset: :reject)
 
     formats = opts |> Keyword.fetch!(:formats) |> compile_formats()
     offset = Keyword.fetch!(opts, :offset)
@@ -50,6 +52,25 @@ defmodule Refract.Parse.Date do
       nil ->
         {:error, {:not_a_datetime, value}}
     end
+  end
+
+  @spec validate_formats!(term()) :: :ok
+
+  def validate_formats!([_format | _formats] = formats) do
+    compile_formats(formats)
+
+    validate_day_month(:dmy in formats and :mdy in formats)
+  end
+
+  def validate_formats!(formats) do
+    raise ArgumentError, "date formats must be a non empty list, got: #{inspect(formats)}"
+  end
+
+  defp validate_day_month(false), do: :ok
+
+  defp validate_day_month(true) do
+    raise ArgumentError,
+          "date formats cannot hold both :dmy and :mdy, the first would decide 03/04 silently"
   end
 
   defp validate_offset(offset) when offset in [:reject, :utc], do: :ok

@@ -3,6 +3,7 @@ defmodule Refract.Shape.FromMap do
 
   import Refract.String.Utils, only: [blank?: 1]
 
+  alias Refract.Parse.Date, as: DateParser
   alias Refract.Shape
   alias Refract.Table
   alias Refract.Validate.Validator
@@ -14,6 +15,7 @@ defmodule Refract.Shape.FromMap do
   @validation_keys ~w(columns)
   @field_keys ~w(label take at rules)
   @rule_names ~w(required integer number date datetime min max in)
+  @date_formats ~w(iso ymd dmy mdy)
 
   @spec run(term(), [Shape.from_map_opt()]) :: {:ok, Shape.t()} | {:error, Shape.error()}
 
@@ -129,6 +131,28 @@ defmodule Refract.Shape.FromMap do
     end
   end
 
+  defp date_formats(formats) when is_list(formats) do
+    formats = Enum.map(formats, &date_format/1)
+
+    DateParser.validate_formats!(formats)
+
+    {:ok, formats}
+  rescue
+    ArgumentError -> :error
+  end
+
+  defp date_formats(_formats), do: :error
+
+  defp date_format(name) when name in @date_formats, do: String.to_existing_atom(name)
+  defp date_format(pattern), do: pattern
+
+  defp dated(path, kind, formats, rule) do
+    case date_formats(formats) do
+      {:ok, formats} -> {:ok, {kind, formats}}
+      :error -> invalid(path, rule)
+    end
+  end
+
   defp build_spec(opts) do
     {:ok, Table.spec(opts)}
   rescue
@@ -216,6 +240,13 @@ defmodule Refract.Shape.FromMap do
 
   defp rule(_path, "integer"), do: {:ok, :integer}
   defp rule(_path, "number"), do: {:ok, :number}
+
+  defp rule(path, %{"date" => formats} = rule) when map_size(rule) == 1,
+    do: dated(path, :date, formats, rule)
+
+  defp rule(path, %{"datetime" => formats} = rule) when map_size(rule) == 1,
+    do: dated(path, :datetime, formats, rule)
+
   defp rule(_path, "date"), do: {:ok, :date}
   defp rule(_path, "datetime"), do: {:ok, :datetime}
   defp rule(path, value), do: regex_only(path, value)
@@ -315,6 +346,13 @@ defmodule Refract.Shape.FromMap do
 
   defp validation_rule(_path, name, validators) when is_map_key(validators, name),
     do: {:ok, Map.fetch!(validators, name)}
+
+  defp validation_rule(path, %{"date" => formats} = rule, _validators) when map_size(rule) == 1,
+    do: dated(path, :date, formats, rule)
+
+  defp validation_rule(path, %{"datetime" => formats} = rule, _validators)
+       when map_size(rule) == 1,
+       do: dated(path, :datetime, formats, rule)
 
   defp validation_rule(path, %{"min" => bound} = rule, _validators) when map_size(rule) == 1,
     do: bound(path, :min, bound)
