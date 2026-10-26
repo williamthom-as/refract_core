@@ -15,6 +15,7 @@ defmodule Refract.CSV do
   alias Refract.CSV.Parsers
   alias Refract.CSV.Source
   alias Refract.Errors.ParseError
+  alias Refract.Writer
 
   @impl Refract.Writer
   def extension, do: "csv"
@@ -47,7 +48,7 @@ defmodule Refract.CSV do
     {:ok, parser} = Parsers.for_separator(Keyword.get(opts, :separator, ","))
 
     rows
-    |> to_cells(Keyword.get(opts, :header))
+    |> Writer.cells(Keyword.get(opts, :header))
     |> parser.dump_to_stream()
   end
 
@@ -59,27 +60,4 @@ defmodule Refract.CSV do
   defp separator({:stream, _chunks}, :detect), do: {:ok, ","}
   defp separator(source, :detect), do: Facts.separator(source)
   defp separator(_source, separator), do: {:ok, separator}
-
-  defp to_cells(rows, nil) do
-    Stream.transform(rows, nil, fn
-      row, nil ->
-        header = row |> Map.keys() |> Enum.sort()
-
-        {[header, fetch_ordered_values(row, header)], header}
-
-      row, header ->
-        {[fetch_ordered_values(row, header)], header}
-    end)
-  end
-
-  defp to_cells(rows, header) do
-    Stream.concat(
-      [header],
-      Stream.map(rows, &fetch_ordered_values(&1, header))
-    )
-  end
-
-  defp fetch_ordered_values(row, headers) do
-    Enum.map(headers, fn header -> Map.fetch!(row, header) end)
-  end
 end
