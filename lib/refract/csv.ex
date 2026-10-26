@@ -3,6 +3,12 @@ defmodule Refract.CSV do
   csv reader and writer impls, providing `stream`, `locate`, `load`, `write`, `write_chunks`
   detects the separator (comma, semicolon, tab, pipe) unless given via `separator:`
   will strip utf8 bom by default, and fail fast on a missing file.
+  `encoding: :auto` (default) keeps each line that is valid utf8 and reads any other as
+  windows-1252; `:utf8`, `:latin1` and `:windows_1252` force one. a utf16 file is an error.
+  `bom: true` writes a utf8 bom first, so excel reads the file as utf8.
+  lines end at `\r\n` or `\n`, mixed freely. a path or string whose lines end only in `\r` (old
+  mac exports) is an error. a `{:stream, chunks}` source is never read ahead, so neither check
+  applies to it.
 
       {:ok, rows} = Refract.CSV.stream("bills.csv", skip: 1)
       :ok = Refract.CSV.write(rows, "out/bills.csv", header: ["date", "cost"])
@@ -11,6 +17,7 @@ defmodule Refract.CSV do
   use Refract.Reader
   use Refract.Writer
 
+  alias Refract.CSV.Encoding
   alias Refract.CSV.Facts
   alias Refract.CSV.Parsers
   alias Refract.CSV.Source
@@ -27,15 +34,20 @@ defmodule Refract.CSV do
 
   @impl true
   def open(source, opts) do
-    opts = Keyword.validate!(opts, separator: :detect)
+    opts = Keyword.validate!(opts, separator: :detect, encoding: :auto)
+    encoding = Keyword.fetch!(opts, :encoding)
 
-    with {:ok, separator} <- separator(source, Keyword.fetch!(opts, :separator)),
-         {:ok, parser} <- Parsers.for_separator(separator),
+    Encoding.validate!(encoding)
+
+    with {:ok, format} <- Facts.format(source, Keyword.fetch!(opts, :separator)),
+         :ok <- supported(format, encoding),
+         {:ok, parser} <- Parsers.for_separator(format.separator),
          {:ok, content} <- Source.open(source, opts) do
       {:ok,
        content
        |> parser.to_line_stream()
        |> Source.strip_bom()
+       |> Encoding.decode(encoding)
        |> parser.parse_stream(skip_headers: false)
        |> ParseError.translate(NimbleCSV.ParseError)}
     end
@@ -45,11 +57,14 @@ defmodule Refract.CSV do
 
   @impl true
   def encode(rows, opts) do
-    {:ok, parser} = Parsers.for_separator(Keyword.get(opts, :separator, ","))
+    opts = Keyword.validate!(opts, header: nil, separator: ",", bom: false)
+
+    {:ok, parser} = Parsers.for_separator(Keyword.fetch!(opts, :separator))
 
     rows
-    |> Writer.cells(Keyword.get(opts, :header))
+    |> Writer.cells(Keyword.fetch!(opts, :header))
     |> parser.dump_to_stream()
+    |> with_bom(Keyword.fetch!(opts, :bom))
   end
 
   @spec facts(source :: Refract.source(), keyword()) :: {:ok, map()} | {:error, term()}
@@ -57,7 +72,10 @@ defmodule Refract.CSV do
   @impl true
   def facts(source, opts \\ []), do: Facts.run(source, opts)
 
-  defp separator({:stream, _chunks}, :detect), do: {:ok, ","}
-  defp separator(source, :detect), do: Facts.separator(source)
-  defp separator(_source, separator), do: {:ok, separator}
+  defp supported(%{utf16: true}, :auto), do: {:error, {:unsupported_encoding, :utf16}}
+  defp supported(%{line_endings: :cr}, _encoding), do: {:error, {:unsupported_line_endings, :cr}}
+  defp supported(_format, _encoding), do: :ok
+
+  defp with_bom(lines, true), do: Stream.concat([<<0xEF, 0xBB, 0xBF>>], lines)
+  defp with_bom(lines, false), do: lines
 end

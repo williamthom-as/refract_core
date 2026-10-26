@@ -16,7 +16,7 @@ defmodule Refract.Writer do
   @type write_chunks_opt ::
           {:prefix, String.t()}
           | {:rows_per_file, pos_integer()}
-          | {:header, [String.t()]}
+          | {atom(), term()}
 
   defmacro __using__(_opts) do
     quote do
@@ -93,11 +93,10 @@ defmodule Refract.Writer do
           {:ok, [Path.t()]} | {:error, File.posix()}
 
   def write_chunks(writer, rows, path, opts \\ []) do
-    opts = Keyword.validate!(opts, [:prefix, :rows_per_file, :header])
+    {chunk_opts, write_opts} = Keyword.split(opts, [:prefix, :rows_per_file])
 
-    prefix = Keyword.fetch!(opts, :prefix)
-    rows_per_file = Keyword.fetch!(opts, :rows_per_file)
-    write_opts = Keyword.take(opts, [:header])
+    prefix = Keyword.fetch!(chunk_opts, :prefix)
+    rows_per_file = Keyword.fetch!(chunk_opts, :rows_per_file)
 
     validate_rows_per_file(rows_per_file)
 
