@@ -8,7 +8,7 @@ defmodule Refract.Shape.ModuleTest.Invoice do
       spec:
         Refract.Table.spec(
           header: [columns: %{"sku" => ["sku"], "total" => ["line total", "amount"]}],
-          row: [match: %{"sku" => &String.starts_with?(&1, "SKU-")}]
+          row: [match: %{"sku" => {:sku_prefix, &String.starts_with?(&1, "SKU-")}}]
         ),
       markers: [file: ~r/invoice/i]
     )

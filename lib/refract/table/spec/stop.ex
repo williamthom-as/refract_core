@@ -1,9 +1,8 @@
 defmodule Refract.Table.Spec.Stop do
   @moduledoc false
 
+  import Refract.String.Utils, only: [blank_line?: 1]
   import Refract.Utils, only: [truthy?: 1]
-
-  alias Refract.String.Utils
 
   defstruct [:conditions]
 
@@ -14,6 +13,8 @@ defmodule Refract.Table.Spec.Stop do
   @type t :: %__MODULE__{
           conditions: conditions()
         }
+
+  @spec new(conditions()) :: t()
 
   def new(conditions) do
     validate_conditions(conditions)
@@ -47,7 +48,7 @@ defmodule Refract.Table.Spec.Stop do
     end
   end
 
-  defp stop_condition_met?(:blank, row), do: Utils.blank_line?(row)
+  defp stop_condition_met?(:blank, row), do: blank_line?(row)
 
   defp stop_condition_met?({:contains, regex}, row),
     do: Enum.any?(row, &(is_binary(&1) and Regex.match?(regex, &1)))

@@ -583,7 +583,7 @@ defmodule Refract.ClassifyTest do
           spec:
             Table.spec(
               header: [columns: %{"sku" => ["sku"], "item" => ["item"]}],
-              row: [match: %{"sku" => fn value -> send(test_pid, {:checked, value}) end}]
+              row: [match: %{"sku" => {:spy, fn value -> send(test_pid, {:checked, value}) end}}]
             )
         )
 

@@ -96,6 +96,16 @@ defmodule Refract.RowsTest do
       assert Enum.map(rows, & &1["note"]) == ["", nil]
     end
 
+    test "unknown options raise" do
+      assert_raise ArgumentError, fn -> Rows.update(@rows, "note", & &1, skip_blanks: true) end
+    end
+
+    test "skip_blank must be a boolean" do
+      assert_raise ArgumentError, ~r/skip_blank/, fn ->
+        Rows.update(@rows, "note", & &1, skip_blank: "yes")
+      end
+    end
+
     test "functions of other arities raise" do
       assert_raise ArgumentError, fn -> Rows.update(@rows, "name", fn _a, _b, _c -> "x" end) end
     end

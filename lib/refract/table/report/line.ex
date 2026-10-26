@@ -6,7 +6,7 @@ defmodule Refract.Table.Report.Line do
 
   defstruct [:row, :check, :passed, columns: %{}, rules: [], extra: []]
 
-  @type check :: :header | :row | :stop
+  @type check :: :header | :row
 
   @type t :: %__MODULE__{
           row: pos_integer() | nil,

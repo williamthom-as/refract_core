@@ -14,24 +14,18 @@ defmodule Refract.Table.Spec do
           max_misses: non_neg_integer()
         }
 
+  @spec new(keyword()) :: t()
+
   def new(opts) do
-    opts = Keyword.validate!(opts, [:header, :row, :stop, :max_misses])
+    opts = Keyword.validate!(opts, [:header, row: [], stop: [], max_misses: 0])
 
-    header =
-      case Keyword.fetch(opts, :header) do
-        :error -> raise ArgumentError, "header is required"
-        {:ok, header_opts} -> Header.new(header_opts)
-      end
-
-    row_opts = Keyword.get(opts, :row, [])
-    row = Row.new(row_opts)
+    header = opts |> Keyword.fetch(:header) |> header()
+    row = Row.new(Keyword.fetch!(opts, :row))
 
     validate_row_rules(row.match, header.columns)
 
-    stop_opts = Keyword.get(opts, :stop, [])
-    stop = Stop.new(stop_opts)
-
-    max_misses = Keyword.get(opts, :max_misses, 0)
+    stop = Stop.new(Keyword.fetch!(opts, :stop))
+    max_misses = Keyword.fetch!(opts, :max_misses)
 
     validate_max_misses(max_misses)
 
@@ -42,6 +36,9 @@ defmodule Refract.Table.Spec do
       max_misses: max_misses
     }
   end
+
+  defp header({:ok, header_opts}), do: Header.new(header_opts)
+  defp header(:error), do: raise(ArgumentError, "header is required")
 
   defp validate_row_rules(rules, columns) do
     Enum.each(rules, fn {column, _rule} ->

@@ -4,14 +4,17 @@ defmodule Refract.Classify.Score do
   alias Refract.Classify.Candidate
   alias Refract.Classify.Ctx
   alias Refract.Classify.Drift
+  alias Refract.Classify.Facts
   alias Refract.Classify.Markers
   alias Refract.Classify.Result
   alias Refract.Classify.Verdict
   alias Refract.Shape
   alias Refract.Table.Body
+  alias Refract.Table.Locate
   alias Refract.Table.Report
   alias Refract.Table.Scan
   alias Refract.Table.Spec.Header
+  alias Refract.Table.Spec.Row
 
   import Refract.String.Utils, only: [blank_line?: 1]
 
@@ -38,10 +41,10 @@ defmodule Refract.Classify.Score do
         name: nil
       )
 
-    validate_within(Keyword.fetch!(opts, :within))
+    Locate.validate_within!(Keyword.fetch!(opts, :within))
     validate_fraction(Keyword.fetch!(opts, :min_score), :min_score)
     validate_fraction(Keyword.fetch!(opts, :margin), :margin)
-    validate_values(Keyword.fetch!(opts, :values))
+    Row.validate_values!(Keyword.fetch!(opts, :values))
     validate_pick(Keyword.fetch!(opts, :pick))
     validate_name(Keyword.fetch!(opts, :name))
 
@@ -70,7 +73,7 @@ defmodule Refract.Classify.Score do
 
     %Result{candidates: candidates} = result = pick(pick, resolved_shapes, ctx)
 
-    facts = %Refract.Classify.Facts{
+    facts = %Facts{
       lines_sampled: length(sample),
       blank_lines: blank_lines(sample),
       widths: Enum.frequencies_by(sample, &length/1),
@@ -185,23 +188,11 @@ defmodule Refract.Classify.Score do
   defp pass_rate([]), do: 1.0
   defp pass_rate(rows), do: Enum.count(rows, & &1.passed) / length(rows)
 
-  defp validate_within(within) when is_integer(within) and within >= 0, do: :ok
-
-  defp validate_within(within) do
-    raise ArgumentError, "within must be a non negative integer, got: #{inspect(within)}"
-  end
-
   defp validate_fraction(value, _name) when is_number(value) and value >= 0 and value <= 1,
     do: :ok
 
   defp validate_fraction(value, name) do
     raise ArgumentError, "#{name} must be a number from 0 to 1, got: #{inspect(value)}"
-  end
-
-  defp validate_values(values) when is_boolean(values), do: :ok
-
-  defp validate_values(values) do
-    raise ArgumentError, "values must be true or false, got: #{inspect(values)}"
   end
 
   defp validate_pick(pick) when pick in [:best, :first], do: :ok

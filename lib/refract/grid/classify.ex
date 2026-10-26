@@ -15,13 +15,6 @@ defmodule Refract.Grid.Classify do
           | {:header_miss, Header.miss()}
           | {:row_miss, Row.miss()}
 
-  @typep entry :: %{
-           line: pos_integer(),
-           class: class(),
-           value: Header.positions() | Refract.row() | Refract.raw_row(),
-           why: why()
-         }
-
   @type classified ::
           {:header, pos_integer(), Header.positions()}
           | {:row, pos_integer(), Refract.row()}
@@ -48,8 +41,6 @@ defmodule Refract.Grid.Classify do
       %{line: line, class: class, why: why}
     end)
   end
-
-  @spec walk(Grid.t(), Spec.t()) :: [entry()]
 
   defp walk(%Grid{} = grid, %Spec{} = spec) do
     {entries, _positions} =

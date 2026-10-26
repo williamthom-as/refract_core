@@ -29,10 +29,13 @@ defmodule Refract.Rows do
         ) :: Enumerable.t()
 
   def update(rows, column, fun, opts \\ []) do
-    skip_blank = Keyword.get(opts, :skip_blank, false)
+    opts = Keyword.validate!(opts, skip_blank: false)
+
+    skip_blank = Keyword.fetch!(opts, :skip_blank)
     columns = List.wrap(column)
 
     validate_fun(fun)
+    validate_skip_blank(skip_blank)
 
     Stream.map(rows, fn row ->
       Enum.reduce(columns, row, fn col, acc ->
@@ -325,6 +328,12 @@ defmodule Refract.Rows do
 
   defp validate_fun(fun),
     do: raise(ArgumentError, "function #{inspect(fun)} must accept 1 or 2 arguments")
+
+  defp validate_skip_blank(skip_blank) when is_boolean(skip_blank), do: :ok
+
+  defp validate_skip_blank(skip_blank) do
+    raise ArgumentError, "skip_blank must be true or false, got: #{inspect(skip_blank)}"
+  end
 
   defp run_chunk(chunk, fun) do
     {:ok, chunk |> fun.() |> Enum.to_list()}

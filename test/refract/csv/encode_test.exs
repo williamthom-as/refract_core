@@ -59,6 +59,20 @@ defmodule Refract.CSV.EncodeTest do
       # building the stream must not read the source (source raises if read)
       _stream = Refract.CSV.encode(rows, header: ["id"])
     end
+
+    test "separator: sets the separator" do
+      rows = [%{"id" => "1", "name" => "alice"}]
+
+      assert encode!(rows, header: ["id", "name"], separator: ";") == "id;name\n1;alice\n"
+    end
+
+    test "unknown options raise" do
+      assert_raise ArgumentError, fn -> Refract.CSV.encode([], hedaer: ["id"]) end
+    end
+
+    test "an unsupported separator raises" do
+      assert_raise ArgumentError, ~r/separator/, fn -> Refract.CSV.encode([], separator: "#") end
+    end
   end
 
   describe "round trip" do

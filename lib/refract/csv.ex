@@ -59,7 +59,7 @@ defmodule Refract.CSV do
   def encode(rows, opts) do
     opts = Keyword.validate!(opts, header: nil, separator: ",", bom: false)
 
-    {:ok, parser} = Parsers.for_separator(Keyword.fetch!(opts, :separator))
+    parser = opts |> Keyword.fetch!(:separator) |> Parsers.for_separator() |> dump_parser!()
 
     rows
     |> Writer.cells(Keyword.fetch!(opts, :header))
@@ -75,6 +75,13 @@ defmodule Refract.CSV do
   defp supported(%{utf16: true}, :auto), do: {:error, {:unsupported_encoding, :utf16}}
   defp supported(%{line_endings: :cr}, _encoding), do: {:error, {:unsupported_line_endings, :cr}}
   defp supported(_format, _encoding), do: :ok
+
+  defp dump_parser!({:ok, parser}), do: parser
+
+  defp dump_parser!({:error, {:unsupported_separator, separator}}) do
+    raise ArgumentError,
+          "separator must be one of \",\", \";\", \"\\t\", \"|\", got: #{inspect(separator)}"
+  end
 
   defp with_bom(lines, true), do: Stream.concat([<<0xEF, 0xBB, 0xBF>>], lines)
   defp with_bom(lines, false), do: lines
