@@ -15,7 +15,7 @@ file                     tests                                         expected
 invoice.csv              exact columns                                 match invoice score 1.0
 invoice_renamed.csv      every column renamed via aliases              match invoice
 quoted_header.csv        header cells wrapped in literal quotes        match invoice
-invoice_short.csv        kg missing 3 of 4 columns                     match invoice score 0.75
+invoice_short.csv        kg missing 3 of 4 columns                     match invoice score 1.0 kg is optional
 invoice_semicolon.csv    semicolon separated                           match invoice with separator
 bad_rows.csv             invoice header over rows failing every rule   unknown rows failed closest invoice score 0.0
                                                                        the first failing row ends the table

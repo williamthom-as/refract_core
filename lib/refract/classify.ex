@@ -4,7 +4,9 @@ defmodule Refract.Classify do
 
   - every shape is a candidate, ranked, with its header and row reports
   - verdict `:match`, `:ambiguous` (within `margin:`) or `:unknown` (closest shape + reason)
-  - score is header share times row pass rate; under `min_score:` is `:rows_failed`
+  - score is header share (columns found over columns needed, at most 1) times row pass rate;
+    under `min_score:` is `:rows_failed`
+  - `:unknown` names the closest shape when its header was found or it scores `min_score:`
   - row cells are left out of reports unless `values: true`
 
       {:ok, result} = Refract.CSV.classify("bill.csv", [MyApp.Shapes.Bill, invoice])

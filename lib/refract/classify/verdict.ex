@@ -5,15 +5,15 @@ defmodule Refract.Classify.Verdict do
   alias Refract.Classify.Result
   alias Refract.Table.Spec.Header
 
-  @spec best([Candidate.t()], number()) :: Result.t()
+  @spec best([Candidate.t()], number(), number()) :: Result.t()
 
-  def best(candidates, margin) do
+  def best(candidates, margin, min_score) do
     ranked = rank(candidates)
     matched = Enum.filter(ranked, &match?(%Candidate{status: :matched}, &1))
     {narrower, kept} = Enum.split_with(matched, &narrower?(&1, matched))
 
     kept
-    |> decide(ranked, margin)
+    |> decide(ranked, margin, min_score)
     |> wider_header(narrower, margin)
   end
 
@@ -27,34 +27,42 @@ defmodule Refract.Classify.Verdict do
   defp status_rank(:rows_failed), do: 1
   defp status_rank(:no_header), do: 2
 
-  defp decide([], [top | _] = candidates, _margin) do
-    %Result{verdict: :unknown, reason: top.status, shape: closest(top), candidates: candidates}
+  defp decide([], [top | _] = candidates, _margin, min_score) do
+    %Result{
+      verdict: :unknown,
+      reason: top.status,
+      shape: closest(top, min_score),
+      candidates: candidates
+    }
   end
 
-  defp decide([only], candidates, _margin), do: match(only, nil, candidates)
+  defp decide([only], candidates, _margin, _min_score), do: match(only, nil, candidates)
 
-  defp decide([%Candidate{score: top} = first, %Candidate{score: next} | _], candidates, margin)
+  defp decide(
+         [%Candidate{score: top} = first, %Candidate{score: next} | _],
+         candidates,
+         margin,
+         _min_score
+       )
        when top - next >= margin do
     match(first, nil, candidates)
   end
 
-  defp decide([%Candidate{score: top} | _] = matched, candidates, margin) do
+  defp decide([%Candidate{score: top} | _] = matched, candidates, margin, _min_score) do
     matched
     |> Enum.take_while(&(top - &1.score < margin))
     |> most(&marker_hits/1)
     |> tie_break(candidates)
   end
 
-  defp closest(%Candidate{header: nil}), do: nil
+  defp closest(%Candidate{header: nil}, _min_score), do: nil
+  defp closest(%Candidate{status: :rows_failed, shape: shape}, _min_score), do: shape
 
-  defp closest(%Candidate{shape: shape} = candidate) do
-    candidate
-    |> matched_columns()
-    |> closest_shape(shape)
-  end
+  defp closest(%Candidate{score: score, shape: shape}, min_score)
+       when score > 0 and score >= min_score,
+       do: shape
 
-  defp closest_shape(0, _shape), do: nil
-  defp closest_shape(_matched, shape), do: shape
+  defp closest(_candidate, _min_score), do: nil
 
   defp marker_hits(%Candidate{markers: markers}), do: Enum.count(markers, & &1.passed)
 

@@ -92,7 +92,7 @@ defmodule Refract.Classify.Score do
     shapes
     |> Enum.map(&candidate(&1, ctx))
     |> Enum.map(&Markers.add(&1, ctx))
-    |> Verdict.best(margin)
+    |> Verdict.best(margin, ctx.min_score)
   end
 
   defp pick(:first, shapes, ctx) do
@@ -181,9 +181,12 @@ defmodule Refract.Classify.Score do
     |> Enum.map(fn {_step, _row, report} -> report end)
   end
 
-  defp share(header, %Shape{spec: spec}) do
-    Header.matched_count(header) / map_size(spec.header.columns)
+  defp share(header, %Shape{spec: %{header: spec}}) do
+    fraction(Header.matched_count(header), max(spec.min_matches, length(spec.required)))
   end
+
+  defp fraction(_matched, 0), do: 1.0
+  defp fraction(matched, total), do: min(matched / total, 1.0)
 
   defp pass_rate([]), do: 1.0
   defp pass_rate(rows), do: Enum.count(rows, & &1.passed) / length(rows)

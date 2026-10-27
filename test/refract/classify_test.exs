@@ -101,10 +101,26 @@ defmodule Refract.ClassifyTest do
 
       invoice = candidate(result, "invoice")
 
-      assert %Candidate{status: :no_header, score: 0.5, rows: []} = invoice
+      assert %Candidate{status: :no_header, score: score, rows: []} = invoice
+      assert score == 2 / 3
       refute invoice.header.passed
       assert Header.positions(invoice.header) == %{"sku" => 0, "item" => 1}
       assert Header.required_missing(invoice.header) == ["total"]
+    end
+
+    test "a file under min_score with no header names no closest shape" do
+      result = Classify.lines([["SKU", "Notes"], ["78632478", "x"]], [shape("invoice")])
+
+      assert %Result{verdict: :unknown, reason: :no_header, shape: nil, drift: nil} = result
+      assert %Candidate{status: :no_header, score: score} = candidate(result, "invoice")
+      assert score == 1 / 3
+    end
+
+    test "min_score is the floor for naming a closest shape" do
+      assert %Result{verdict: :unknown, shape: %Shape{name: "invoice"}} =
+               Classify.lines([["SKU", "Notes"], ["78632478", "x"]], [shape("invoice")],
+                 min_score: 0.3
+               )
     end
 
     test "a file like no shape has no closest shape" do
@@ -236,9 +252,22 @@ defmodule Refract.ClassifyTest do
                "messy_invoice.csv" |> classify(["invoice"]) |> candidate("invoice")
 
       assert score == 2 / 3
+    end
 
-      assert %Candidate{status: :matched, score: 0.75} =
+    test "a file missing only optional columns scores on its rows" do
+      assert %Candidate{status: :matched, score: 1.0} =
                "invoice_short.csv" |> classify(["invoice"]) |> candidate("invoice")
+    end
+
+    test "a header needing no columns scores on its rows" do
+      shape =
+        Shape.new(
+          name: "any",
+          spec: Table.spec(header: [columns: %{"sku" => ["sku"]}, min_matches: 0])
+        )
+
+      assert %Result{candidates: [%Candidate{status: :matched, score: 1.0}]} =
+               Classify.lines([["a"], ["1"]], [shape])
     end
 
     test "a header with no rows under it scores on the header alone" do
@@ -480,7 +509,12 @@ defmodule Refract.ClassifyTest do
     end
 
     test "markers never override a clear score lead" do
-      lines = [["Tax Invoice"], ["SKU", "Item", "Line Total"], ["78632478", "apple", "3"]]
+      lines = [
+        ["Tax Invoice"],
+        ["SKU", "Item", "Line Total"],
+        ["78632478", "apple", "3"],
+        ["A-100", "pear", "4"]
+      ]
 
       assert %Result{verdict: :match, reason: nil, shape: %Shape{name: "invoice_loose"}} =
                Classify.lines(lines, [shape("invoice_au"), shape("invoice_loose")],
