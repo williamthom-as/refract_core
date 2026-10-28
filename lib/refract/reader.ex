@@ -1,8 +1,8 @@
 defmodule Refract.Reader do
   @moduledoc """
   behaviour for tabular readers. to use, implement `open/2` and return arrays of cells
-  `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3`, `suggest/3`, `validate/3`,
-  `fields/3` and `load/2`.
+  `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3`, `suggest/3`, `profile/3`,
+  `validate/3`, `fields/3` and `load/2`.
   implement `extensions/0` to be picked by file extension in `Refract.Classify.folder/3`.
 
   options go to `open/2`, bar the names refract keeps for itself, so a reader picks other names:
@@ -10,6 +10,7 @@ defmodule Refract.Reader do
   - `locate`: `within`, `on_miss`, `header_row`
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
   - `suggest`: `within`, `header_row`
+  - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`
   - `validate`: `within`, `header_row`, `values` (and `max_bytes` when the shape has fields or
     document rules, as the whole file is read)
   - `load`, `fields`: `max_bytes`
@@ -42,6 +43,7 @@ defmodule Refract.Reader do
   alias Refract.Classify.Score
   alias Refract.Errors.ParseError
   alias Refract.Grid
+  alias Refract.Profile
   alias Refract.Shape
   alias Refract.Source
   alias Refract.Table
@@ -75,6 +77,12 @@ defmodule Refract.Reader do
 
       def suggest(source, shape, opts \\ []),
         do: Refract.Reader.suggest(__MODULE__, source, shape, opts)
+
+      @spec profile(Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+              {:ok, Refract.Profile.Result.t()} | {:error, term()}
+
+      def profile(source, shape, opts \\ []),
+        do: Refract.Reader.profile(__MODULE__, source, shape, opts)
 
       @spec validate(Refract.source(), Refract.Shape.t() | module(), keyword()) ::
               {:ok, Refract.Validate.Result.t()} | {:error, term()}
@@ -159,6 +167,16 @@ defmodule Refract.Reader do
     read(reader, source, open_opts, &{:ok, Classify.suggest(&1, shape, suggest_opts)})
   end
 
+  @spec profile(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::
+          {:ok, Refract.Profile.Result.t()} | {:error, term()}
+
+  def profile(reader, source, shape, opts) do
+    {profile_opts, open_opts} =
+      Keyword.split(opts, [:within, :header_row, :except, :max_distinct, :max_lines])
+
+    read(reader, source, open_opts, &Profile.lines(&1, shape, profile_opts))
+  end
+
   @spec validate(reader :: module(), Refract.source(), Refract.Shape.t() | module(), keyword()) ::
           {:ok, Refract.Validate.Result.t()} | {:error, term()}
 
@@ -216,7 +234,12 @@ defmodule Refract.Reader do
          do: read(reader, source, open_opts, &{:ok, Grid.new(&1)})
   end
 
-  defp read(reader, source, open_opts, fun) do
+  @doc false
+  @spec read(module(), Refract.source(), keyword(), (Enumerable.t() -> result)) ::
+          result | {:error, term()}
+        when result: term()
+
+  def read(reader, source, open_opts, fun) do
     with {:ok, raw} <- reader.open(source, open_opts),
          do: parse_error_as_error(fn -> fun.(raw) end)
   end
