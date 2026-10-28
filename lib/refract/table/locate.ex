@@ -13,16 +13,11 @@ defmodule Refract.Table.Locate do
 
   def run(raw, %Spec{} = spec, opts) do
     opts = validate_opts!(opts)
-    within = Keyword.fetch!(opts, :within)
     on_miss = Keyword.fetch!(opts, :on_miss)
-    header_row = Keyword.fetch!(opts, :header_row)
 
-    case find_header(raw, spec, within, header_row) do
-      {:error, best} ->
-        {:error, {:header_not_found, best}}
-
-      {:ok, header_row, positions} ->
-        {:ok, table(raw, spec, header_row, positions, on_miss)}
+    with {:ok, header_row, positions, steps} <-
+           body(raw, spec, Keyword.take(opts, [:within, :header_row])) do
+      {:ok, table(steps, spec, header_row, positions, on_miss)}
     end
   end
 
@@ -42,19 +37,32 @@ defmodule Refract.Table.Locate do
     |> header_found()
   end
 
+  @spec body(Enumerable.t(), Spec.t(), keyword()) ::
+          {:ok, pos_integer(), Header.positions(), Enumerable.t(Body.step())}
+          | {:error, {:header_not_found, header_miss()}}
+
+  def body(raw, %Spec{} = spec, opts) do
+    {body_opts, header_opts} = Keyword.split(opts, [:misses])
+
+    with {:ok, header_row, positions} <- header(raw, spec, header_opts) do
+      {:ok, header_row, positions,
+       raw
+       |> Stream.with_index(1)
+       |> Stream.drop(header_row)
+       |> Body.run(spec, positions, false, body_opts)}
+    end
+  end
+
   @spec absent(Spec.t(), Header.positions()) :: %{String.t() => nil}
 
   def absent(spec, positions), do: spec |> missing_columns(positions) |> Map.new(&{&1, nil})
 
-  defp table(raw, spec, header_row, positions, on_miss) do
+  defp table(steps, spec, header_row, positions, on_miss) do
     missing = missing_columns(spec, positions)
     absent = absent(spec, positions)
 
     rows =
-      raw
-      |> Stream.with_index(1)
-      |> Stream.drop(header_row)
-      |> Body.run(spec, positions, false)
+      steps
       |> Stream.take_while(&in_table?/1)
       |> Stream.flat_map(&kept(&1, on_miss))
       |> Stream.map(&Map.merge(&1, absent))

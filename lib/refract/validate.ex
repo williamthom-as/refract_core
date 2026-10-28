@@ -10,7 +10,6 @@ defmodule Refract.Validate do
 
   alias Refract.Shape
   alias Refract.Shape.Field
-  alias Refract.Table.Body
   alias Refract.Table.Locate
   alias Refract.Table.Report
 
@@ -76,16 +75,13 @@ defmodule Refract.Validate do
     %Shape{spec: spec, validation: %Rules{columns: columns, rows: row_rules}} =
       Shape.resolve(shape)
 
-    with {:ok, header_row, positions} <- Locate.header(raw, spec, header_opts) do
+    with {:ok, header_row, positions, steps} <-
+           Locate.body(raw, spec, [{:misses, :unlimited} | header_opts]) do
       absent = Locate.absent(spec, positions)
       {missing, columns} = columns |> Enum.sort() |> Enum.split_with(&missing?(&1, absent))
 
       {:ok, Enum.map(missing, &missing_issue(&1, header_row)),
-       raw
-       |> Stream.with_index(1)
-       |> Stream.drop(header_row)
-       |> Body.run(spec, positions, false, misses: :unlimited)
-       |> Stream.map(fn {kind, row, report} ->
+       Stream.map(steps, fn {kind, row, report} ->
          row = Map.merge(row, absent)
          {row, step_issues({kind, row, report}, columns, row_rules, values)}
        end)}
