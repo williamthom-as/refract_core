@@ -65,11 +65,9 @@ defmodule Refract.Profile.Group do
     %Cluster{
       most_common: most_common,
       via: via,
-      variants: Enum.map(ranked, fn {_order, variant} -> in_order(variant) end)
+      variants: Enum.map(ranked, fn {_order, variant} -> variant end)
     }
   end
-
-  defp in_order(%Variant{lines: lines} = variant), do: %{variant | lines: Enum.reverse(lines)}
 
   defp normalised(value) do
     slug = value |> text() |> Clean.slug()

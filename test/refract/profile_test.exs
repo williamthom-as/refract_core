@@ -77,6 +77,17 @@ defmodule Refract.ProfileTest do
              } = profile(@ledger).columns["cost_centre"]
     end
 
+    test "a result names its shape, a variant has lines, not files" do
+      assert %Result{
+               shape: %Shape{name: "ledger"},
+               files: nil,
+               columns: %{"cost_centre" => column}
+             } =
+               profile(@ledger)
+
+      assert %Column{clusters: [%Cluster{variants: [%Variant{files: nil} | _]}]} = column
+    end
+
     test "rows, blanks and distinct values" do
       assert %Result{rows: 7, columns: %{"cost_centre" => column}} = profile(@ledger)
       assert %Column{blanks: 1, distinct: 4, capped: false} = column

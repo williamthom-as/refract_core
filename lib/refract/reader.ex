@@ -234,7 +234,12 @@ defmodule Refract.Reader do
          do: read(reader, source, open_opts, &{:ok, Grid.new(&1)})
   end
 
-  defp read(reader, source, open_opts, fun) do
+  @doc false
+  @spec read(module(), Refract.source(), keyword(), (Enumerable.t() -> result)) ::
+          result | {:error, term()}
+        when result: term()
+
+  def read(reader, source, open_opts, fun) do
     with {:ok, raw} <- reader.open(source, open_opts),
          do: parse_error_as_error(fn -> fun.(raw) end)
   end
