@@ -20,6 +20,7 @@ Each one of the features can be used on its own, or work together to build compl
   - [Drift](#drift): flag missing, extra and duplicated columns on every classified (known) file.
 - [**Check it's acceptable**](#check-its-acceptable)
   - [Validate](#validate): validate file content against its known shapes rules, per cell and across each row, reporting issues found.
+  - [Profile](#profile): collect values in a column for audit purposes, in one file or across a folder.
 - [**Transform**](#transform)
   - [Rows](#rows): transform row streams: rename, fill down, group, pivot, run in parallel.
   - [Parse and clean](#parse-and-clean): turn messy cells into numbers, dates and booleans.
@@ -604,6 +605,41 @@ end)
 - **drift** on a match - missing, extra or duplicated columns ([Drift](#drift))
 - **`validation.issues`** - the line, column and rule that failed
 
+### Profile
+
+A file can pass validation and still spell one value many ways. Profile reports them per column, so the source can be fixed and reexported. `ledger_oct.csv`:
+
+```
+Account,Cost Centre,Amount
+A-100,Cost Center 1,120.00
+A-101,costcenter1,45.50
+A-102,Cost Centre 1,12.00
+A-103,Cost Center 1,8.25
+A-104,Cost Center 2,99.00
+A-105,Cost Center 2 ,15.00
+```
+
+```elixir
+{:ok, result} = Refract.CSV.profile("ledger_oct.csv", ledger)
+
+Refract.CSV.write(Refract.Profile.rows(result), "ledger_oct_profile.csv", header: Refract.Profile.header())
+```
+
+| column | most_common | via | variant | count | lines |
+|---|---|---|---|---|---|
+| cost_centre | Cost Center 1 | fuzzy | Cost Center 1 | 2 | 2, 5 |
+| cost_centre | Cost Center 1 | fuzzy | costcenter1 | 1 | 3 |
+| cost_centre | Cost Center 1 | fuzzy | Cost Centre 1 | 1 | 4 |
+| cost_centre | Cost Center 2 | normalised | Cost Center 2 | 1 | 6 |
+| cost_centre | Cost Center 2 | normalised | "Cost Center 2 " | 1 | 7 |
+
+- **via** - `:normalised` (equal once case, spacing, punctuation and accents are ignored), `:fuzzy` (a typo of the most common spelling, worth a look)
+- **digits** - values with different numbers never group: `Cost Center 1` and `Cost Center 2` stay apart
+- **invisible differences** - a trailing space or a non breaking space is shown quoted
+- **every column** - typed or not; `except: ["notes"]` leaves columns out
+- **folder** - `Refract.Profile.folder("inbox", [ledger])` counts every file a shape matched as one, so `costcenter1` in one month and `Cost Center 1` in the next show up together, lines by file
+- **read only** - nothing is changed; lines are file lines
+
 ---
 
 ## Transform
@@ -744,7 +780,7 @@ result =
 
 ### Plugins
 
-Every reader (built in or via plugin) has the same functions: `stream`, `locate`, `classify`, `suggest`, `validate`, `fields`, `facts` and `load`. Its own options pass straight through.
+Every reader (built in or via plugin) has the same functions: `stream`, `locate`, `classify`, `suggest`, `validate`, `profile`, `fields`, `facts` and `load`. Its own options pass straight through.
 
 | reader | files | impl options |
 |---|---|---|
