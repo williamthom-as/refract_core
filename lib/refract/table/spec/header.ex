@@ -1,7 +1,7 @@
 defmodule Refract.Table.Spec.Header do
   @moduledoc false
 
-  defstruct [:columns, :required, :min_matches, :lookup, :regexes]
+  defstruct [:columns, :required, :min_matches, :lookup, :regexes, ignore: []]
 
   import Refract.String.Utils, only: [blank?: 1, header_cell: 1, normalise: 1]
 
@@ -12,7 +12,8 @@ defmodule Refract.Table.Spec.Header do
           required: [String.t()],
           min_matches: non_neg_integer(),
           lookup: %{String.t() => [{String.t(), rank()}]},
-          regexes: %{String.t() => [{Regex.t(), rank()}]}
+          regexes: %{String.t() => [{Regex.t(), rank()}]},
+          ignore: [String.t() | Regex.t()]
         }
 
   @type rank :: {0 | 1, non_neg_integer()}
@@ -20,7 +21,7 @@ defmodule Refract.Table.Spec.Header do
   @spec new(keyword()) :: t()
 
   def new(opts) do
-    opts = Keyword.validate!(opts, [:columns, :min_matches, required: []])
+    opts = Keyword.validate!(opts, [:columns, :min_matches, required: [], ignore: []])
 
     columns =
       case Keyword.fetch(opts, :columns) do
@@ -38,9 +39,11 @@ defmodule Refract.Table.Spec.Header do
 
     required = Keyword.fetch!(opts, :required)
     min_matches = Keyword.get(opts, :min_matches, map_size(columns))
+    ignore = Keyword.fetch!(opts, :ignore)
 
     validate_columns(columns)
     validate_min_matches(columns, min_matches)
+    validate_ignore(ignore)
 
     validate_required(columns, required)
 
@@ -49,7 +52,8 @@ defmodule Refract.Table.Spec.Header do
       required: required,
       min_matches: min_matches,
       lookup: lookup(columns),
-      regexes: regexes(columns)
+      regexes: regexes(columns),
+      ignore: Enum.map(ignore, &normalise/1)
     }
   end
 
@@ -122,6 +126,19 @@ defmodule Refract.Table.Spec.Header do
     end)
   end
 
+  defp validate_ignore(ignore) when is_list(ignore), do: Enum.each(ignore, &validate_ignored/1)
+
+  defp validate_ignore(ignore) do
+    raise ArgumentError,
+          "header ignore must be a list of names and regexes, got: #{inspect(ignore)}"
+  end
+
+  defp validate_ignored(name) when is_binary(name) or is_struct(name, Regex), do: :ok
+
+  defp validate_ignored(name) do
+    raise ArgumentError, "header ignore must be a string or regex, got: #{inspect(name)}"
+  end
+
   @type positions :: %{String.t() => non_neg_integer()}
 
   @type miss :: %{matched: [String.t()], missing: [String.t()]}
@@ -189,14 +206,14 @@ defmodule Refract.Table.Spec.Header do
       passed: passed,
       columns: column_reports,
       rules: rules,
-      extra: extra(line, found)
+      extra: extra(header, line, found)
     }
   end
 
-  @spec extra(Refract.raw_row(), %{String.t() => Report.Column.t()}) ::
+  @spec extra(t(), Refract.raw_row(), %{String.t() => Report.Column.t()}) ::
           [{non_neg_integer(), Refract.cell()}]
 
-  def extra(line, found) do
+  def extra(%__MODULE__{ignore: ignore}, line, found) do
     taken =
       for {_column, %Report.Column{index: index, others: others}} <- found,
           taken <- [index | Enum.map(others, &elem(&1, 0))],
@@ -207,8 +224,15 @@ defmodule Refract.Table.Spec.Header do
         is_binary(cell),
         not blank?(cell),
         not is_map_key(taken, index),
+        not ignored?(ignore, cell),
         do: {index, cell}
   end
+
+  defp ignored?(ignore, cell), do: Enum.any?(ignore, &ignores?(&1, cell))
+
+  defp ignores?(%Regex{} = regex, cell), do: Regex.match?(regex, header_cell(cell))
+
+  defp ignores?(name, cell), do: normalise_cell(cell) == name
 
   @spec rules(t(), [String.t()]) :: [Report.Rule.t()]
 

@@ -679,6 +679,35 @@ defmodule Refract.ClassifyTest do
     end
   end
 
+  describe "reader" do
+    test "a classified file carries the reader and the options it was read with" do
+      assert %Result{reader: {CSV, []}} = classify("invoice.csv", ["invoice"])
+
+      assert %Result{reader: {CSV, [separator: ";"]}} =
+               classify("invoice_semicolon.csv", ["invoice"], separator: ";")
+    end
+
+    test "classify options are not reader options" do
+      assert %Result{reader: {CSV, []}} =
+               classify("invoice.csv", ["invoice"], within: 10, min_score: 0.4, name: "x.csv")
+    end
+
+    test "the reader validates the file as classify read it" do
+      result = classify("invoice_semicolon.csv", ["invoice"], separator: ";")
+      {reader, opts} = result.reader
+
+      assert {:ok, %{rows: rows}} =
+               reader.validate(path("invoice_semicolon.csv"), result.shape, opts)
+
+      assert rows > 0
+    end
+
+    test "lines have no reader" do
+      assert %Result{reader: nil} =
+               Classify.lines([["SKU", "Item", "Kg", "Line Total"]], [shape("invoice")])
+    end
+  end
+
   describe "lines/3" do
     @lines [["SKU", "Item", "Kg", "Line Total"], ["78632478", "apple", "2", "3"]]
 

@@ -190,7 +190,7 @@ defmodule Refract.Classify.Suggest do
       columns:
         Map.new(columns, fn {column, _aliases} -> {column, column_report(found, column)} end),
       rules: rules,
-      extra: Header.extra(line, found)
+      extra: Header.extra(header, line, found)
     }
   end
 

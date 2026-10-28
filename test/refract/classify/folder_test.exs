@@ -123,6 +123,19 @@ defmodule Refract.Classify.FolderTest do
                folder(dir, ["invoice"], readers: [{CSV, separator: ";"}])
 
       assert %{delimiter: ";", delimiter_source: :given} = result.file.format
+      assert result.reader == {CSV, [separator: ";"]}
+    end
+
+    test "each result carries the reader that read its file", %{tmp_dir: dir} do
+      copy(dir, "invoice.csv", "invoice.txt")
+      copy(dir, "invoice.csv")
+
+      readers =
+        for {path, {:ok, %Result{reader: reader}}} <-
+              folder(dir, ["invoice"], readers: [TestReaders.Txt]),
+            do: {Path.basename(path), reader}
+
+      assert readers == [{"invoice.csv", {CSV, []}}, {"invoice.txt", {TestReaders.Txt, []}}]
     end
 
     test "a caller reader overrides the default for its extensions", %{tmp_dir: dir} do

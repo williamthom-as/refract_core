@@ -9,7 +9,7 @@ defmodule Refract.Shape.FromMap do
   alias Refract.Validate.Validator
 
   @keys ~w(name version markers header row stop max_misses validation fields)
-  @header_keys ~w(columns required min_matches)
+  @header_keys ~w(columns required min_matches ignore)
   @row_keys ~w(match min_score)
   @marker_keys ~w(file content)
   @validation_keys ~w(columns)
@@ -21,7 +21,9 @@ defmodule Refract.Shape.FromMap do
 
   def run(map, opts) do
     opts = Keyword.validate!(opts, validators: %{})
+
     validators = Keyword.fetch!(opts, :validators)
+
     validate_validators(validators)
 
     shape(map, validators)
@@ -166,9 +168,11 @@ defmodule Refract.Shape.FromMap do
 
     with :ok <- known_keys(header, @header_keys, "header"),
          {:ok, columns} <- columns(Map.get(header, "columns")),
-         :ok <- validate_required(Map.get(header, "required", [])) do
+         :ok <- validate_required(Map.get(header, "required", [])),
+         {:ok, ignore} <- aliases("header.ignore", Map.get(header, "ignore", [])) do
       {:ok,
-       [columns: columns] ++ take_opts(header, required: "required", min_matches: "min_matches")}
+       [columns: columns, ignore: ignore] ++
+         take_opts(header, required: "required", min_matches: "min_matches")}
     end
   end
 

@@ -24,10 +24,11 @@ defmodule Refract.Classify.Result do
           shape: Shape.t() | nil,
           file: Facts.t() | nil,
           drift: Drift.t() | nil,
+          reader: {module(), keyword()} | nil,
           candidates: [Candidate.t()]
         }
 
-  defstruct [:verdict, :reason, :shape, :file, :drift, candidates: []]
+  defstruct [:verdict, :reason, :shape, :file, :drift, :reader, candidates: []]
 
   @spec to_map(t()) :: map()
 
@@ -38,6 +39,7 @@ defmodule Refract.Classify.Result do
       reason: result.reason,
       shape: shape(result.shape),
       drift: drift(result.drift),
+      reader: reader(result.reader),
       candidates: Enum.map(result.candidates, &candidate/1)
     }
   end
@@ -57,6 +59,10 @@ defmodule Refract.Classify.Result do
       others: Map.new(others, fn {column, found} -> {column, cells(found)} end)
     }
   end
+
+  defp reader(nil), do: nil
+
+  defp reader({module, _opts}), do: inspect(module)
 
   defp candidate(%Candidate{shape: shape, status: status, score: score} = candidate) do
     %{

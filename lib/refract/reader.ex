@@ -151,10 +151,12 @@ defmodule Refract.Reader do
       |> Score.validate_opts!()
 
     read(reader, source, open_opts, fn raw ->
-      {:ok,
-       raw
-       |> Classify.lines(shapes, classify_opts)
-       |> Facts.Source.add(reader, source, open_opts)}
+      result =
+        raw
+        |> Classify.lines(shapes, classify_opts)
+        |> Facts.Source.add(reader, source, open_opts)
+
+      {:ok, %{result | reader: {reader, open_opts}}}
     end)
   end
 

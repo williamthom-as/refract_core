@@ -95,6 +95,13 @@ defmodule Refract.AuditTest do
                Result.to_map(result)
     end
 
+    test "the reader by module name", %{tmp_dir: dir} do
+      {:ok, result} = CSV.classify(invoice_file!(dir), [invoice()], separator: ",")
+
+      assert %{reader: "Refract.CSV"} = Result.to_map(result)
+      assert %{reader: nil} = result |> Map.put(:reader, nil) |> Result.to_map()
+    end
+
     test "an unknown file has no shape and no drift" do
       {:ok, result} = CSV.classify({:string, "name,colour\nfig,purple\n"}, [invoice()])
 
