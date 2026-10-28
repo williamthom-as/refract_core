@@ -87,8 +87,11 @@ defmodule Refract.Profile.Count do
   defp column(%__MODULE__{capped: true, blanks: blanks}),
     do: %Column{blanks: blanks, distinct: nil, capped: true}
 
-  defp column(%__MODULE__{blanks: blanks, values: values}),
-    do: %Column{blanks: blanks, distinct: map_size(values), clusters: Group.clusters(values)}
+  defp column(%__MODULE__{blanks: blanks, values: values}) do
+    {fuzzy, clusters} = Group.clusters(values)
+
+    %Column{blanks: blanks, distinct: map_size(values), fuzzy: fuzzy, clusters: clusters}
+  end
 
   defp validate_except(except, columns) when is_list(except),
     do: except |> Enum.reject(&is_map_key(columns, &1)) |> validate_known()

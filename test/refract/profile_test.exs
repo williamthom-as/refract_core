@@ -66,7 +66,7 @@ defmodule Refract.ProfileTest do
                clusters: [
                  %Cluster{
                    most_common: "Cost Center 1",
-                   via: :fingerprint,
+                   via: :normalised,
                    variants: [
                      %Variant{value: "Cost Center 1", count: 2, lines: [4, 6]},
                      %Variant{value: "costcenter1", count: 2, lines: [5, 10]},
@@ -128,6 +128,59 @@ defmodule Refract.ProfileTest do
         )
 
       assert grouped(result.columns["cost_centre"]) == [[12, "12"]]
+    end
+  end
+
+  describe "fuzzy" do
+    test "a misspelling joins the cluster of the most common" do
+      column = cost_centres(["Cost Center 1", "Cost Center 1", "costcenter1", "Cost Centre 1"])
+
+      assert [%Cluster{most_common: "Cost Center 1", via: :fuzzy}] = column.clusters
+      assert grouped(column) == [["Cost Center 1", "costcenter1", "Cost Centre 1"]]
+    end
+
+    test "transposed and dropped letters group" do
+      assert grouped(cost_centres(["Melbourne", "Melbounre", "Marketing", "Markting"])) ==
+               [["Melbourne", "Melbounre"], ["Marketing", "Markting"]]
+    end
+
+    test "different words stay apart" do
+      values = [
+        "North Sydney",
+        "North Ryde",
+        "Sales North",
+        "Sales South",
+        "Accounts Payable",
+        "Accounts Receivable"
+      ]
+
+      assert grouped(cost_centres(values)) == []
+    end
+
+    test "short codes stay apart" do
+      assert grouped(cost_centres(["NSW", "NWS", "QLD", "OLD", "abcde", "abced"])) == []
+    end
+
+    test "different digits never join" do
+      assert grouped(cost_centres(["Cost Centre 1", "Cost Center 2"])) == []
+    end
+
+    test "a value joins only when close to the most common, not to another variant" do
+      assert grouped(cost_centres(["Warehouse", "Warehouse", "Warehous", "Warhous"])) ==
+               [["Warehouse", "Warehous"]]
+    end
+
+    test "a normalised cluster stays normalised when nothing joins it" do
+      column = cost_centres(["north", "North"])
+
+      assert %Column{fuzzy: :done, clusters: [%Cluster{via: :normalised}]} = column
+    end
+
+    test "too many groups to compare skips the fuzzy pass, normalised clusters stay" do
+      values = Enum.map(1..501, &"item #{&1}") ++ ["north", "North", "Melbourne", "Melbounre"]
+
+      assert %Column{fuzzy: :skipped} = column = cost_centres(values)
+      assert grouped(column) == [["north", "North"]]
     end
   end
 
