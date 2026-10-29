@@ -10,7 +10,8 @@ defmodule Refract.Reader do
   - `locate`: `within`, `on_miss`, `header_row`
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
   - `suggest`: `within`, `header_row`
-  - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`
+  - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`, `values`,
+    `fuzzy`, `columns`
   - `validate`: `within`, `header_row`, `values` (and `max_bytes` when the shape has fields or
     document rules, as the whole file is read)
   - `load`, `fields`: `max_bytes`
@@ -44,6 +45,7 @@ defmodule Refract.Reader do
   alias Refract.Errors.ParseError
   alias Refract.Grid
   alias Refract.Profile
+  alias Refract.Profile.Count
   alias Refract.Shape
   alias Refract.Source
   alias Refract.Table
@@ -115,7 +117,7 @@ defmodule Refract.Reader do
         {:ok,
          Stream.transform(content, nil, fn
            row, nil ->
-             {[], Header.normalise(row)}
+             {[], Header.names(row)}
 
            row, header ->
              {[Header.to_row(header, row)], header}
@@ -132,7 +134,7 @@ defmodule Refract.Reader do
           | {:error, term()}
 
   def locate(reader, source, %Spec{} = spec, opts) do
-    {locate_opts, open_opts} = Keyword.split(opts, [:within, :on_miss, :header_row])
+    {locate_opts, open_opts} = Keyword.split(opts, Keyword.keys(Locate.options()))
     locate_opts = Locate.validate_opts!(locate_opts)
 
     read(reader, source, open_opts, &Table.locate(&1, spec, locate_opts))
@@ -142,8 +144,7 @@ defmodule Refract.Reader do
           {:ok, Classify.Result.t()} | {:error, term()}
 
   def classify(reader, source, shapes, opts) do
-    {classify_opts, open_opts} =
-      Keyword.split(opts, [:within, :min_score, :margin, :values, :pick, :name])
+    {classify_opts, open_opts} = Keyword.split(opts, Keyword.keys(Score.options()))
 
     classify_opts =
       classify_opts
@@ -164,7 +165,7 @@ defmodule Refract.Reader do
           {:ok, Refract.Table.Report.Line.t()} | {:error, term()}
 
   def suggest(reader, source, shape, opts) do
-    {suggest_opts, open_opts} = Keyword.split(opts, [:within, :header_row])
+    {suggest_opts, open_opts} = Keyword.split(opts, Keyword.keys(Locate.header_options()))
 
     read(reader, source, open_opts, &{:ok, Classify.suggest(&1, shape, suggest_opts)})
   end
@@ -174,7 +175,7 @@ defmodule Refract.Reader do
 
   def profile(reader, source, shape, opts) do
     {profile_opts, open_opts} =
-      Keyword.split(opts, [:within, :header_row, :except, :max_distinct, :max_lines])
+      Keyword.split(opts, Keyword.keys(Locate.header_options() ++ Count.options()))
 
     read(reader, source, open_opts, &Profile.lines(&1, shape, profile_opts))
   end
@@ -183,7 +184,8 @@ defmodule Refract.Reader do
           {:ok, Refract.Validate.Result.t()} | {:error, term()}
 
   def validate(reader, source, shape, opts) do
-    {validate_opts, read_opts} = Keyword.split(opts, [:within, :header_row, :values])
+    {validate_opts, read_opts} =
+      Keyword.split(opts, Keyword.keys(Locate.header_options() ++ Validate.options()))
 
     shape
     |> Shape.resolve()

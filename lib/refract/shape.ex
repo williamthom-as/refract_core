@@ -15,6 +15,7 @@ defmodule Refract.Shape do
       Refract.Shape.load("shapes/order.yml", validators: %{"abn" => MyApp.Validators.ABN})
   """
 
+  alias Refract.ArgValidator
   alias Refract.Shape.Field
   alias Refract.Shape.FromMap
   alias Refract.Shape.Load
@@ -120,7 +121,7 @@ defmodule Refract.Shape do
 
     validate_name(name)
     validate_spec(spec)
-    validate_version(version)
+    ArgValidator.validate_positive_integer!(version, :version)
     validate_markers(markers)
 
     validation = Rules.new!(Keyword.fetch!(opts, :validation), spec.header.columns)
@@ -199,10 +200,6 @@ defmodule Refract.Shape do
   defp validate_spec(%Spec{}), do: :ok
 
   defp validate_spec(_), do: raise(ArgumentError, "spec must be a Refract.Table.Spec")
-
-  defp validate_version(version) when is_integer(version) and version > 0, do: :ok
-
-  defp validate_version(_), do: raise(ArgumentError, "version must be a positive integer")
 
   @markers_validation_error "markers must be a list of {:file, Regex.t()} or {:content, Regex.t()}"
 

@@ -106,4 +106,49 @@ defmodule Refract.ReaderTest do
       assert Enum.to_list(rows) == [%{"id" => "1"}]
     end
   end
+
+  describe "options" do
+    alias Refract.Classify.Score
+    alias Refract.CSV
+    alias Refract.Profile.Count
+    alias Refract.Shape
+    alias Refract.Table
+    alias Refract.Table.Locate
+    alias Refract.Validate
+
+    @source {:string, "account,amount\nA-1,1.00\n"}
+
+    defp shape do
+      Shape.new(
+        name: "ledger",
+        spec: Table.spec(header: [columns: %{"account" => ["account"], "amount" => ["amount"]}])
+      )
+    end
+
+    defp each_option(options, fun), do: Enum.each(options, &fun.([&1]))
+
+    test "every option a module declares reaches it, none is taken for the file reader" do
+      each_option(
+        Locate.options(),
+        &assert({:ok, _table} = CSV.locate(@source, shape().spec, &1))
+      )
+
+      each_option(Score.options(), &assert({:ok, _result} = CSV.classify(@source, [shape()], &1)))
+
+      each_option(
+        Locate.header_options(),
+        &assert({:ok, _report} = CSV.suggest(@source, shape(), &1))
+      )
+
+      each_option(
+        Locate.header_options() ++ Count.options(),
+        &assert({:ok, _result} = CSV.profile(@source, shape(), &1))
+      )
+
+      each_option(
+        Locate.header_options() ++ Validate.options(),
+        &assert({:ok, _result} = CSV.validate(@source, shape(), &1))
+      )
+    end
+  end
 end

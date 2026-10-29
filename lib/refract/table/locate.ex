@@ -1,8 +1,11 @@
 defmodule Refract.Table.Locate do
   @moduledoc false
 
+  alias Refract.ArgValidator
+  alias Refract.Reader
   alias Refract.Table
   alias Refract.Table.Body
+  alias Refract.Table.Report
   alias Refract.Table.Spec
   alias Refract.Table.Spec.Header
 
@@ -16,16 +19,30 @@ defmodule Refract.Table.Locate do
     on_miss = Keyword.fetch!(opts, :on_miss)
 
     with {:ok, header_row, positions, steps} <-
-           body(raw, spec, Keyword.take(opts, [:within, :header_row])) do
+           body(raw, spec, Keyword.take(opts, Keyword.keys(header_options()))) do
       {:ok, table(steps, spec, header_row, positions, on_miss)}
     end
   end
+
+  @spec header_options() :: keyword()
+
+  def header_options, do: [within: 100, header_row: nil]
+
+  @spec options() :: keyword()
+
+  def options, do: [on_miss: :skip] ++ header_options()
 
   @spec header(Enumerable.t(), Spec.t(), keyword()) ::
           {:ok, pos_integer(), Header.positions()} | {:error, {:header_not_found, header_miss()}}
 
   def header(raw, %Spec{} = spec, opts) do
-    opts = Keyword.validate!(opts, within: 100, header_row: nil)
+    with {:ok, report} <- scan(raw, spec, opts) do
+      {:ok, report.row, Header.positions(report)}
+    end
+  end
+
+  defp scan(raw, spec, opts) do
+    opts = Keyword.validate!(opts, header_options())
     within = Keyword.fetch!(opts, :within)
     header_row = Keyword.fetch!(opts, :header_row)
 
@@ -42,15 +59,29 @@ defmodule Refract.Table.Locate do
           | {:error, {:header_not_found, header_miss()}}
 
   def body(raw, %Spec{} = spec, opts) do
-    {body_opts, header_opts} = Keyword.split(opts, [:misses])
+    {body_opts, opts} = Keyword.split(opts, [:misses])
+    {columns, header_opts} = Keyword.pop(opts, :columns, :shape)
 
-    with {:ok, header_row, positions} <- header(raw, spec, header_opts) do
-      {:ok, header_row, positions,
-       raw
-       |> Stream.with_index(1)
-       |> Stream.drop(header_row)
-       |> Body.run(spec, positions, false, body_opts)}
+    with {:ok, report} <- scan(raw, spec, header_opts) do
+      positions = positions(report, raw, columns)
+
+      {:ok, report.row, positions, Body.run(raw, report.row, spec, positions, false, body_opts)}
     end
+  end
+
+  defp positions(report, _raw, :shape), do: Header.positions(report)
+
+  defp positions(%Report.Line{row: row, columns: columns, extra: extra} = report, raw, :all) do
+    named = Header.positions(report)
+    names = raw |> Enum.at(row - 1) |> Reader.Header.names()
+
+    unnamed =
+      Enum.map(extra, &elem(&1, 0)) ++
+        for {_name, %Report.Column{others: others}} <- columns,
+            {index, _cell} <- others,
+            do: index
+
+    Enum.reduce(unnamed, named, &Map.put_new(&2, Enum.at(names, &1), &1))
   end
 
   @spec absent(Spec.t(), Header.positions()) :: %{String.t() => nil}
@@ -80,7 +111,7 @@ defmodule Refract.Table.Locate do
   @spec validate_opts!(keyword()) :: keyword()
 
   def validate_opts!(opts) do
-    opts = Keyword.validate!(opts, within: 100, on_miss: :skip, header_row: nil)
+    opts = Keyword.validate!(opts, options())
 
     validate_within!(Keyword.fetch!(opts, :within))
     validate_on_miss(Keyword.fetch!(opts, :on_miss))
@@ -91,11 +122,7 @@ defmodule Refract.Table.Locate do
 
   @spec validate_within!(term()) :: :ok
 
-  def validate_within!(within) when is_integer(within) and within >= 0, do: :ok
-
-  def validate_within!(within) do
-    raise ArgumentError, "within must be a non negative integer, got: #{inspect(within)}"
-  end
+  def validate_within!(within), do: ArgValidator.validate_non_negative_integer!(within, :within)
 
   @spec validate_header_row!(term()) :: :ok
 
@@ -136,7 +163,7 @@ defmodule Refract.Table.Locate do
   defp first_passing(scanned) do
     case Enum.find(scanned, & &1.passed) do
       nil -> {:error, best_miss(scanned)}
-      report -> {:ok, report.row, Header.positions(report)}
+      report -> {:ok, report}
     end
   end
 

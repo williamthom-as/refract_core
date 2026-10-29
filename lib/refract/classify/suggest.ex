@@ -1,6 +1,7 @@
 defmodule Refract.Classify.Suggest do
   @moduledoc false
 
+  alias Refract.Clean
   alias Refract.Shape
 
   alias Refract.Table.Locate
@@ -17,7 +18,7 @@ defmodule Refract.Classify.Suggest do
   @spec run(Enumerable.t(), Shape.t() | module(), [opt()]) :: Line.t()
 
   def run(raw, shape, opts) do
-    opts = Keyword.validate!(opts, within: 100, header_row: nil)
+    opts = Keyword.validate!(opts, Locate.header_options())
     within = Keyword.fetch!(opts, :within)
     header_row = Keyword.fetch!(opts, :header_row)
 
@@ -106,8 +107,8 @@ defmodule Refract.Classify.Suggest do
   defp words(text) do
     ~r/([a-z0-9])([A-Z])/
     |> Regex.replace(text, "\\1 \\2")
-    |> String.downcase()
-    |> String.split(~r/[^a-z0-9]+/, trim: true)
+    |> Clean.slug()
+    |> String.split("_", trim: true)
   end
 
   defp fails_values?({column, %Column{index: index}}, rules, rows) when is_map_key(rules, column),

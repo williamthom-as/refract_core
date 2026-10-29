@@ -1,6 +1,7 @@
 defmodule Refract.Table.Spec do
   @moduledoc false
 
+  alias Refract.ArgValidator
   alias Refract.Table.Spec.Header
   alias Refract.Table.Spec.Row
   alias Refract.Table.Spec.Stop
@@ -27,7 +28,7 @@ defmodule Refract.Table.Spec do
     stop = Stop.new(Keyword.fetch!(opts, :stop))
     max_misses = Keyword.fetch!(opts, :max_misses)
 
-    validate_max_misses(max_misses)
+    ArgValidator.validate_non_negative_integer!(max_misses, :max_misses)
 
     %__MODULE__{
       header: header,
@@ -47,9 +48,4 @@ defmodule Refract.Table.Spec do
       end
     end)
   end
-
-  defp validate_max_misses(max_misses) when is_integer(max_misses) and max_misses >= 0, do: :ok
-
-  defp validate_max_misses(_),
-    do: raise(ArgumentError, "max_misses must be a non negative integer")
 end

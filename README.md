@@ -88,7 +88,7 @@ account,customer,cost
 ```
 
 ```elixir
-{:ok, paths} = Refract.CSV.write_chunks(rows, "out/numbers", prefix: "part", rows_per_file: 2)
+{:ok, paths} = Refract.CSV.write_chunks(rows, "out/numbers/part.csv", rows_per_file: 2)
 #=> {:ok, ["out/numbers/part_1.csv", "out/numbers/part_2.csv", "out/numbers/part_3.csv"]}
 ```
 
@@ -636,7 +636,9 @@ Refract.CSV.write(Refract.Profile.rows(result), "ledger_oct_profile.csv", header
 - **via** - `:normalised` (equal once case, spacing, punctuation and accents are ignored), `:fuzzy` (a typo of the most common spelling, worth a look)
 - **digits** - values with different numbers never group: `Cost Center 1` and `Cost Center 2` stay apart
 - **invisible differences** - a trailing space or a non breaking space is shown quoted
-- **every column** - typed or not; `except: ["notes"]` leaves columns out
+- **every column** - typed or not; `except: ["notes"]` leaves columns out; `columns: :all` also profiles header cells the shape does not name (under their header text)
+- **values** - `values: true` lists every distinct value with its count and lines, an inventory of the column to check that everything belongs: `Refract.Profile.rows(result, :values)` with `header: Refract.Profile.header(:values)`
+- **fuzzy** - `fuzzy: 0.9` groups looser typos, `fuzzy: false` turns it off (short codes, part numbers); a folder takes `%{"ledger" => 0.9, "parts" => false}`
 - **folder** - `Refract.Profile.folder("inbox", [ledger])` counts every file a shape matched as one, so `costcenter1` in one month and `Cost Center 1` in the next show up together, lines by file
 - **read only** - nothing is changed; lines are file lines
 

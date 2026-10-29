@@ -8,10 +8,12 @@ defmodule Refract.CSV.WriteChunksTest do
 
   defp rows(n), do: for(i <- 1..n, do: %{"id" => "#{i}", "name" => "n#{i}"})
 
-  defp opts(extra \\ []), do: Keyword.merge([prefix: "part", rows_per_file: 2], extra)
+  defp opts(extra \\ []), do: Keyword.merge([rows_per_file: 2], extra)
+
+  defp part(dir), do: Path.join(dir, "part.csv")
 
   test "splits rows into numbered files, each with the header", %{tmp_dir: dir} do
-    assert {:ok, paths} = CSV.write_chunks(rows(5), dir, opts())
+    assert {:ok, paths} = CSV.write_chunks(rows(5), part(dir), opts())
 
     assert paths == Enum.map(1..3, &Path.join(dir, "part_#{&1}.csv"))
     assert File.read!(Path.join(dir, "part_1.csv")) == "id,name\n1,n1\n2,n2\n"
@@ -20,26 +22,26 @@ defmodule Refract.CSV.WriteChunksTest do
   end
 
   test "an exact multiple leaves no empty last file", %{tmp_dir: dir} do
-    assert {:ok, paths} = CSV.write_chunks(rows(4), dir, opts())
+    assert {:ok, paths} = CSV.write_chunks(rows(4), part(dir), opts())
 
     assert length(paths) == 2
     assert dir |> File.ls!() |> Enum.sort() == ["part_1.csv", "part_2.csv"]
   end
 
   test "header sets the columns and order in every file", %{tmp_dir: dir} do
-    assert {:ok, _paths} = CSV.write_chunks(rows(3), dir, opts(header: ["name", "id"]))
+    assert {:ok, _paths} = CSV.write_chunks(rows(3), part(dir), opts(header: ["name", "id"]))
 
     assert File.read!(Path.join(dir, "part_1.csv")) == "name,id\nn1,1\nn2,2\n"
     assert File.read!(Path.join(dir, "part_2.csv")) == "name,id\nn3,3\n"
   end
 
   test "no rows writes no files", %{tmp_dir: dir} do
-    assert CSV.write_chunks([], dir, opts()) == {:ok, []}
+    assert CSV.write_chunks([], part(dir), opts()) == {:ok, []}
     assert File.ls!(dir) == []
   end
 
   test "a missing directory is an error and leaves nothing behind", %{tmp_dir: dir} do
-    missing = Path.join(dir, "nope")
+    missing = Path.join([dir, "nope", "part.csv"])
 
     assert {:error, :enoent} = CSV.write_chunks(rows(3), missing, opts())
     assert File.ls!(dir) == []
@@ -61,25 +63,40 @@ defmodule Refract.CSV.WriteChunksTest do
         fn _ -> :ok end
       )
 
-    assert {:ok, [_, _, _]} = CSV.write_chunks(source, dir, opts())
+    assert {:ok, [_, _, _]} = CSV.write_chunks(source, part(dir), opts())
     assert_received :opened
     refute_received :opened
   end
 
-  test "missing prefix or rows_per_file raises", %{tmp_dir: dir} do
-    assert_raise KeyError, fn -> CSV.write_chunks(rows(1), dir, rows_per_file: 2) end
-    assert_raise KeyError, fn -> CSV.write_chunks(rows(1), dir, prefix: "part") end
+  test "a path without an extension takes the writers extension", %{tmp_dir: dir} do
+    assert {:ok, paths} = CSV.write_chunks(rows(3), Path.join(dir, "part"), opts())
+
+    assert paths == [Path.join(dir, "part_1.csv"), Path.join(dir, "part_2.csv")]
+  end
+
+  test "the path's own extension is kept", %{tmp_dir: dir} do
+    assert {:ok, paths} = CSV.write_chunks(rows(3), Path.join(dir, "part.txt"), opts())
+
+    assert paths == [Path.join(dir, "part_1.txt"), Path.join(dir, "part_2.txt")]
+  end
+
+  test "missing rows_per_file raises", %{tmp_dir: dir} do
+    assert_raise KeyError, fn -> CSV.write_chunks(rows(1), part(dir), []) end
+  end
+
+  test "prefix is not an option, the path names the files", %{tmp_dir: dir} do
+    assert_raise ArgumentError, fn -> CSV.write_chunks(rows(1), part(dir), opts(prefix: "x")) end
   end
 
   test "rows_per_file must be a positive integer", %{tmp_dir: dir} do
     for bad <- [0, -1, 1.5, "2"] do
       assert_raise ArgumentError, fn ->
-        CSV.write_chunks(rows(1), dir, opts(rows_per_file: bad))
+        CSV.write_chunks(rows(1), part(dir), opts(rows_per_file: bad))
       end
     end
   end
 
   test "unknown option raises", %{tmp_dir: dir} do
-    assert_raise ArgumentError, fn -> CSV.write_chunks(rows(1), dir, opts(rows: 2)) end
+    assert_raise ArgumentError, fn -> CSV.write_chunks(rows(1), part(dir), opts(rows: 2)) end
   end
 end

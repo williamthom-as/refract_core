@@ -1,6 +1,7 @@
 defmodule Refract.Profile.Count do
   @moduledoc false
 
+  alias Refract.ArgValidator
   alias Refract.Profile.Column
   alias Refract.Profile.Ctx
   alias Refract.Profile.Group
@@ -32,6 +33,8 @@ defmodule Refract.Profile.Count do
           | {:except, [String.t()]}
           | {:max_distinct, pos_integer()}
           | {:max_lines, pos_integer()}
+          | {:values, boolean()}
+          | {:fuzzy, number() | false}
 
   @spec run(Enumerable.t(), Shape.t() | module(), [opt()]) ::
           {:ok, Result.t()} | {:error, {:header_not_found, Locate.header_miss()}}
@@ -41,27 +44,51 @@ defmodule Refract.Profile.Count do
     ctx = ctx!(opts, spec.header.columns)
 
     with {:ok, counted} <- add_file({0, %{}}, raw, nil, spec, ctx) do
-      {rows, columns} = finish(counted, :lines)
+      {rows, columns} = finish(counted, :lines, ctx)
 
       {:ok, %Result{shape: shape, rows: rows, columns: columns}}
     end
   end
 
+  @spec options() :: keyword()
+
+  def options do
+    [
+      except: [],
+      max_distinct: 5000,
+      max_lines: 100,
+      values: false,
+      fuzzy: 0.94,
+      columns: :shape
+    ]
+  end
+
   @spec ctx!([opt()], %{String.t() => term()}) :: Ctx.t()
 
   def ctx!(opts, columns) do
-    {header_opts, opts} = Keyword.split(opts, [:within, :header_row])
-    opts = Keyword.validate!(opts, except: [], max_distinct: 5000, max_lines: 100)
+    {header_opts, opts} = Keyword.split(opts, Keyword.keys(Locate.header_options()))
+
+    opts = Keyword.validate!(opts, options())
+
     except = Keyword.fetch!(opts, :except)
+    values = Keyword.fetch!(opts, :values)
+    fuzzy = Keyword.fetch!(opts, :fuzzy)
+    column_mode = Keyword.fetch!(opts, :columns)
     max_distinct = Keyword.fetch!(opts, :max_distinct)
     max_lines = Keyword.fetch!(opts, :max_lines)
 
-    validate_except(except, columns)
-    validate_limit(max_distinct, :max_distinct)
-    validate_limit(max_lines, :max_lines)
+    validate_columns(column_mode)
+    validate_except(except, columns, column_mode)
+    ArgValidator.validate_positive_integer!(max_distinct, :max_distinct)
+    ArgValidator.validate_positive_integer!(max_lines, :max_lines)
+    ArgValidator.validate_boolean!(values, :values)
+    validate_fuzzy!(fuzzy)
 
     %Ctx{
       except: except,
+      values: values,
+      fuzzy: fuzzy,
+      columns: column_mode,
       max_distinct: max_distinct,
       max_lines: max_lines,
       header_opts: header_opts
@@ -73,18 +100,21 @@ defmodule Refract.Profile.Count do
 
   def add_file({rows, counts}, raw, path, spec, %Ctx{except: except} = ctx) do
     with {:ok, _header_row, positions, steps} <-
-           Locate.body(raw, spec, [{:misses, :unlimited} | ctx.header_opts]) do
+           Locate.body(raw, spec, [misses: :unlimited, columns: ctx.columns] ++ ctx.header_opts) do
       present = Map.keys(positions) -- except
-      counts = Enum.reduce(present, counts, &Map.put_new(&2, &1, %__MODULE__{}))
+
+      counts =
+        Enum.reduce(present, counts, &Map.put_new(&2, &1, %__MODULE__{}))
 
       {:ok, Enum.reduce(steps, {rows, counts}, &add_row(&1, &2, present, path, ctx))}
     end
   end
 
-  @spec finish(counted(), :lines | :files) :: {non_neg_integer(), %{String.t() => Column.t()}}
+  @spec finish(counted(), :lines | :files, Ctx.t()) ::
+          {non_neg_integer(), %{String.t() => Column.t()}}
 
-  def finish({rows, counts}, place),
-    do: {rows, Map.new(counts, fn {name, count} -> {name, column(count, place)} end)}
+  def finish({rows, counts}, place, %Ctx{} = ctx),
+    do: {rows, Map.new(counts, fn {name, count} -> {name, column(count, place, ctx)} end)}
 
   defp add_row({_kind, row, %Report.Line{row: line}}, {rows, counts}, present, path, ctx) do
     {rows + 1,
@@ -119,18 +149,33 @@ defmodule Refract.Profile.Count do
   defp seen_again({order, count, locations}, _location, _max_lines),
     do: {order, count + 1, locations}
 
-  defp column(%__MODULE__{capped: true, blanks: blanks}, _place),
+  defp column(%__MODULE__{capped: true, blanks: blanks}, _place, _ctx),
     do: %Column{blanks: blanks, distinct: nil, capped: true}
 
-  defp column(%__MODULE__{blanks: blanks, values: values}, place) do
-    {fuzzy, clusters} =
-      values
-      |> Map.new(fn {cell, {order, count, locations}} ->
+  defp column(%__MODULE__{blanks: blanks, values: values}, place, %Ctx{} = ctx) do
+    variants =
+      Map.new(values, fn {cell, {order, count, locations}} ->
         {cell, {order, variant(cell, count, Enum.reverse(locations), place)}}
       end)
-      |> Group.clusters()
 
-    %Column{blanks: blanks, distinct: map_size(values), fuzzy: fuzzy, clusters: clusters}
+    {fuzzy, clusters} = Group.clusters(variants, ctx.fuzzy)
+
+    %Column{
+      blanks: blanks,
+      distinct: map_size(values),
+      fuzzy: fuzzy,
+      clusters: clusters,
+      values: listed(variants, ctx.values)
+    }
+  end
+
+  defp listed(_variants, false), do: nil
+
+  defp listed(variants, true) do
+    variants
+    |> Map.values()
+    |> Enum.sort_by(fn {order, %Variant{count: count}} -> {-count, order} end)
+    |> Enum.map(fn {_order, variant} -> variant end)
   end
 
   defp variant(cell, count, locations, :lines),
@@ -148,22 +193,40 @@ defmodule Refract.Profile.Count do
     }
   end
 
-  defp validate_except(except, columns) when is_list(except),
+  @spec validate_fuzzy!(term()) :: :ok
+
+  def validate_fuzzy!(false), do: :ok
+  def validate_fuzzy!(fuzzy) when is_number(fuzzy) and fuzzy >= 0 and fuzzy <= 1, do: :ok
+
+  def validate_fuzzy!(fuzzy) do
+    raise ArgumentError, "fuzzy must be a number from 0 to 1 or false, got: #{inspect(fuzzy)}"
+  end
+
+  defp validate_columns(columns) when columns in [:shape, :all], do: :ok
+
+  defp validate_columns(columns) do
+    raise ArgumentError, "columns must be :shape or :all, got: #{inspect(columns)}"
+  end
+
+  defp validate_except(except, columns, :shape) when is_list(except),
     do: except |> Enum.reject(&is_map_key(columns, &1)) |> validate_known()
 
-  defp validate_except(except, _columns) do
+  defp validate_except(except, _columns, :all) when is_list(except),
+    do: except |> Enum.reject(&is_binary/1) |> validate_names()
+
+  defp validate_except(except, _columns, _mode) do
     raise ArgumentError, "except must be a list of shape columns, got: #{inspect(except)}"
+  end
+
+  defp validate_names([]), do: :ok
+
+  defp validate_names(bad) do
+    raise ArgumentError, "except must be a list of column names, got: #{inspect(bad)}"
   end
 
   defp validate_known([]), do: :ok
 
   defp validate_known(unknown) do
     raise ArgumentError, "except must name shape columns, got: #{inspect(unknown)}"
-  end
-
-  defp validate_limit(limit, _name) when is_integer(limit) and limit > 0, do: :ok
-
-  defp validate_limit(limit, name) do
-    raise ArgumentError, "#{name} must be a positive integer, got: #{inspect(limit)}"
   end
 end

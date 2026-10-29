@@ -20,16 +20,20 @@ defmodule Refract.Table.Body do
           misses: :limited | :unlimited
         }
 
-  @spec run(Enumerable.t(), Spec.t(), Header.positions(), boolean(), keyword()) :: Enumerable.t()
+  @spec run(Enumerable.t(), pos_integer(), Spec.t(), Header.positions(), boolean(), keyword()) ::
+          Enumerable.t()
 
-  def run(numbered_lines, %Spec{} = spec, positions, values, opts \\ []) do
+  def run(raw, header_row, %Spec{} = spec, positions, values, opts \\ []) do
     opts = Keyword.validate!(opts, misses: :limited)
 
     misses = Keyword.fetch!(opts, :misses)
 
     body = %__MODULE__{spec: spec, positions: positions, values: values, misses: misses}
 
-    Stream.transform(numbered_lines, 0, &step(&1, &2, body))
+    raw
+    |> Stream.with_index(1)
+    |> Stream.drop(header_row)
+    |> Stream.transform(0, &step(&1, &2, body))
   end
 
   defp step(_numbered_line, :ended, _body), do: {:halt, :ended}

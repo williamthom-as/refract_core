@@ -121,6 +121,52 @@ defmodule Refract.Profile.ReportTest do
     assert result |> Profile.rows() |> variants() == ["12", "12"]
   end
 
+  test "values rows list every value of every column" do
+    {:ok, result} = CSV.profile(source(["north", "North", "north"]), ledger(), values: true)
+
+    assert result |> Profile.rows(:values) |> Enum.filter(&(&1["column"] == "cost_centre")) == [
+             %{
+               "shape" => "ledger",
+               "version" => 1,
+               "column" => "cost_centre",
+               "value" => "north",
+               "count" => 2,
+               "file" => nil,
+               "lines" => "2, 4"
+             },
+             %{
+               "shape" => "ledger",
+               "version" => 1,
+               "column" => "cost_centre",
+               "value" => "North",
+               "count" => 1,
+               "file" => nil,
+               "lines" => "3"
+             }
+           ]
+  end
+
+  test "values rows quote invisible differences and write through the csv writer" do
+    {:ok, result} = CSV.profile(source(["north", "north "]), ledger(), values: true)
+
+    assert result
+           |> Profile.rows(:values)
+           |> Enum.filter(&(&1["column"] == "cost_centre"))
+           |> CSV.encode(header: Profile.header(:values))
+           |> Enum.join() ==
+             """
+             shape,version,column,value,count,file,lines
+             ledger,1,cost_centre,north,1,,2
+             ledger,1,cost_centre,\"""north \""",1,,3
+             """
+  end
+
+  test "no values rows unless values were asked for" do
+    {:ok, result} = CSV.profile(source(["north", "North"]), ledger())
+
+    assert Profile.rows(result, :values) == []
+  end
+
   test "columns without clusters and capped columns add no rows" do
     assert rows(["a", "b", "c"]) == []
 

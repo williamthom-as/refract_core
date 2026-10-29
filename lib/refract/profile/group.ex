@@ -9,14 +9,14 @@ defmodule Refract.Profile.Group do
 
   @type counted :: %{Refract.cell() => {non_neg_integer(), Variant.t()}}
 
-  @spec clusters(counted()) :: {:done | :skipped, [Cluster.t()]}
+  @spec clusters(counted(), number() | false) :: {:done | :skipped | :off, [Cluster.t()]}
 
-  def clusters(values) do
+  def clusters(values, threshold) do
     {fuzzy, joined} =
       values
       |> Map.values()
       |> Enum.group_by(fn {_order, %Variant{value: value}} -> normalised(value) end)
-      |> join_fuzzy()
+      |> join_fuzzy(threshold)
 
     {fuzzy,
      joined
@@ -25,20 +25,25 @@ defmodule Refract.Profile.Group do
      |> Enum.map(&cluster/1)}
   end
 
-  defp join_fuzzy(groups) when map_size(groups) > 500,
-    do: {:skipped, Enum.map(groups, fn {key, members} -> {key, members, :normalised} end)}
+  defp join_fuzzy(groups, false), do: {:off, normalised_only(groups)}
 
-  defp join_fuzzy(groups) do
+  defp join_fuzzy(groups, _threshold) when map_size(groups) > 500,
+    do: {:skipped, normalised_only(groups)}
+
+  defp join_fuzzy(groups, threshold) do
     {:done,
      groups
      |> Enum.sort_by(fn {_key, members} -> {-total(members), first_seen(members)} end)
-     |> Enum.reduce([], &join/2)
+     |> Enum.reduce([], &join(&1, &2, threshold))
      |> Enum.reverse()}
   end
 
-  defp join({key, members}, anchors) do
+  defp normalised_only(groups),
+    do: Enum.map(groups, fn {key, members} -> {key, members, :normalised} end)
+
+  defp join({key, members}, anchors, threshold) do
     anchors
-    |> Enum.find_index(fn {anchor, _members, _via} -> fuzzy?(anchor, key) end)
+    |> Enum.find_index(fn {anchor, _members, _via} -> fuzzy?(anchor, key, threshold) end)
     |> join_at(key, members, anchors)
   end
 
@@ -50,8 +55,10 @@ defmodule Refract.Profile.Group do
     end)
   end
 
-  defp fuzzy?({anchor, digits}, {key, digits}), do: String.jaro_distance(anchor, key) >= 0.94
-  defp fuzzy?(_anchor, _key), do: false
+  defp fuzzy?({anchor, digits}, {key, digits}, threshold),
+    do: String.jaro_distance(anchor, key) >= threshold
+
+  defp fuzzy?(_anchor, _key, _threshold), do: false
 
   defp total(ranked),
     do: ranked |> Enum.map(fn {_order, %Variant{count: count}} -> count end) |> Enum.sum()

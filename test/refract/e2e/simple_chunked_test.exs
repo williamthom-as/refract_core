@@ -22,8 +22,7 @@ defmodule Refract.E2E.SimpleChunkedTest do
                "test_column",
                &Gen.digits(&1, length: 12, domain: :test, keyring: @keyring)
              )
-             |> CSV.write_chunks(dir,
-               prefix: "default",
+             |> CSV.write_chunks(Path.join(dir, "default.csv"),
                rows_per_file: 2,
                header: ["test_column", "test_column2"]
              )

@@ -14,7 +14,7 @@ defmodule Refract.Grid.Lookup do
 
     case area(rows, start, finish) do
       [] -> []
-      [header_row | data] -> to_rows(Header.normalise(header_row), data)
+      [header_row | data] -> to_rows(Header.names(header_row), data)
     end
   end
 
@@ -62,8 +62,8 @@ defmodule Refract.Grid.Lookup do
     label = Keyword.fetch!(opts, :label)
     take = Keyword.fetch!(opts, :take)
 
-    validate_label(label)
-    validate_take(take)
+    validate_label!(label)
+    validate_take!(take)
 
     rows
     |> find_label(normalise(label))
@@ -80,7 +80,7 @@ defmodule Refract.Grid.Lookup do
     after_label = Keyword.fetch!(opts, :after)
     until = Keyword.fetch!(opts, :until)
 
-    validate_label(after_label)
+    validate_label!(after_label)
     validate_until(until)
 
     case find_label(rows, normalise(after_label)) do
@@ -175,15 +175,19 @@ defmodule Refract.Grid.Lookup do
         "invalid cell ref #{inspect(ref)}, expected a column and row like \"B4\""
       )
 
-  defp validate_label(label) when is_binary(label) or is_struct(label, Regex), do: :ok
+  @spec validate_label!(term()) :: :ok
 
-  defp validate_label(label) do
+  def validate_label!(label) when is_binary(label) or is_struct(label, Regex), do: :ok
+
+  def validate_label!(label) do
     raise ArgumentError, "label must be a string or regex, got: #{inspect(label)}"
   end
 
-  defp validate_take(take) when take in [:right, :below], do: :ok
+  @spec validate_take!(term()) :: :ok
 
-  defp validate_take(take) do
+  def validate_take!(take) when take in [:right, :below], do: :ok
+
+  def validate_take!(take) do
     raise ArgumentError, "take must be :right or :below, got: #{inspect(take)}"
   end
 

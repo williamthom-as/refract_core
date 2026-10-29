@@ -53,9 +53,18 @@ defmodule Refract.Test.WriterCase do
         test "write_chunks numbers files with the writers extension", %{tmp_dir: dir} do
           rows = for i <- 1..3, do: %{"id" => "#{i}"}
 
-          assert {:ok, paths} = @writer.write_chunks(rows, dir, prefix: "part", rows_per_file: 2)
+          assert {:ok, paths} =
+                   @writer.write_chunks(rows, Path.join(dir, "part"), rows_per_file: 2)
+
           assert paths == [path(dir, "part_1"), path(dir, "part_2")]
           assert read(path(dir, "part_2")) == [["id"], ["3"]]
+        end
+
+        test "write_chunks numbers the files a path names", %{tmp_dir: dir} do
+          rows = for i <- 1..3, do: %{"id" => "#{i}"}
+
+          assert {:ok, paths} = @writer.write_chunks(rows, path(dir, "part"), rows_per_file: 2)
+          assert paths == [path(dir, "part_1"), path(dir, "part_2")]
         end
 
         test "a stream that fails part way leaves nothing behind", %{tmp_dir: dir} do

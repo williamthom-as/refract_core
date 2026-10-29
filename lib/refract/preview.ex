@@ -6,6 +6,8 @@ defmodule Refract.Preview do
       Refract.Preview.print(rows, limit: 5, title: "bills")
   """
 
+  alias Refract.ArgValidator
+
   @max_cell_width 30
 
   @type print_opt ::
@@ -19,7 +21,7 @@ defmodule Refract.Preview do
     opts = Keyword.validate!(opts, [:title, :header, limit: 10])
     limit = Keyword.fetch!(opts, :limit)
 
-    validate_limit(limit)
+    ArgValidator.validate_positive_integer!(limit, :limit)
 
     candidate_rows = Enum.take(rows, limit + 1)
     selected_rows = Enum.take(candidate_rows, limit)
@@ -33,12 +35,6 @@ defmodule Refract.Preview do
     end
 
     :ok
-  end
-
-  defp validate_limit(limit) when is_integer(limit) and limit > 0, do: :ok
-
-  defp validate_limit(limit) do
-    raise ArgumentError, "limit must be a positive integer, got: #{inspect(limit)}"
   end
 
   defp print_table([], _header), do: IO.puts("no rows")

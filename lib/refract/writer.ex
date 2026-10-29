@@ -6,17 +6,16 @@ defmodule Refract.Writer do
 
   note: you can check/verify a custom writer with `Refract.Test.WriterCase`
 
-      {:ok, paths} = Refract.CSV.write_chunks(rows, "out", prefix: "bills", rows_per_file: 10_000)
+      {:ok, paths} = Refract.CSV.write_chunks(rows, "out/bills.csv", rows_per_file: 10_000)
   """
+
+  alias Refract.ArgValidator
 
   @callback encode(rows :: Enumerable.t(), opts :: keyword()) :: Enumerable.t()
 
   @callback extension() :: String.t()
 
-  @type write_chunks_opt ::
-          {:prefix, String.t()}
-          | {:rows_per_file, pos_integer()}
-          | {atom(), term()}
+  @type write_chunks_opt :: {:rows_per_file, pos_integer()} | {atom(), term()}
 
   defmacro __using__(_opts) do
     quote do
@@ -93,22 +92,17 @@ defmodule Refract.Writer do
           {:ok, [Path.t()]} | {:error, File.posix()}
 
   def write_chunks(writer, rows, path, opts \\ []) do
-    {chunk_opts, write_opts} = Keyword.split(opts, [:prefix, :rows_per_file])
+    {chunk_opts, write_opts} = Keyword.split(opts, [:rows_per_file])
 
-    prefix = Keyword.fetch!(chunk_opts, :prefix)
     rows_per_file = Keyword.fetch!(chunk_opts, :rows_per_file)
 
-    validate_rows_per_file(rows_per_file)
+    ArgValidator.validate_positive_integer!(rows_per_file, :rows_per_file)
 
     rows
     |> Stream.chunk_every(rows_per_file)
     |> Stream.with_index(1)
     |> Enum.reduce_while({:ok, []}, fn {chunk, index}, {:ok, paths} ->
-      file_path =
-        Path.join(
-          path,
-          generate_file_path(prefix, index, writer.extension())
-        )
+      file_path = numbered(path, index, writer.extension())
 
       case write(writer, chunk, file_path, write_opts) do
         :ok -> {:cont, {:ok, [file_path | paths]}}
@@ -121,13 +115,9 @@ defmodule Refract.Writer do
     end
   end
 
-  defp generate_file_path(prefix, index, extension) do
-    "#{prefix}_#{index}.#{extension}"
-  end
+  defp numbered(path, index, extension),
+    do: numbered(Path.rootname(path), Path.extname(path), index, extension)
 
-  defp validate_rows_per_file(rows_per_file) when is_integer(rows_per_file) and rows_per_file > 0,
-    do: :ok
-
-  defp validate_rows_per_file(val),
-    do: raise(ArgumentError, "rows_per_file must be a positive integer, got: #{inspect(val)}")
+  defp numbered(root, "", index, extension), do: "#{root}_#{index}.#{extension}"
+  defp numbered(root, own_extension, index, _extension), do: "#{root}_#{index}#{own_extension}"
 end

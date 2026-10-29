@@ -17,6 +17,7 @@ defmodule Refract.Rows do
 
   import Refract.Utils, only: [truthy?: 1]
 
+  alias Refract.ArgValidator
   alias Refract.String.Utils
 
   alias Refract.Rows.Ctx
@@ -35,7 +36,7 @@ defmodule Refract.Rows do
     columns = List.wrap(column)
 
     validate_fun(fun)
-    validate_skip_blank(skip_blank)
+    ArgValidator.validate_boolean!(skip_blank, :skip_blank)
 
     Stream.map(rows, fn row ->
       Enum.reduce(columns, row, fn col, acc ->
@@ -251,8 +252,8 @@ defmodule Refract.Rows do
     chunk = Keyword.fetch!(opts, :chunk)
     max_concurrency = Keyword.fetch!(opts, :max_concurrency)
 
-    validate_positive(chunk, :chunk)
-    validate_positive(max_concurrency, :max_concurrency)
+    ArgValidator.validate_positive_integer!(chunk, :chunk)
+    ArgValidator.validate_positive_integer!(max_concurrency, :max_concurrency)
 
     rows
     |> Stream.chunk_every(chunk)
@@ -329,12 +330,6 @@ defmodule Refract.Rows do
   defp validate_fun(fun),
     do: raise(ArgumentError, "function #{inspect(fun)} must accept 1 or 2 arguments")
 
-  defp validate_skip_blank(skip_blank) when is_boolean(skip_blank), do: :ok
-
-  defp validate_skip_blank(skip_blank) do
-    raise ArgumentError, "skip_blank must be true or false, got: #{inspect(skip_blank)}"
-  end
-
   defp run_chunk(chunk, fun) do
     {:ok, chunk |> fun.() |> Enum.to_list()}
   rescue
@@ -343,10 +338,4 @@ defmodule Refract.Rows do
 
   defp chunk_rows({:ok, {:ok, rows}}), do: rows
   defp chunk_rows({:ok, {:error, exception, stacktrace}}), do: reraise(exception, stacktrace)
-
-  defp validate_positive(value, _name) when is_integer(value) and value > 0, do: :ok
-
-  defp validate_positive(value, name) do
-    raise ArgumentError, "#{name} must be a positive integer, got: #{inspect(value)}"
-  end
 end
