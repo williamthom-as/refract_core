@@ -427,38 +427,6 @@ defmodule Refract.RowsTest do
     end
   end
 
-  describe "reject_blank/2" do
-    @padded [
-      %{"id" => "1", "name" => "alice"},
-      %{"id" => "", "name" => "  "},
-      %{"id" => "2", "name" => ""},
-      %{"id" => nil, "name" => nil}
-    ]
-
-    test "drops rows that are blank in every column" do
-      assert @padded |> Rows.reject_blank() |> Enum.map(& &1["id"]) == ["1", "2"]
-    end
-
-    test "drops rows that are blank in the named column" do
-      assert @padded |> Rows.reject_blank("name") |> Enum.map(& &1["id"]) == ["1"]
-    end
-
-    test "drops rows that are blank in all of several columns" do
-      assert @padded |> Rows.reject_blank(["id", "name"]) |> Enum.map(& &1["id"]) == ["1", "2"]
-    end
-
-    test "unknown column raises" do
-      assert_raise KeyError, fn -> @padded |> Rows.reject_blank("nmae") |> Enum.to_list() end
-    end
-
-    test "is lazy" do
-      rows = Stream.map(@padded, fn _ -> raise "read too early" end)
-
-      _stream = Rows.reject_blank(rows)
-      _stream = Rows.reject_blank(rows, "id")
-    end
-  end
-
   describe "from/2" do
     @marked [
       %{"id" => "junk"},
@@ -556,7 +524,7 @@ defmodule Refract.RowsTest do
 
     test "blanks can be rejected first" do
       assert @traits
-             |> Rows.reject_blank("trait")
+             |> Stream.reject(&Rows.blank?(&1, "trait"))
              |> Rows.distinct("trait")
              |> Enum.map(& &1["trait"]) == ["weight", "teeth"]
     end

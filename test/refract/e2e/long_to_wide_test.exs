@@ -17,7 +17,7 @@ defmodule Refract.E2E.LongToWideTest do
     {:ok, rows} = CSV.stream(@input)
 
     rows
-    |> Rows.reject_blank("Reading Type")
+    |> Stream.reject(&Rows.blank?(&1, "Reading Type"))
     |> Rows.distinct("Reading Type")
     |> Stream.map(&Clean.slug(&1["Reading Type"]))
     |> Enum.sort()
@@ -27,7 +27,7 @@ defmodule Refract.E2E.LongToWideTest do
     {:ok, rows} = CSV.stream(@input)
 
     rows
-    |> Rows.reject_blank()
+    |> Stream.reject(&Rows.blank?/1)
     |> Rows.fill_down("Asset Tag")
     |> Rows.update("Taken At", &Parse.datetime!(&1, formats: [:dmy]))
     |> Rows.update("Reading Type", &Clean.slug/1)
@@ -36,7 +36,7 @@ defmodule Refract.E2E.LongToWideTest do
 
   defp widen(lines, types) do
     lines = Enum.sort_by(lines, & &1["taken_at"], NaiveDateTime)
-    present = Rows.reject_blank(lines, "reading_value")
+    present = Enum.reject(lines, &Rows.blank?(&1, "reading_value"))
 
     latest =
       Map.new(types, fn type ->

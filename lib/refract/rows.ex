@@ -12,7 +12,7 @@ defmodule Refract.Rows do
       |> Refract.Rows.rename(%{"col_0" => "date"})
       |> Refract.Rows.update("cost", &Refract.Parse.number!/1)
       |> Refract.Rows.put("year", &(&1["date"] |> String.split(" ") |> List.last()))
-      |> Refract.Rows.reject_blank()
+      |> Stream.reject(&Refract.Rows.blank?/1)
   """
 
   import Refract.Utils, only: [truthy?: 1]
@@ -153,14 +153,6 @@ defmodule Refract.Rows do
     |> List.wrap()
     |> Enum.all?(fn col -> row |> Map.fetch!(col) |> Utils.blank?() end)
   end
-
-  @spec reject_blank(Enumerable.t()) :: Enumerable.t()
-
-  def reject_blank(rows), do: Stream.reject(rows, &blank?/1)
-
-  @spec reject_blank(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
-
-  def reject_blank(rows, column), do: Stream.reject(rows, &blank?(&1, column))
 
   @spec distinct(Enumerable.t(), String.t()) :: Enumerable.t()
 

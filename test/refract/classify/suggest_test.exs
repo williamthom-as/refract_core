@@ -64,6 +64,14 @@ defmodule Refract.Classify.SuggestTest do
       assert %{cell: "USAGE-DATE", index: 1, via: :normalised} = report.columns["usage_date"]
     end
 
+    test "accents do not stop a name being normalised" do
+      columns = %{"region" => ["region"], "societe" => ["societe"]}
+      report = Classify.suggest([["Région", "Société"]], shape(columns))
+
+      assert %{passed: true, via: :normalised} = report.columns["region"]
+      assert %{passed: true, via: :normalised} = report.columns["societe"]
+    end
+
     test "a header holding every word of a name or alias is suggested by its words" do
       report = suggest([["Total Cost", "Client Full Name"]])
 
