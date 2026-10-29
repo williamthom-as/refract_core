@@ -683,7 +683,7 @@ Refract.Rows.pivot(cleaned, by: "account", key: "month", value: "cost", columns:
 | 123456789012 | 1.50 | 2.00 |
 | 123456789013 | 0.75 | |
 
-Also `put`, `copy`, `rename`, `drop`, `take`, `distinct`, `blank?`, `from` / `until`, `group`, and `parallel` to run a pipeline across cores with order kept.
+Also `put`, `copy`, `rename`, `drop`, `take`, `distinct`, `reject_blank`, `from` / `until`, `group`, and `parallel` to run a pipeline across cores with order kept.
 
 ### Parse and clean
 
