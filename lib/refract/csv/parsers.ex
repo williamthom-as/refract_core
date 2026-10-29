@@ -4,7 +4,7 @@ defmodule Refract.CSV.Parsers do
   NimbleCSV.define(Refract.CSV.Parsers.Comma,
     separator: ",",
     escape: "\"",
-    reserved: [",", "\"", "\n", "\r"]
+    reserved: [",", "\"", "\n", "\r", "\t"]
   )
 
   NimbleCSV.define(Refract.CSV.Parsers.Tab,
@@ -16,13 +16,13 @@ defmodule Refract.CSV.Parsers do
   NimbleCSV.define(Refract.CSV.Parsers.Semicolon,
     separator: ";",
     escape: "\"",
-    reserved: [";", "\"", "\n", "\r"]
+    reserved: [";", "\"", "\n", "\r", "\t"]
   )
 
   NimbleCSV.define(Refract.CSV.Parsers.Pipe,
     separator: "|",
     escape: "\"",
-    reserved: ["|", "\"", "\n", "\r"]
+    reserved: ["|", "\"", "\n", "\r", "\t"]
   )
 
   @spec for_separator(String.t()) :: {:ok, module()} | {:error, term()}

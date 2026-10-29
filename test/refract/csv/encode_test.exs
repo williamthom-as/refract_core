@@ -83,10 +83,30 @@ defmodule Refract.CSV.EncodeTest do
               rows <-
                 list_of(fixed_map(Map.new(header, &{&1, string(:printable)})), max_length: 20)
             ) do
-        csv = encode!(rows, header: header)
+        csv = encode!(rows, header: header, escape_formulas: false)
 
         assert {:ok, parsed} = Refract.CSV.stream({:string, csv})
         assert Enum.to_list(parsed) == rows
+      end
+    end
+
+    property "by default a cell comes back as it was, or with a tab when it starts a formula" do
+      header = ["a", "b", "c"]
+      starts = ["=", "+", "-", "@", "\r", "\n", "\uFF1D", "\uFF0B", "\uFF0D", "\uFF20"]
+
+      check all(
+              rows <-
+                list_of(fixed_map(Map.new(header, &{&1, string(:printable)})), max_length: 20)
+            ) do
+        expected =
+          Enum.map(rows, fn row ->
+            Map.new(row, fn {column, cell} ->
+              {column, if(String.starts_with?(cell, starts), do: "\t" <> cell, else: cell)}
+            end)
+          end)
+
+        assert {:ok, parsed} = Refract.CSV.stream({:string, encode!(rows, header: header)})
+        assert Enum.to_list(parsed) == expected
       end
     end
   end

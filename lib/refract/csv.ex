@@ -1,11 +1,20 @@
 defmodule Refract.CSV do
   @moduledoc """
-  csv reader and writer impls, providing `stream`, `locate`, `load`, `write`, `write_chunks`
+  CSV reader and writer impls, providing `stream`, `locate`, `load`, `write`, `write_chunks`
   detects the separator (comma, semicolon, tab, pipe) unless given via `separator:`
   will strip utf8 bom by default, and fail fast on a missing file.
+
   `encoding: :auto` (default) keeps each line that is valid utf8 and reads any other as
   windows-1252; `:utf8`, `:latin1` and `:windows_1252` force one. a utf16 file is an error.
   `bom: true` writes a utf8 bom first, so excel reads the file as utf8.
+
+  `escape_formulas: true` (default) writing mode escapes formulas by default following owasp
+  CSV injection best practise rules
+  - a text cell starting with `=`, `+`,`-`, `@`, carriage return, line feed or their full width
+  form gets escaped via a tab first, inside a quoted field.
+  for example, the tab stays in the data (`-12.50` is written `"\t-12.50"`). pass
+  `escape_formulas: false` when a program (not a person/human read) reads the file.
+
   lines end at `\r\n` or `\n`, mixed freely. a path or string whose lines end only in `\r` (old
   mac exports) is an error. a `{:stream, chunks}` source is never read ahead, so neither check
   applies to it.
@@ -57,12 +66,16 @@ defmodule Refract.CSV do
 
   @impl true
   def encode(rows, opts) do
-    opts = Keyword.validate!(opts, header: nil, separator: ",", bom: false)
+    opts = Keyword.validate!(opts, header: nil, separator: ",", bom: false, escape_formulas: true)
+    escape_formulas = Keyword.fetch!(opts, :escape_formulas)
+
+    validate_escape_formulas(escape_formulas)
 
     parser = opts |> Keyword.fetch!(:separator) |> Parsers.for_separator() |> dump_parser!()
 
     rows
     |> Writer.cells(Keyword.fetch!(opts, :header))
+    |> escape_formulas(escape_formulas)
     |> parser.dump_to_stream()
     |> with_bom(Keyword.fetch!(opts, :bom))
   end
@@ -75,6 +88,38 @@ defmodule Refract.CSV do
   defp supported(%{utf16: true}, :auto), do: {:error, {:unsupported_encoding, :utf16}}
   defp supported(%{line_endings: :cr}, _encoding), do: {:error, {:unsupported_line_endings, :cr}}
   defp supported(_format, _encoding), do: :ok
+
+  defp validate_escape_formulas(escape_formulas) when is_boolean(escape_formulas), do: :ok
+
+  defp validate_escape_formulas(escape_formulas) do
+    raise ArgumentError, "escape_formulas must be true or false, got: #{inspect(escape_formulas)}"
+  end
+
+  defp escape_formulas(lines, false), do: lines
+
+  defp escape_formulas(lines, true),
+    do: Stream.map(lines, &Enum.map(&1, fn cell -> escaped(cell) end))
+
+  defp escaped(cell) when is_binary(cell), do: cell |> formula?() |> escaped(cell)
+  defp escaped(cell), do: cell
+
+  defp escaped(true, cell), do: "\t" <> cell
+  defp escaped(false, cell), do: cell
+
+  defp formula?(cell),
+    do:
+      String.starts_with?(cell, [
+        "=",
+        "+",
+        "-",
+        "@",
+        "\r",
+        "\n",
+        "\uFF1D",
+        "\uFF0B",
+        "\uFF0D",
+        "\uFF20"
+      ])
 
   defp dump_parser!({:ok, parser}), do: parser
 

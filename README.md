@@ -70,6 +70,7 @@ Refract.CSV.facts("bills.csv")
 
 - **encodings** - `encoding: :auto` (default) keeps every line that is valid UTF-8 and reads any other as Windows-1252, so `Renée` and `€` from an old export arrive intact, even in a file mixing both; `:utf8`, `:latin1` and `:windows_1252` force one; a UTF-16 file is `{:error, {:unsupported_encoding, :utf16}}`
 - **writing for Excel** - `Refract.CSV.write(rows, path, bom: true)` starts the file with a UTF-8 BOM, so Excel shows `Renée`, not `RenÃ©e`
+- **escape formulas** - follows OWASP best practise for CSV injection protection. By default, a text cell starting with `=`, `+`, `-` or `@` is written with a tab first inside quotes, so a spreadsheet never runs it. the tab stays in the data (`-12.50` too), so you must use `escape_formulas: false` when a program reads the file, leave as `true` if human read. 
 
 ---
 
