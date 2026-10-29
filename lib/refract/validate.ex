@@ -24,10 +24,15 @@ defmodule Refract.Validate do
 
   @type tagged :: {:ok, Refract.row()} | {:invalid, Refract.row(), [Issue.t()]}
 
+  @doc "the options validate takes besides the header search with defaults"
+  @spec options() :: keyword()
+
+  def options, do: [values: false]
+
   @spec rows(Enumerable.t(), Shape.t() | module(), [opt()]) :: Enumerable.t(tagged())
 
   def rows(rows, shape, opts \\ []) do
-    opts = Keyword.validate!(opts, values: false)
+    opts = Keyword.validate!(opts, options())
     values = Keyword.fetch!(opts, :values)
 
     %Shape{validation: %Rules{columns: columns, rows: row_rules}} = Shape.resolve(shape)
@@ -67,9 +72,9 @@ defmodule Refract.Validate do
   end
 
   defp steps(raw, shape, opts) do
-    {header_opts, opts} = Keyword.split(opts, [:within, :header_row])
+    {header_opts, opts} = Keyword.split(opts, Keyword.keys(Locate.header_options()))
 
-    opts = Keyword.validate!(opts, values: false)
+    opts = Keyword.validate!(opts, options())
     values = Keyword.fetch!(opts, :values)
 
     %Shape{spec: spec, validation: %Rules{columns: columns, rows: row_rules}} =

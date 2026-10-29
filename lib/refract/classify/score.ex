@@ -28,18 +28,15 @@ defmodule Refract.Classify.Score do
           | {:pick, pick()}
           | {:name, String.t() | nil}
 
+  @spec options() :: keyword()
+
+  def options,
+    do: [within: 100, min_score: 0.5, margin: 0.1, values: false, pick: :best, name: nil]
+
   @spec validate_opts!(keyword()) :: keyword()
 
   def validate_opts!(opts) do
-    opts =
-      Keyword.validate!(opts,
-        within: 100,
-        min_score: 0.5,
-        margin: 0.1,
-        values: false,
-        pick: :best,
-        name: nil
-      )
+    opts = Keyword.validate!(opts, options())
 
     Locate.validate_within!(Keyword.fetch!(opts, :within))
     validate_fraction(Keyword.fetch!(opts, :min_score), :min_score)

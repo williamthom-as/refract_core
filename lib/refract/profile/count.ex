@@ -49,20 +49,25 @@ defmodule Refract.Profile.Count do
     end
   end
 
+  @spec options() :: keyword()
+
+  def options do
+    [
+      except: [],
+      max_distinct: 5000,
+      max_lines: 100,
+      values: false,
+      fuzzy: 0.94,
+      columns: :shape
+    ]
+  end
+
   @spec ctx!([opt()], %{String.t() => term()}) :: Ctx.t()
 
   def ctx!(opts, columns) do
-    {header_opts, opts} = Keyword.split(opts, [:within, :header_row])
+    {header_opts, opts} = Keyword.split(opts, Keyword.keys(Locate.header_options()))
 
-    opts =
-      Keyword.validate!(opts,
-        except: [],
-        max_distinct: 5000,
-        max_lines: 100,
-        values: false,
-        fuzzy: 0.94,
-        columns: :shape
-      )
+    opts = Keyword.validate!(opts, options())
 
     except = Keyword.fetch!(opts, :except)
     values = Keyword.fetch!(opts, :values)

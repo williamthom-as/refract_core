@@ -17,7 +17,7 @@ defmodule Refract.Classify.Suggest do
   @spec run(Enumerable.t(), Shape.t() | module(), [opt()]) :: Line.t()
 
   def run(raw, shape, opts) do
-    opts = Keyword.validate!(opts, within: 100, header_row: nil)
+    opts = Keyword.validate!(opts, Locate.header_options())
     within = Keyword.fetch!(opts, :within)
     header_row = Keyword.fetch!(opts, :header_row)
 

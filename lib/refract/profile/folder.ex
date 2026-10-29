@@ -14,8 +14,7 @@ defmodule Refract.Profile.Folder do
   @spec run(Path.t(), [Shape.t() | module()], [opt()]) :: {:ok, Folders.t()} | {:error, term()}
 
   def run(dir, shapes, opts) do
-    {profile_opts, folder_opts} =
-      Keyword.split(opts, [:except, :max_distinct, :max_lines, :values, :fuzzy, :columns])
+    {profile_opts, folder_opts} = Keyword.split(opts, Keyword.keys(Count.options()))
 
     resolved_shapes = Shape.resolve_all(shapes)
     {fuzzy, profile_opts} = shape_fuzzy(profile_opts)

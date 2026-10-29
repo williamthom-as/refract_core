@@ -18,10 +18,18 @@ defmodule Refract.Table.Locate do
     on_miss = Keyword.fetch!(opts, :on_miss)
 
     with {:ok, header_row, positions, steps} <-
-           body(raw, spec, Keyword.take(opts, [:within, :header_row])) do
+           body(raw, spec, Keyword.take(opts, Keyword.keys(header_options()))) do
       {:ok, table(steps, spec, header_row, positions, on_miss)}
     end
   end
+
+  @spec header_options() :: keyword()
+
+  def header_options, do: [within: 100, header_row: nil]
+
+  @spec options() :: keyword()
+
+  def options, do: [on_miss: :skip] ++ header_options()
 
   @spec header(Enumerable.t(), Spec.t(), keyword()) ::
           {:ok, pos_integer(), Header.positions()} | {:error, {:header_not_found, header_miss()}}
@@ -33,7 +41,7 @@ defmodule Refract.Table.Locate do
   end
 
   defp scan(raw, spec, opts) do
-    opts = Keyword.validate!(opts, within: 100, header_row: nil)
+    opts = Keyword.validate!(opts, header_options())
     within = Keyword.fetch!(opts, :within)
     header_row = Keyword.fetch!(opts, :header_row)
 
@@ -106,7 +114,7 @@ defmodule Refract.Table.Locate do
   @spec validate_opts!(keyword()) :: keyword()
 
   def validate_opts!(opts) do
-    opts = Keyword.validate!(opts, within: 100, on_miss: :skip, header_row: nil)
+    opts = Keyword.validate!(opts, options())
 
     validate_within!(Keyword.fetch!(opts, :within))
     validate_on_miss(Keyword.fetch!(opts, :on_miss))

@@ -13,14 +13,17 @@ defmodule Refract.Classify.Folder do
           | {:readers, [Reader.reader_entry()]}
           | {:max_concurrency, pos_integer()}
 
+  @spec options() :: keyword()
+
+  def options, do: [readers: [], max_concurrency: System.schedulers_online()]
+
   @spec run(Path.t(), [Shape.t() | module()], [opt()]) ::
           {:ok, Enumerable.t(item())} | {:error, term()}
 
   def run(dir, shapes, opts) do
-    {folder_opts, classify_opts} = Keyword.split(opts, [:readers, :max_concurrency])
+    {folder_opts, classify_opts} = Keyword.split(opts, Keyword.keys(options()))
 
-    folder_opts =
-      Keyword.validate!(folder_opts, readers: [], max_concurrency: System.schedulers_online())
+    folder_opts = Keyword.validate!(folder_opts, options())
 
     readers = Keyword.fetch!(folder_opts, :readers)
     max_concurrency = Keyword.fetch!(folder_opts, :max_concurrency)
