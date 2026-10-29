@@ -88,7 +88,7 @@ account,customer,cost
 ```
 
 ```elixir
-{:ok, paths} = Refract.CSV.write_chunks(rows, "out/numbers", prefix: "part", rows_per_file: 2)
+{:ok, paths} = Refract.CSV.write_chunks(rows, "out/numbers/part.csv", rows_per_file: 2)
 #=> {:ok, ["out/numbers/part_1.csv", "out/numbers/part_2.csv", "out/numbers/part_3.csv"]}
 ```
 

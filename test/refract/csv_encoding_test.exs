@@ -182,7 +182,7 @@ defmodule Refract.CSVEncodingTest do
       rows = for n <- 1..3, do: %{"n" => Integer.to_string(n)}
 
       assert {:ok, paths} =
-               CSV.write_chunks(rows, dir, prefix: "part", rows_per_file: 2, bom: true)
+               CSV.write_chunks(rows, Path.join(dir, "part.csv"), rows_per_file: 2, bom: true)
 
       assert length(paths) == 2
       assert Enum.all?(paths, &String.starts_with?(File.read!(&1), @bom <> "n\n"))

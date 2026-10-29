@@ -3,19 +3,19 @@ golden files
 
 all files from original cure project [github/williamthom-as/cure]
 
-dir                  milestone   cure spec                                   files
-empty_columns        m1          empty columns spec                          input expected
-bad_data             m1 or m2    bad data csv spec                           input expected
-total_arrivals       m3          total arrivals spec                         input expected
-invoice              m3          invoice csv spec                            input expected
-aws                  m4          aws csv spec                                input expected
-simple_chunked       m4          simple chunked csv spec                     input only structural
-simple_translations  m4          simple translations spec                    input only no assert in cure
-db_testing           post mvp    db testing spec                             colors dessert dessert two structural
-simple_joins         post mvp    simple joins spec and string contents spec  names ages expected
-complex_joins        post mvp    complex joins spec                          names ages expected
-multisheet_anon      post mvp    multisheet anon spec                        customers orders payments expected data expected lookup
-long_to_wide         refract     none, added 2026-10-06                      input expected
+dir                  cure spec                                   files
+empty_columns        empty columns spec                          input expected
+bad_data             bad data csv spec                           input expected
+total_arrivals       total arrivals spec                         input expected
+invoice              invoice csv spec                            input expected
+aws                  aws csv spec                                input expected
+simple_chunked       simple chunked csv spec                     input only structural
+simple_translations  simple translations spec                    input only no assert in cure
+db_testing           db testing spec                             colors dessert dessert two structural
+simple_joins         simple joins spec and string contents spec  names ages expected
+complex_joins        complex joins spec                          names ages expected
+multisheet_anon      multisheet anon spec                        customers orders payments expected data expected lookup
+long_to_wide         none, added 2026-10-06                      input expected
 
 input quirks
 ============
