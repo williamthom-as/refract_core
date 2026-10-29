@@ -2,9 +2,9 @@ defmodule Refract.Table.Locate do
   @moduledoc false
 
   alias Refract.ArgValidator
-  alias Refract.Reader
   alias Refract.Table
   alias Refract.Table.Body
+  alias Refract.Table.ColumnNames
   alias Refract.Table.Report
   alias Refract.Table.Spec
   alias Refract.Table.Spec.Header
@@ -73,7 +73,7 @@ defmodule Refract.Table.Locate do
 
   defp positions(%Report.Line{row: row, columns: columns, extra: extra} = report, raw, :all) do
     named = Header.positions(report)
-    names = raw |> Enum.at(row - 1) |> Reader.Header.names()
+    names = raw |> Enum.at(row - 1) |> ColumnNames.from()
 
     unnamed =
       Enum.map(extra, &elem(&1, 0)) ++

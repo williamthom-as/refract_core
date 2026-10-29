@@ -1,13 +1,13 @@
-defmodule Refract.Reader.Header do
+defmodule Refract.Table.ColumnNames do
   @moduledoc false
 
   import Refract.String.Utils, only: [header_cell: 1]
 
   @nil_col_prefix "col"
 
-  @spec names([Refract.cell()]) :: [String.t()]
+  @spec from([Refract.cell()]) :: [String.t()]
 
-  def names(header) do
+  def from(header) do
     normalised_header =
       Enum.map(header, &header_cell/1)
 
@@ -36,8 +36,8 @@ defmodule Refract.Reader.Header do
 
   @spec to_row([String.t()], [Refract.cell()]) :: Refract.row()
 
-  def to_row(header, raw_row) do
-    header
+  def to_row(names, raw_row) do
+    names
     |> Enum.zip(raw_row)
     |> Map.new()
   end

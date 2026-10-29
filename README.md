@@ -317,6 +317,7 @@ result.drift
 - **missing** - missing columns
 - **extra** - additional columns, with their index and name
 - **others** - a column more than one cell matched: `Cost` won (first in the shape), `Amount` lost
+- **ignore** - cells an export always has but the shape does not map: `header: [ignore: [~r/^cost centre \d+$/i, "notes"]]` keeps them out of `extra`
 
 ---
 
@@ -581,7 +582,7 @@ Each kind of file is one shape (one module), csv or xlsx alike. Classify the fol
 
 Enum.each(results, fn
   {path, {:ok, %{verdict: :match} = result}} ->
-    {:ok, {reader, opts}} = Refract.Reader.for_path(path, [Refract.XLSX])
+    {reader, opts} = result.reader
     {:ok, validation} = reader.validate(path, result.shape, opts)
 
     if validation.valid,

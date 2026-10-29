@@ -40,7 +40,6 @@ defmodule Refract.Reader do
 
   @optional_callbacks facts: 2, extensions: 0, indexing: 0
 
-  alias Refract.Reader.Header
   alias Refract.Reader.Lookup
 
   alias Refract.Classify
@@ -53,6 +52,7 @@ defmodule Refract.Reader do
   alias Refract.Shape
   alias Refract.Source
   alias Refract.Table
+  alias Refract.Table.ColumnNames
   alias Refract.Table.Locate
   alias Refract.Table.Spec
   alias Refract.Validate
@@ -121,10 +121,10 @@ defmodule Refract.Reader do
         {:ok,
          Stream.transform(content, nil, fn
            row, nil ->
-             {[], Header.names(row)}
+             {[], ColumnNames.from(row)}
 
            row, header ->
-             {[Header.to_row(header, row)], header}
+             {[ColumnNames.to_row(header, row)], header}
          end)}
 
       {:error, _reason} = error ->

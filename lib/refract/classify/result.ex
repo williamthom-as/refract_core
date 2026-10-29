@@ -1,7 +1,7 @@
 defmodule Refract.Classify.Result do
   @moduledoc """
   what classify decided for a file and why (verdict, reason, shape matched and every
-  candidate checked)
+  candidate checked), and the reader it was read with (`{module, opts}`, nil from `lines`)
   """
 
   alias Refract.Classify.Candidate

@@ -2,7 +2,7 @@ defmodule Refract.Grid.Lookup do
   @moduledoc false
 
   alias Refract.Grid
-  alias Refract.Reader.Header
+  alias Refract.Table.ColumnNames
 
   import Refract.String.Utils, only: [blank?: 1, normalise: 1]
 
@@ -14,7 +14,7 @@ defmodule Refract.Grid.Lookup do
 
     case area(rows, start, finish) do
       [] -> []
-      [header_row | data] -> to_rows(Header.names(header_row), data)
+      [header_row | data] -> to_rows(ColumnNames.from(header_row), data)
     end
   end
 
@@ -112,7 +112,7 @@ defmodule Refract.Grid.Lookup do
     end
   end
 
-  defp to_rows(header, data), do: Enum.map(data, &Header.to_row(header, &1))
+  defp to_rows(header, data), do: Enum.map(data, &ColumnNames.to_row(header, &1))
 
   defp fetch(rows, x, y) when y < tuple_size(rows) do
     row = elem(rows, y)
