@@ -9,9 +9,9 @@ defmodule Refract.Profile.Group do
 
   @type counted :: %{Refract.cell() => {non_neg_integer(), Variant.t()}}
 
-  @spec clusters(counted()) :: {:done | :skipped, [Cluster.t()]}
+  @spec clusters(counted(), :keep | :drop) :: {:done | :skipped, [Cluster.t()]}
 
-  def clusters(values) do
+  def clusters(values, singles \\ :keep) do
     {fuzzy, joined} =
       values
       |> Map.values()
@@ -20,7 +20,9 @@ defmodule Refract.Profile.Group do
 
     {fuzzy,
      joined
-     |> Enum.filter(fn {_key, members, _via} -> match?([_, _ | _], members) end)
+     |> Enum.filter(fn {_key, members, _via} ->
+       singles == :keep or match?([_, _ | _], members)
+     end)
      |> Enum.sort_by(fn {_key, members, _via} -> {-total(members), first_seen(members)} end)
      |> Enum.map(&cluster/1)}
   end

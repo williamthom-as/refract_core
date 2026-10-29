@@ -74,6 +74,10 @@ defmodule Refract.Profile.FolderTest do
                      %Variant{value: "Cost Center 1", count: 2, files: %{^jan => [2, 3]}},
                      %Variant{value: "costcenter1", count: 1, files: %{^feb => [3]}}
                    ]
+                 },
+                 %Cluster{
+                   most_common: "north",
+                   variants: [%Variant{count: 1, files: %{^feb => [2]}}]
                  }
                ]
              } = dir |> profile([ledger()]) |> cost_centre()
@@ -83,7 +87,7 @@ defmodule Refract.Profile.FolderTest do
       jan = ledger_file(dir, "1_jan.csv", ["north", "North"])
       feb = ledger_file(dir, "2_feb.csv", ["x", "north"])
 
-      assert %Column{clusters: [%Cluster{variants: [north, _north]}]} =
+      assert %Column{clusters: [%Cluster{variants: [north, _north]}, %Cluster{most_common: "x"}]} =
                dir |> profile([ledger()]) |> cost_centre()
 
       assert %Variant{value: "north", count: 2, files: %{^jan => [2], ^feb => [3]}} = north

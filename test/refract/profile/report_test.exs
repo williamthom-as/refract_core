@@ -24,7 +24,7 @@ defmodule Refract.Profile.ReportTest do
   end
 
   defp rows(cost_centres) do
-    {:ok, result} = CSV.profile(source(cost_centres), ledger())
+    {:ok, result} = CSV.profile(source(cost_centres), ledger(), singles: :drop)
     Profile.rows(result)
   end
 
@@ -63,7 +63,7 @@ defmodule Refract.Profile.ReportTest do
     File.write!(jan, "Account,Cost Centre\nA-1,north\nA-2,North\n")
     File.write!(feb, "Account,Cost Centre\nA-1,north\nA-2,north\n")
 
-    {:ok, folders} = Profile.folder(dir, [ledger()])
+    {:ok, folders} = Profile.folder(dir, [ledger()], singles: :drop)
 
     assert folders
            |> Profile.rows()
@@ -92,7 +92,7 @@ defmodule Refract.Profile.ReportTest do
 
     File.write!(Path.join(dir, "2_old.csv"), "Account,Cost Centre\nA-1,south\nA-1,South\n")
 
-    {:ok, folders} = Profile.folder(dir, [ledger(), v2])
+    {:ok, folders} = Profile.folder(dir, [ledger(), v2], singles: :drop)
 
     assert folders |> Profile.rows() |> Enum.map(&{&1["version"], &1["column"], &1["variant"]}) ==
              [
@@ -116,7 +116,9 @@ defmodule Refract.Profile.ReportTest do
 
   test "non text cells are written as text" do
     {:ok, result} =
-      Profile.lines([["Account", "Cost Centre"], ["A-1", 12], ["A-2", "12"]], ledger())
+      Profile.lines([["Account", "Cost Centre"], ["A-1", 12], ["A-2", "12"]], ledger(),
+        singles: :drop
+      )
 
     assert result |> Profile.rows() |> variants() == ["12", "12"]
   end
@@ -124,7 +126,9 @@ defmodule Refract.Profile.ReportTest do
   test "columns without clusters and capped columns add no rows" do
     assert rows(["a", "b", "c"]) == []
 
-    {:ok, result} = CSV.profile(source(["north", "North", "x"]), ledger(), max_distinct: 2)
+    {:ok, result} =
+      CSV.profile(source(["north", "North", "x"]), ledger(), max_distinct: 2, singles: :drop)
+
     assert Profile.rows(result) == []
   end
 

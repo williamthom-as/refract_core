@@ -14,7 +14,9 @@ defmodule Refract.Profile.Folder do
   @spec run(Path.t(), [Shape.t() | module()], [opt()]) :: {:ok, Folders.t()} | {:error, term()}
 
   def run(dir, shapes, opts) do
-    {profile_opts, folder_opts} = Keyword.split(opts, [:except, :max_distinct, :max_lines])
+    {profile_opts, folder_opts} =
+      Keyword.split(opts, [:except, :max_distinct, :max_lines, :singles, :columns])
+
     resolved_shapes = Shape.resolve_all(shapes)
 
     ctx =

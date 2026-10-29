@@ -25,6 +25,12 @@ defmodule Refract.Table.Locate do
           {:ok, pos_integer(), Header.positions()} | {:error, {:header_not_found, header_miss()}}
 
   def header(raw, %Spec{} = spec, opts) do
+    with {:ok, report} <- scan(raw, spec, opts) do
+      {:ok, report.row, Header.positions(report)}
+    end
+  end
+
+  defp scan(raw, spec, opts) do
     opts = Keyword.validate!(opts, within: 100, header_row: nil)
     within = Keyword.fetch!(opts, :within)
     header_row = Keyword.fetch!(opts, :header_row)
@@ -42,15 +48,39 @@ defmodule Refract.Table.Locate do
           | {:error, {:header_not_found, header_miss()}}
 
   def body(raw, %Spec{} = spec, opts) do
-    {body_opts, header_opts} = Keyword.split(opts, [:misses])
+    {body_opts, opts} = Keyword.split(opts, [:misses])
+    {columns, header_opts} = Keyword.pop(opts, :columns, :shape)
 
-    with {:ok, header_row, positions} <- header(raw, spec, header_opts) do
-      {:ok, header_row, positions,
+    with {:ok, report} <- scan(raw, spec, header_opts) do
+      positions = positions(report, columns)
+
+      {:ok, report.row, positions,
        raw
        |> Stream.with_index(1)
-       |> Stream.drop(header_row)
+       |> Stream.drop(report.row)
        |> Body.run(spec, positions, false, body_opts)}
     end
+  end
+
+  defp positions(report, :shape), do: Header.positions(report)
+
+  defp positions(%{columns: columns, extra: extra} = report, :all) do
+    others =
+      for {_name, %{others: others}} <- columns, {index, cell} <- others, do: {index, cell, 2}
+
+    (Enum.map(extra, fn {index, cell} -> {index, cell, 1} end) ++ others)
+    |> Enum.sort()
+    |> Enum.reduce(Header.positions(report), fn {index, cell, n}, positions ->
+      Map.put(positions, unique(String.trim(cell), positions, n), index)
+    end)
+  end
+
+  defp unique(name, taken, 1) when is_map_key(taken, name), do: unique(name, taken, 2)
+  defp unique(name, _taken, 1), do: name
+
+  defp unique(name, taken, n) do
+    candidate = "#{name} (#{n})"
+    if is_map_key(taken, candidate), do: unique(name, taken, n + 1), else: candidate
   end
 
   @spec absent(Spec.t(), Header.positions()) :: %{String.t() => nil}
@@ -136,7 +166,7 @@ defmodule Refract.Table.Locate do
   defp first_passing(scanned) do
     case Enum.find(scanned, & &1.passed) do
       nil -> {:error, best_miss(scanned)}
-      report -> {:ok, report.row, Header.positions(report)}
+      report -> {:ok, report}
     end
   end
 

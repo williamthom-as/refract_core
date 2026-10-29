@@ -636,7 +636,8 @@ Refract.CSV.write(Refract.Profile.rows(result), "ledger_oct_profile.csv", header
 - **via** - `:normalised` (equal once case, spacing, punctuation and accents are ignored), `:fuzzy` (a typo of the most common spelling, worth a look)
 - **digits** - values with different numbers never group: `Cost Center 1` and `Cost Center 2` stay apart
 - **invisible differences** - a trailing space or a non breaking space is shown quoted
-- **every column** - typed or not; `except: ["notes"]` leaves columns out
+- **every column** - typed or not; `except: ["notes"]` leaves columns out; `columns: :all` also profiles header cells the shape does not name (under their header text)
+- **singles** - show all values, including single results; `singles: :drop` keeps only values shown more than one way, for audit/fixing purposes.
 - **folder** - `Refract.Profile.folder("inbox", [ledger])` counts every file a shape matched as one, so `costcenter1` in one month and `Cost Center 1` in the next show up together, lines by file
 - **read only** - nothing is changed; lines are file lines
 

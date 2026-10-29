@@ -10,7 +10,8 @@ defmodule Refract.Reader do
   - `locate`: `within`, `on_miss`, `header_row`
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
   - `suggest`: `within`, `header_row`
-  - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`
+  - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`, `singles`,
+    `columns`
   - `validate`: `within`, `header_row`, `values` (and `max_bytes` when the shape has fields or
     document rules, as the whole file is read)
   - `load`, `fields`: `max_bytes`
@@ -174,7 +175,15 @@ defmodule Refract.Reader do
 
   def profile(reader, source, shape, opts) do
     {profile_opts, open_opts} =
-      Keyword.split(opts, [:within, :header_row, :except, :max_distinct, :max_lines])
+      Keyword.split(opts, [
+        :within,
+        :header_row,
+        :except,
+        :max_distinct,
+        :max_lines,
+        :singles,
+        :columns
+      ])
 
     read(reader, source, open_opts, &Profile.lines(&1, shape, profile_opts))
   end
