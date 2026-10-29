@@ -4,6 +4,8 @@ defmodule Refract.Reader do
   `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3`, `suggest/3`, `profile/3`,
   `validate/3`, `fields/3` and `load/2`.
   implement `extensions/0` to be picked by file extension in `Refract.Classify.folder/3`.
+  implement `indexing/0` returning `:records` when the reader makes its header row up (json): issue
+  and profile lines then count records from 1, not lines; default `:lines`.
 
   options go to `open/2`, bar the names refract keeps for itself, so a reader picks other names:
   - `stream`: `skip`
@@ -11,9 +13,9 @@ defmodule Refract.Reader do
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
   - `suggest`: `within`, `header_row`
   - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`, `values`,
-    `fuzzy`, `columns`
-  - `validate`: `within`, `header_row`, `values` (and `max_bytes` when the shape has fields or
-    document rules, as the whole file is read)
+    `fuzzy`, `columns`, `indexing` (set from the reader)
+  - `validate`: `within`, `header_row`, `values`, `indexing` (set from the reader; and `max_bytes`
+    when the shape has fields or document rules, as the whole file is read)
   - `load`, `fields`: `max_bytes`
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
@@ -34,7 +36,9 @@ defmodule Refract.Reader do
 
   @callback extensions() :: [String.t()]
 
-  @optional_callbacks facts: 2, extensions: 0
+  @callback indexing() :: :lines | :records
+
+  @optional_callbacks facts: 2, extensions: 0, indexing: 0
 
   alias Refract.Reader.Header
   alias Refract.Reader.Lookup
@@ -177,6 +181,8 @@ defmodule Refract.Reader do
     {profile_opts, open_opts} =
       Keyword.split(opts, Keyword.keys(Locate.header_options() ++ Count.options()))
 
+    profile_opts = Keyword.put_new(profile_opts, :indexing, indexing(reader))
+
     read(reader, source, open_opts, &Profile.lines(&1, shape, profile_opts))
   end
 
@@ -186,6 +192,8 @@ defmodule Refract.Reader do
   def validate(reader, source, shape, opts) do
     {validate_opts, read_opts} =
       Keyword.split(opts, Keyword.keys(Locate.header_options() ++ Validate.options()))
+
+    validate_opts = Keyword.put_new(validate_opts, :indexing, indexing(reader))
 
     shape
     |> Shape.resolve()
@@ -214,6 +222,16 @@ defmodule Refract.Reader do
   def fields(reader, source, shape, opts) do
     with {:ok, grid} <- load(reader, source, opts), do: {:ok, Grid.fields(grid, shape)}
   end
+
+  @spec indexing(module()) :: :lines | :records
+
+  def indexing(reader), do: reader |> exports_indexing?() |> indexing(reader)
+
+  defp indexing(true, reader), do: reader.indexing()
+  defp indexing(false, _reader), do: :lines
+
+  defp exports_indexing?(reader),
+    do: Code.ensure_loaded?(reader) and function_exported?(reader, :indexing, 0)
 
   @type reader_entry :: Lookup.reader_entry()
 

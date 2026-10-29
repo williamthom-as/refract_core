@@ -107,6 +107,61 @@ defmodule Refract.ReaderTest do
     end
   end
 
+  describe "indexing" do
+    alias Refract.Shape
+    alias Refract.Table
+
+    defmodule RecordsReader do
+      use Refract.Reader
+
+      @impl Refract.Reader
+      def open({:stream, rows}, _opts), do: {:ok, rows}
+
+      @impl Refract.Reader
+      def indexing, do: :records
+    end
+
+    @records [["account", "amount"], ["A-1", "1.00"], ["A-2", "n/a"], ["A-3", "north"]]
+
+    defp ledger do
+      Shape.new(
+        name: "ledger",
+        spec: Table.spec(header: [columns: %{"account" => ["account"], "amount" => ["amount"]}]),
+        validation: [columns: %{"amount" => [:number]}]
+      )
+    end
+
+    test "a reader that makes its header up counts records from 1" do
+      assert {:ok, %{issues: [%{line: 2}, %{line: 3}]}} =
+               RecordsReader.validate({:stream, @records}, ledger())
+    end
+
+    test "a reader counting lines keeps file lines" do
+      assert {:ok, %{issues: [%{line: 3}, %{line: 4}]}} =
+               StubReader.validate({:stream, @records}, ledger())
+    end
+
+    test "profile lines follow the reader too" do
+      rows = [["account", "amount"], ["A-1", "north"], ["A-2", "North"]]
+
+      assert {:ok, %{columns: %{"amount" => %{clusters: [%{variants: variants}]}}}} =
+               RecordsReader.profile({:stream, rows}, ledger())
+
+      assert Enum.map(variants, & &1.lines) == [[1], [2]]
+    end
+
+    test "a reader without indexing counts lines" do
+      assert Refract.Reader.indexing(StubReader) == :lines
+      assert Refract.Reader.indexing(RecordsReader) == :records
+    end
+
+    test "indexing is :lines or :records" do
+      assert_raise ArgumentError, ~r/indexing/, fn ->
+        StubReader.validate({:stream, @records}, ledger(), indexing: :rows)
+      end
+    end
+  end
+
   describe "options" do
     alias Refract.Classify.Score
     alias Refract.CSV

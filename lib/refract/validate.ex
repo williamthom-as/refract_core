@@ -27,12 +27,12 @@ defmodule Refract.Validate do
   @doc "the options validate takes besides the header search with defaults"
   @spec options() :: keyword()
 
-  def options, do: [values: false]
+  def options, do: [values: false, indexing: :lines]
 
   @spec rows(Enumerable.t(), Shape.t() | module(), [opt()]) :: Enumerable.t(tagged())
 
   def rows(rows, shape, opts \\ []) do
-    opts = Keyword.validate!(opts, options())
+    opts = Keyword.validate!(opts, Keyword.take(options(), [:values]))
     values = Keyword.fetch!(opts, :values)
 
     %Shape{validation: %Rules{columns: columns, rows: row_rules}} = Shape.resolve(shape)
@@ -76,12 +76,13 @@ defmodule Refract.Validate do
 
     opts = Keyword.validate!(opts, options())
     values = Keyword.fetch!(opts, :values)
+    indexing = Keyword.fetch!(opts, :indexing)
 
     %Shape{spec: spec, validation: %Rules{columns: columns, rows: row_rules}} =
       Shape.resolve(shape)
 
     with {:ok, header_row, positions, steps} <-
-           Locate.body(raw, spec, [{:misses, :unlimited} | header_opts]) do
+           Locate.body(raw, spec, [misses: :unlimited, indexing: indexing] ++ header_opts) do
       absent = Locate.absent(spec, positions)
       {missing, columns} = columns |> Enum.sort() |> Enum.split_with(&missing?(&1, absent))
 

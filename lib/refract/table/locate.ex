@@ -59,7 +59,7 @@ defmodule Refract.Table.Locate do
           | {:error, {:header_not_found, header_miss()}}
 
   def body(raw, %Spec{} = spec, opts) do
-    {body_opts, opts} = Keyword.split(opts, [:misses])
+    {body_opts, opts} = Keyword.split(opts, [:misses, :indexing])
     {columns, header_opts} = Keyword.pop(opts, :columns, :shape)
 
     with {:ok, report} <- scan(raw, spec, header_opts) do

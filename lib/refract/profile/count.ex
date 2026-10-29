@@ -59,7 +59,8 @@ defmodule Refract.Profile.Count do
       max_lines: 100,
       values: false,
       fuzzy: 0.94,
-      columns: :shape
+      columns: :shape,
+      indexing: :lines
     ]
   end
 
@@ -74,6 +75,7 @@ defmodule Refract.Profile.Count do
     values = Keyword.fetch!(opts, :values)
     fuzzy = Keyword.fetch!(opts, :fuzzy)
     column_mode = Keyword.fetch!(opts, :columns)
+    indexing = Keyword.fetch!(opts, :indexing)
     max_distinct = Keyword.fetch!(opts, :max_distinct)
     max_lines = Keyword.fetch!(opts, :max_lines)
 
@@ -89,6 +91,7 @@ defmodule Refract.Profile.Count do
       values: values,
       fuzzy: fuzzy,
       columns: column_mode,
+      indexing: indexing,
       max_distinct: max_distinct,
       max_lines: max_lines,
       header_opts: header_opts
@@ -100,7 +103,11 @@ defmodule Refract.Profile.Count do
 
   def add_file({rows, counts}, raw, path, spec, %Ctx{except: except} = ctx) do
     with {:ok, _header_row, positions, steps} <-
-           Locate.body(raw, spec, [misses: :unlimited, columns: ctx.columns] ++ ctx.header_opts) do
+           Locate.body(
+             raw,
+             spec,
+             [misses: :unlimited, columns: ctx.columns, indexing: ctx.indexing] ++ ctx.header_opts
+           ) do
       present = Map.keys(positions) -- except
 
       counts =

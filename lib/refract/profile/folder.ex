@@ -109,8 +109,11 @@ defmodule Refract.Profile.Folder do
     |> counted_file(path, {counted, paths, failed})
   end
 
-  defp read(path, %Shape{spec: spec}, counted, {reader, reader_opts}, ctx),
-    do: Reader.read(reader, path, reader_opts, &Count.add_file(counted, &1, path, spec, ctx))
+  defp read(path, %Shape{spec: spec}, counted, {reader, reader_opts}, ctx) do
+    ctx = %{ctx | indexing: Reader.indexing(reader)}
+
+    Reader.read(reader, path, reader_opts, &Count.add_file(counted, &1, path, spec, ctx))
+  end
 
   defp counted_file({:ok, counted}, path, {_counted, paths, failed}),
     do: {counted, [path | paths], failed}

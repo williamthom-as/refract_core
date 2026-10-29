@@ -24,16 +24,26 @@ defmodule Refract.Table.Body do
           Enumerable.t()
 
   def run(raw, header_row, %Spec{} = spec, positions, values, opts \\ []) do
-    opts = Keyword.validate!(opts, misses: :limited)
+    opts = Keyword.validate!(opts, misses: :limited, indexing: :lines)
 
     misses = Keyword.fetch!(opts, :misses)
+    indexing_mode = Keyword.fetch!(opts, :indexing)
 
     body = %__MODULE__{spec: spec, positions: positions, values: values, misses: misses}
 
+    first_idx_num = first_index(indexing_mode)
+
     raw
-    |> Stream.with_index(1)
+    |> Stream.with_index(first_idx_num)
     |> Stream.drop(header_row)
     |> Stream.transform(0, &step(&1, &2, body))
+  end
+
+  defp first_index(:lines), do: 1
+  defp first_index(:records), do: 0
+
+  defp first_index(indexing) do
+    raise ArgumentError, "indexing must be :lines or :records, got: #{inspect(indexing)}"
   end
 
   defp step(_numbered_line, :ended, _body), do: {:halt, :ended}

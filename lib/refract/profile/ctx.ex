@@ -8,6 +8,7 @@ defmodule Refract.Profile.Ctx do
     values: false,
     fuzzy: 0.94,
     columns: :shape,
+    indexing: :lines,
     header_opts: []
   ]
 
@@ -18,6 +19,7 @@ defmodule Refract.Profile.Ctx do
           values: boolean(),
           fuzzy: number() | false,
           columns: :shape | :all,
+          indexing: :lines | :records,
           header_opts: keyword()
         }
 end
