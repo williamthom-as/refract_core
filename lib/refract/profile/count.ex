@@ -1,6 +1,7 @@
 defmodule Refract.Profile.Count do
   @moduledoc false
 
+  alias Refract.ArgValidator
   alias Refract.Profile.Column
   alias Refract.Profile.Ctx
   alias Refract.Profile.Group
@@ -78,9 +79,9 @@ defmodule Refract.Profile.Count do
 
     validate_columns(column_mode)
     validate_except(except, columns, column_mode)
-    validate_limit(max_distinct, :max_distinct)
-    validate_limit(max_lines, :max_lines)
-    validate_values(values)
+    ArgValidator.validate_positive_integer!(max_distinct, :max_distinct)
+    ArgValidator.validate_positive_integer!(max_lines, :max_lines)
+    ArgValidator.validate_boolean!(values, :values)
     validate_fuzzy!(fuzzy)
 
     %Ctx{
@@ -192,12 +193,6 @@ defmodule Refract.Profile.Count do
     }
   end
 
-  defp validate_values(values) when is_boolean(values), do: :ok
-
-  defp validate_values(values) do
-    raise ArgumentError, "values must be true or false, got: #{inspect(values)}"
-  end
-
   @spec validate_fuzzy!(term()) :: :ok
 
   def validate_fuzzy!(false), do: :ok
@@ -233,11 +228,5 @@ defmodule Refract.Profile.Count do
 
   defp validate_known(unknown) do
     raise ArgumentError, "except must name shape columns, got: #{inspect(unknown)}"
-  end
-
-  defp validate_limit(limit, _name) when is_integer(limit) and limit > 0, do: :ok
-
-  defp validate_limit(limit, name) do
-    raise ArgumentError, "#{name} must be a positive integer, got: #{inspect(limit)}"
   end
 end

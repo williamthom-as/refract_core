@@ -1,6 +1,7 @@
 defmodule Refract.Table.Locate do
   @moduledoc false
 
+  alias Refract.ArgValidator
   alias Refract.Reader
   alias Refract.Table
   alias Refract.Table.Body
@@ -64,11 +65,7 @@ defmodule Refract.Table.Locate do
     with {:ok, report} <- scan(raw, spec, header_opts) do
       positions = positions(report, raw, columns)
 
-      {:ok, report.row, positions,
-       raw
-       |> Stream.with_index(1)
-       |> Stream.drop(report.row)
-       |> Body.run(spec, positions, false, body_opts)}
+      {:ok, report.row, positions, Body.run(raw, report.row, spec, positions, false, body_opts)}
     end
   end
 
@@ -76,7 +73,7 @@ defmodule Refract.Table.Locate do
 
   defp positions(%Report.Line{row: row, columns: columns, extra: extra} = report, raw, :all) do
     named = Header.positions(report)
-    names = raw |> Enum.at(row - 1) |> Reader.Header.normalise()
+    names = raw |> Enum.at(row - 1) |> Reader.Header.names()
 
     unnamed =
       Enum.map(extra, &elem(&1, 0)) ++
@@ -125,11 +122,7 @@ defmodule Refract.Table.Locate do
 
   @spec validate_within!(term()) :: :ok
 
-  def validate_within!(within) when is_integer(within) and within >= 0, do: :ok
-
-  def validate_within!(within) do
-    raise ArgumentError, "within must be a non negative integer, got: #{inspect(within)}"
-  end
+  def validate_within!(within), do: ArgValidator.validate_non_negative_integer!(within, :within)
 
   @spec validate_header_row!(term()) :: :ok
 

@@ -1,6 +1,7 @@
 defmodule Refract.Classify.Folder do
   @moduledoc false
 
+  alias Refract.ArgValidator
   alias Refract.Classify.Result
   alias Refract.Classify.Score
   alias Refract.Reader
@@ -30,7 +31,7 @@ defmodule Refract.Classify.Folder do
 
     Score.validate_opts!(classify_opts)
     Reader.validate_readers!(readers)
-    validate_max_concurrency(max_concurrency)
+    ArgValidator.validate_positive_integer!(max_concurrency, :max_concurrency)
 
     resolved_shapes = Shape.resolve_all(shapes)
 
@@ -45,15 +46,6 @@ defmodule Refract.Classify.Folder do
        )
        |> Stream.map(fn {:ok, item} -> item end)}
     end
-  end
-
-  defp validate_max_concurrency(max_concurrency)
-       when is_integer(max_concurrency) and max_concurrency > 0,
-       do: :ok
-
-  defp validate_max_concurrency(max_concurrency) do
-    raise ArgumentError,
-          "max_concurrency must be a positive integer, got: #{inspect(max_concurrency)}"
   end
 
   defp extract_candidate_files(dir, file_names) do

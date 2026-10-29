@@ -9,6 +9,8 @@ defmodule Refract.Writer do
       {:ok, paths} = Refract.CSV.write_chunks(rows, "out", prefix: "bills", rows_per_file: 10_000)
   """
 
+  alias Refract.ArgValidator
+
   @callback encode(rows :: Enumerable.t(), opts :: keyword()) :: Enumerable.t()
 
   @callback extension() :: String.t()
@@ -98,7 +100,7 @@ defmodule Refract.Writer do
     prefix = Keyword.fetch!(chunk_opts, :prefix)
     rows_per_file = Keyword.fetch!(chunk_opts, :rows_per_file)
 
-    validate_rows_per_file(rows_per_file)
+    ArgValidator.validate_positive_integer!(rows_per_file, :rows_per_file)
 
     rows
     |> Stream.chunk_every(rows_per_file)
@@ -124,10 +126,4 @@ defmodule Refract.Writer do
   defp generate_file_path(prefix, index, extension) do
     "#{prefix}_#{index}.#{extension}"
   end
-
-  defp validate_rows_per_file(rows_per_file) when is_integer(rows_per_file) and rows_per_file > 0,
-    do: :ok
-
-  defp validate_rows_per_file(val),
-    do: raise(ArgumentError, "rows_per_file must be a positive integer, got: #{inspect(val)}")
 end

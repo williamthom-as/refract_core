@@ -5,9 +5,9 @@ defmodule Refract.Reader.Header do
 
   @nil_col_prefix "col"
 
-  @spec normalise([Refract.cell()]) :: [String.t()]
+  @spec names([Refract.cell()]) :: [String.t()]
 
-  def normalise(header) do
+  def names(header) do
     normalised_header =
       Enum.map(header, &header_cell/1)
 

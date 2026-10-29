@@ -1,6 +1,8 @@
 defmodule Refract.Privacy.Pseudonym.FF1 do
   @moduledoc false
 
+  alias Refract.ArgValidator
+
   # nist sp 800-38g ff1, algorithm 7 encrypt, algorithm 8 decrypt
   #
   # reference impl:
@@ -35,7 +37,7 @@ defmodule Refract.Privacy.Pseudonym.FF1 do
     opts = Keyword.validate!(opts, min_domain: 1_000_000)
     min_domain = Keyword.fetch!(opts, :min_domain)
 
-    validate_min_domain(min_domain)
+    ArgValidator.validate_non_negative_integer!(min_domain, :min_domain)
 
     {ecb, cbc} = ciphers(byte_size(key))
     symbols = String.graphemes(alphabet)
@@ -76,12 +78,6 @@ defmodule Refract.Privacy.Pseudonym.FF1 do
     symbols = List.to_tuple(symbols)
 
     Enum.map_join(numerals, &elem(symbols, &1))
-  end
-
-  defp validate_min_domain(min_domain) when is_integer(min_domain) and min_domain >= 0, do: :ok
-
-  defp validate_min_domain(min_domain) do
-    raise ArgumentError, "min_domain must be a non negative integer, got: #{inspect(min_domain)}"
   end
 
   # the feistel split needs two halves, so this is mechanics not policy

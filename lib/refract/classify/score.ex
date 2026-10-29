@@ -1,6 +1,7 @@
 defmodule Refract.Classify.Score do
   @moduledoc false
 
+  alias Refract.ArgValidator
   alias Refract.Classify.Candidate
   alias Refract.Classify.Ctx
   alias Refract.Classify.Drift
@@ -14,7 +15,6 @@ defmodule Refract.Classify.Score do
   alias Refract.Table.Report
   alias Refract.Table.Scan
   alias Refract.Table.Spec.Header
-  alias Refract.Table.Spec.Row
 
   import Refract.String.Utils, only: [blank_line?: 1]
 
@@ -39,9 +39,9 @@ defmodule Refract.Classify.Score do
     opts = Keyword.validate!(opts, options())
 
     Locate.validate_within!(Keyword.fetch!(opts, :within))
-    validate_fraction(Keyword.fetch!(opts, :min_score), :min_score)
-    validate_fraction(Keyword.fetch!(opts, :margin), :margin)
-    Row.validate_values!(Keyword.fetch!(opts, :values))
+    ArgValidator.validate_fraction!(Keyword.fetch!(opts, :min_score), :min_score)
+    ArgValidator.validate_fraction!(Keyword.fetch!(opts, :margin), :margin)
+    ArgValidator.validate_boolean!(Keyword.fetch!(opts, :values), :values)
     validate_pick(Keyword.fetch!(opts, :pick))
     validate_name(Keyword.fetch!(opts, :name))
 
@@ -172,9 +172,7 @@ defmodule Refract.Classify.Score do
 
   defp rows(header, %Shape{spec: spec}, %Ctx{sample: sample, values: values}) do
     sample
-    |> Enum.with_index(1)
-    |> Enum.drop(header.row)
-    |> Body.run(spec, Header.positions(header), values)
+    |> Body.run(header.row, spec, Header.positions(header), values)
     |> Enum.map(fn {_step, _row, report} -> report end)
   end
 
@@ -187,13 +185,6 @@ defmodule Refract.Classify.Score do
 
   defp pass_rate([]), do: 1.0
   defp pass_rate(rows), do: Enum.count(rows, & &1.passed) / length(rows)
-
-  defp validate_fraction(value, _name) when is_number(value) and value >= 0 and value <= 1,
-    do: :ok
-
-  defp validate_fraction(value, name) do
-    raise ArgumentError, "#{name} must be a number from 0 to 1, got: #{inspect(value)}"
-  end
 
   defp validate_pick(pick) when pick in [:best, :first], do: :ok
 

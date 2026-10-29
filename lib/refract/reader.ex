@@ -117,7 +117,7 @@ defmodule Refract.Reader do
         {:ok,
          Stream.transform(content, nil, fn
            row, nil ->
-             {[], Header.normalise(row)}
+             {[], Header.names(row)}
 
            row, header ->
              {[Header.to_row(header, row)], header}

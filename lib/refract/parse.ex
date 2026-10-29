@@ -32,6 +32,7 @@ defmodule Refract.Parse do
       {:error, {:not_an_integer, "12a"}}
   """
 
+  alias Refract.ArgValidator
   alias Refract.Parse.Date, as: DateParser
 
   import Refract.String.Utils, only: [normalise: 1]
@@ -52,7 +53,7 @@ defmodule Refract.Parse do
     opts = Keyword.validate!(opts, locale: :en, currency: false)
     separator = separators(Keyword.fetch!(opts, :locale))
 
-    validate_currency(Keyword.fetch!(opts, :currency))
+    ArgValidator.validate_boolean!(Keyword.fetch!(opts, :currency), :currency)
 
     value
     |> strip_currency(Keyword.fetch!(opts, :currency))
@@ -63,11 +64,6 @@ defmodule Refract.Parse do
   @spec number!(term(), [number_opt()]) :: Decimal.t()
 
   def number!(value, opts \\ []), do: value |> number(opts) |> unwrap!(value, "a number")
-
-  defp validate_currency(currency) when is_boolean(currency), do: :ok
-
-  defp validate_currency(currency),
-    do: raise(ArgumentError, "currency must be true or false, got: #{inspect(currency)}")
 
   defp strip_currency(value, true) when is_binary(value) do
     {sign, amount} = value |> String.trim() |> accounting_sign()
