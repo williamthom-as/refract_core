@@ -74,10 +74,6 @@ defmodule Refract.Profile.FolderTest do
                      %Variant{value: "Cost Center 1", count: 2, files: %{^jan => [2, 3]}},
                      %Variant{value: "costcenter1", count: 1, files: %{^feb => [3]}}
                    ]
-                 },
-                 %Cluster{
-                   most_common: "north",
-                   variants: [%Variant{count: 1, files: %{^feb => [2]}}]
                  }
                ]
              } = dir |> profile([ledger()]) |> cost_centre()
@@ -87,7 +83,7 @@ defmodule Refract.Profile.FolderTest do
       jan = ledger_file(dir, "1_jan.csv", ["north", "North"])
       feb = ledger_file(dir, "2_feb.csv", ["x", "north"])
 
-      assert %Column{clusters: [%Cluster{variants: [north, _north]}, %Cluster{most_common: "x"}]} =
+      assert %Column{clusters: [%Cluster{variants: [north, _north]}]} =
                dir |> profile([ledger()]) |> cost_centre()
 
       assert %Variant{value: "north", count: 2, files: %{^jan => [2], ^feb => [3]}} = north
@@ -231,6 +227,40 @@ defmodule Refract.Profile.FolderTest do
 
       assert %Column{capped: false} = dir |> profile([ledger()], max_distinct: 3) |> cost_centre()
       assert %Column{capped: true} = dir |> profile([ledger()], max_distinct: 2) |> cost_centre()
+    end
+
+    test "values list every value across the folder, lines by file", %{tmp_dir: dir} do
+      jan = ledger_file(dir, "1_jan.csv", ["north", "south"])
+      feb = ledger_file(dir, "2_feb.csv", ["north"])
+
+      assert %Column{values: values} = dir |> profile([ledger()], values: true) |> cost_centre()
+
+      assert Enum.map(values, &{&1.value, &1.count, &1.files}) == [
+               {"north", 2, %{jan => [2], feb => [2]}},
+               {"south", 1, %{jan => [3]}}
+             ]
+    end
+
+    test "fuzzy by shape name, others keep the default", %{tmp_dir: dir} do
+      ledger_file(dir, "1_jan.csv", ["Melbourne", "Melbounre"])
+      write(dir, "2_bank.csv", "Date,Payee\n2026-10-01,Melbourne\n2026-10-02,Melbounre\n")
+
+      folder = profile(dir, [ledger(), statement()], fuzzy: %{"ledger" => false})
+
+      assert %Column{fuzzy: :off, clusters: []} = cost_centre(folder)
+
+      assert %Column{fuzzy: :done, clusters: [_cluster]} =
+               folder.results[{"statement", 1}].columns["payee"]
+    end
+
+    test "a fuzzy map names given shapes", %{tmp_dir: dir} do
+      assert_raise ArgumentError, ~r/fuzzy/, fn ->
+        Profile.folder(dir, [ledger()], fuzzy: %{"legder" => false})
+      end
+
+      assert_raise ArgumentError, ~r/fuzzy/, fn ->
+        Profile.folder(dir, [ledger()], fuzzy: %{"ledger" => 2})
+      end
     end
 
     test "except leaves columns out", %{tmp_dir: dir} do

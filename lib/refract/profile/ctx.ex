@@ -5,7 +5,8 @@ defmodule Refract.Profile.Ctx do
     :max_distinct,
     :max_lines,
     except: [],
-    singles: :keep,
+    values: false,
+    fuzzy: 0.94,
     columns: :shape,
     header_opts: []
   ]
@@ -14,7 +15,8 @@ defmodule Refract.Profile.Ctx do
           max_distinct: pos_integer(),
           max_lines: pos_integer(),
           except: [String.t()],
-          singles: :keep | :drop,
+          values: boolean(),
+          fuzzy: number() | false,
           columns: :shape | :all,
           header_opts: keyword()
         }

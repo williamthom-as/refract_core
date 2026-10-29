@@ -10,8 +10,8 @@ defmodule Refract.Reader do
   - `locate`: `within`, `on_miss`, `header_row`
   - `classify`: `within`, `min_score`, `margin`, `values`, `pick`, `name`
   - `suggest`: `within`, `header_row`
-  - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`, `singles`,
-    `columns`
+  - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`, `values`,
+    `fuzzy`, `columns`
   - `validate`: `within`, `header_row`, `values` (and `max_bytes` when the shape has fields or
     document rules, as the whole file is read)
   - `load`, `fields`: `max_bytes`
@@ -181,7 +181,8 @@ defmodule Refract.Reader do
         :except,
         :max_distinct,
         :max_lines,
-        :singles,
+        :values,
+        :fuzzy,
         :columns
       ])
 

@@ -73,10 +73,6 @@ defmodule Refract.ProfileTest do
                      %Variant{value: "costcenter1", count: 2, lines: [5, 10]},
                      %Variant{value: "cost center 1", count: 1, lines: [7]}
                    ]
-                 },
-                 %Cluster{
-                   most_common: "Cost Center 2",
-                   variants: [%Variant{count: 1, lines: [8]}]
                  }
                ]
              } = profile(@ledger).columns["cost_centre"]
@@ -90,7 +86,7 @@ defmodule Refract.ProfileTest do
              } =
                profile(@ledger)
 
-      assert %Column{clusters: [%Cluster{variants: [%Variant{files: nil} | _]} | _]} = column
+      assert %Column{clusters: [%Cluster{variants: [%Variant{files: nil} | _]}]} = column
     end
 
     test "rows, blanks and distinct values" do
@@ -98,11 +94,8 @@ defmodule Refract.ProfileTest do
       assert %Column{blanks: 1, distinct: 4, capped: false} = column
     end
 
-    test "a value spelled one way is a cluster of one" do
-      assert %Column{distinct: 7, clusters: clusters} = profile(@ledger).columns["account"]
-
-      assert Enum.map(clusters, &{&1.most_common, &1.via, length(&1.variants)}) ==
-               for(n <- 1..7, do: {"A-#{n}", :normalised, 1})
+    test "a value spelled one way is not a cluster" do
+      assert %Column{distinct: 7, clusters: []} = profile(@ledger).columns["account"]
     end
 
     test "case, spacing, punctuation and accents group" do
@@ -150,7 +143,73 @@ defmodule Refract.ProfileTest do
     end
   end
 
+  describe "values" do
+    test "values: true lists every distinct value with its count and lines" do
+      assert %Column{values: values} = profile(@ledger, values: true).columns["cost_centre"]
+
+      assert Enum.map(values, &{&1.value, &1.count, &1.lines}) == [
+               {"Cost Center 1", 2, [4, 6]},
+               {"costcenter1", 2, [5, 10]},
+               {"cost center 1", 1, [7]},
+               {"Cost Center 2", 1, [8]}
+             ]
+    end
+
+    test "values by count, then first seen" do
+      values = cost_centres(["south", "north", "north", "east"], values: true).values
+
+      assert Enum.map(values, & &1.value) == ["north", "south", "east"]
+    end
+
+    test "values are not clusters, clusters stay two or more" do
+      column = profile(@ledger, values: true).columns["account"]
+
+      assert %Column{clusters: [], values: values} = column
+      assert length(values) == 7
+    end
+
+    test "values are left out unless asked for" do
+      assert %Column{values: nil} = profile(@ledger).columns["cost_centre"]
+    end
+
+    test "a capped column has no values" do
+      assert %Column{capped: true, values: nil} =
+               profile(@ledger, values: true, max_distinct: 3).columns["cost_centre"]
+    end
+
+    test "max_lines applies to values too" do
+      assert [%Variant{count: 2, lines: [4]} | _] =
+               profile(@ledger, values: true, max_lines: 1).columns["cost_centre"].values
+    end
+
+    test "values is true or false" do
+      assert_raise ArgumentError, ~r/values/, fn ->
+        CSV.profile(@ledger, ledger(), values: :all)
+      end
+    end
+  end
+
   describe "fuzzy" do
+    test "a looser fuzzy joins what the default keeps apart" do
+      assert grouped(cost_centres(["Seat", "Seat", "Seat X"])) == []
+      assert grouped(cost_centres(["Seat", "Seat", "Seat X"], fuzzy: 0.9)) == [["Seat", "Seat X"]]
+    end
+
+    test "fuzzy: false turns the pass off, normalised clusters stay" do
+      column = cost_centres(["Melbourne", "Melbounre", "north", "North"], fuzzy: false)
+
+      assert %Column{fuzzy: :off} = column
+      assert grouped(column) == [["north", "North"]]
+    end
+
+    test "fuzzy is a number from 0 to 1 or false" do
+      for fuzzy <- [1.5, -0.1, true, "0.9", %{"ledger" => 0.9}] do
+        assert_raise ArgumentError, ~r/fuzzy/, fn ->
+          CSV.profile(@ledger, ledger(), fuzzy: fuzzy)
+        end
+      end
+    end
+
     test "a misspelling joins the cluster of the most common" do
       column = cost_centres(["Cost Center 1", "Cost Center 1", "costcenter1", "Cost Centre 1"])
 
@@ -207,7 +266,7 @@ defmodule Refract.ProfileTest do
     test "a column with rules is profiled too" do
       shape = ledger(validation: [columns: %{"cost_centre" => [~r/^[A-Za-z ]+\d$/]}])
 
-      assert {:ok, %Result{columns: %{"cost_centre" => %Column{clusters: [_cluster, _single]}}}} =
+      assert {:ok, %Result{columns: %{"cost_centre" => %Column{clusters: [_cluster]}}}} =
                CSV.profile(@ledger, shape)
     end
 
@@ -241,10 +300,28 @@ defmodule Refract.ProfileTest do
       assert {:ok, %Result{columns: columns}} = CSV.profile(source, ledger(), columns: :all)
 
       assert columns |> Map.keys() |> Enum.sort() ==
-               ["Cost Centre (2)", "Notes", "Notes (2)", "account", "amount", "cost_centre"]
+               ["Cost Centre_2", "Notes", "Notes_2", "account", "amount", "cost_centre"]
 
       assert grouped(columns["Notes"]) == [["ok", "OK"]]
-      assert %Column{distinct: 2} = columns["Cost Centre (2)"]
+      assert %Column{distinct: 2} = columns["Cost Centre_2"]
+    end
+
+    test "unnamed columns take the names stream gives them" do
+      source =
+        {:string, "Account,Cost Centre,Amount,Notes,Cost Centre,Notes\nA-1,north,1.00,ok,x,p\n"}
+
+      assert {:ok, %Result{columns: columns}} = CSV.profile(source, ledger(), columns: :all)
+      assert {:ok, rows} = CSV.stream(source)
+
+      unnamed = Map.keys(columns) -- ["account", "amount", "cost_centre"]
+      assert unnamed -- (rows |> Enum.at(0) |> Map.keys()) == []
+    end
+
+    test "a quoted header cell loses its quotes" do
+      source = {:string, "Account,Cost Centre,Amount,\"\"\"Notes\"\"\"\nA-1,north,1.00,ok\n"}
+
+      assert {:ok, %Result{columns: columns}} = CSV.profile(source, ledger(), columns: :all)
+      assert Map.has_key?(columns, "Notes")
     end
 
     test "columns: :all with except by header text" do
@@ -254,6 +331,39 @@ defmodule Refract.ProfileTest do
                CSV.profile(source, ledger(), columns: :all, except: ["Notes", "account"])
 
       assert columns |> Map.keys() |> Enum.sort() == ["amount", "cost_centre"]
+    end
+
+    test "columns: :all leaves ignored cells out" do
+      shape =
+        Shape.new(
+          name: "ledger",
+          spec:
+            Table.spec(
+              header: [
+                columns: @columns,
+                required: ["account", "amount"],
+                min_matches: 2,
+                ignore: ["notes"]
+              ]
+            )
+        )
+
+      source = {:string, "Account,Cost Centre,Amount,Notes,Region\nA-1,north,1.00,ok,au\n"}
+
+      assert {:ok, %Result{columns: columns}} = CSV.profile(source, shape, columns: :all)
+
+      assert columns |> Map.keys() |> Enum.sort() == [
+               "Region",
+               "account",
+               "amount",
+               "cost_centre"
+             ]
+    end
+
+    test "except under columns: :all is a list of names" do
+      assert_raise ArgumentError, ~r/except/, fn ->
+        CSV.profile(@ledger, ledger(), columns: :all, except: [:notes])
+      end
     end
 
     test "columns names a mode" do
@@ -268,24 +378,13 @@ defmodule Refract.ProfileTest do
       result = profile(@ledger, max_distinct: 4)
 
       assert %Column{capped: true, blanks: 0, clusters: []} = result.columns["account"]
-      assert %Column{capped: false, clusters: [_cluster, _single]} = result.columns["cost_centre"]
+      assert %Column{capped: false, clusters: [_cluster]} = result.columns["cost_centre"]
       assert %Column{capped: true} = profile(@ledger, max_distinct: 3).columns["cost_centre"]
     end
 
     test "max_lines keeps the first lines and the full count" do
-      assert %Column{clusters: [%Cluster{variants: [%Variant{count: 2, lines: [4]} | _]} | _]} =
+      assert %Column{clusters: [%Cluster{variants: [%Variant{count: 2, lines: [4]} | _]}]} =
                profile(@ledger, max_lines: 1).columns["cost_centre"]
-    end
-
-    test "singles: :drop keeps only values spelt more than one way" do
-      assert [%Cluster{most_common: "Cost Center 1"}] =
-               profile(@ledger, singles: :drop).columns["cost_centre"].clusters
-
-      assert %Column{clusters: []} = profile(@ledger, singles: :drop).columns["account"]
-
-      assert_raise ArgumentError, ~r/singles/, fn ->
-        CSV.profile(@ledger, ledger(), singles: :all)
-      end
     end
 
     test "limits are positive integers" do

@@ -1,8 +1,10 @@
 defmodule Refract.Table.Locate do
   @moduledoc false
 
+  alias Refract.Reader
   alias Refract.Table
   alias Refract.Table.Body
+  alias Refract.Table.Report
   alias Refract.Table.Spec
   alias Refract.Table.Spec.Header
 
@@ -52,7 +54,7 @@ defmodule Refract.Table.Locate do
     {columns, header_opts} = Keyword.pop(opts, :columns, :shape)
 
     with {:ok, report} <- scan(raw, spec, header_opts) do
-      positions = positions(report, columns)
+      positions = positions(report, raw, columns)
 
       {:ok, report.row, positions,
        raw
@@ -62,25 +64,19 @@ defmodule Refract.Table.Locate do
     end
   end
 
-  defp positions(report, :shape), do: Header.positions(report)
+  defp positions(report, _raw, :shape), do: Header.positions(report)
 
-  defp positions(%{columns: columns, extra: extra} = report, :all) do
-    others =
-      for {_name, %{others: others}} <- columns, {index, cell} <- others, do: {index, cell, 2}
+  defp positions(%Report.Line{row: row, columns: columns, extra: extra} = report, raw, :all) do
+    named = Header.positions(report)
+    names = raw |> Enum.at(row - 1) |> Reader.Header.normalise()
 
-    (Enum.map(extra, fn {index, cell} -> {index, cell, 1} end) ++ others)
-    |> Enum.sort()
-    |> Enum.reduce(Header.positions(report), fn {index, cell, n}, positions ->
-      Map.put(positions, unique(String.trim(cell), positions, n), index)
-    end)
-  end
+    unnamed =
+      Enum.map(extra, &elem(&1, 0)) ++
+        for {_name, %Report.Column{others: others}} <- columns,
+            {index, _cell} <- others,
+            do: index
 
-  defp unique(name, taken, 1) when is_map_key(taken, name), do: unique(name, taken, 2)
-  defp unique(name, _taken, 1), do: name
-
-  defp unique(name, taken, n) do
-    candidate = "#{name} (#{n})"
-    if is_map_key(taken, candidate), do: unique(name, taken, n + 1), else: candidate
+    Enum.reduce(unnamed, named, &Map.put_new(&2, Enum.at(names, &1), &1))
   end
 
   @spec absent(Spec.t(), Header.positions()) :: %{String.t() => nil}

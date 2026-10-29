@@ -4,11 +4,15 @@ defmodule Refract.Profile do
   reads only, fixes nothing.
 
   - every shape column found in the file; `except:` leaves columns out; `columns: :all` also
-    profiles header cells the shape does not name, under their header text
+    profiles header cells the shape does not name, under the names `stream` gives them (`except:`
+    then names header text and is not checked against the shape; `ignore:` cells stay out)
   - a cluster groups values equal after case, spacing, punctuation and accents; different digits
     never group
   - lines are file lines; `max_lines:` per variant, `max_distinct:` per column
-  - every value is listed, spelt one way or many; `singles: :drop` keeps only the ones spelt more than one way
+  - `values: true` lists every distinct value with its count and lines, an inventory of the column;
+    `rows(result, :values)` + `header(:values)` write it
+  - `fuzzy: 0.9` looser, `fuzzy: false` off (`Column.fuzzy` says `:done`, `:skipped` or `:off`); a
+    folder takes `%{"shape name" => 0.9 | false}`
   - `folder/3` profiles every file a shape matched as one, lines by file; a result per shape name
     and version, unmatched or unreadable files listed in `skipped`
   - `rows/1` + `header/0` flatten a result to rows for any writer
@@ -44,4 +48,12 @@ defmodule Refract.Profile do
   @spec header() :: [String.t()]
 
   def header, do: Report.header()
+
+  @spec rows(Result.t() | Folders.t(), :values) :: [%{String.t() => term()}]
+
+  def rows(result, :values), do: Report.rows(result, :values)
+
+  @spec header(:values) :: [String.t()]
+
+  def header(:values), do: Report.header(:values)
 end

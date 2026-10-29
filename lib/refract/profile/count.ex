@@ -13,7 +13,7 @@ defmodule Refract.Profile.Count do
 
   import Refract.String.Utils, only: [blank?: 1]
 
-  defstruct blanks: 0, seen: 0, values: %{}, capped: false, singles: :keep
+  defstruct blanks: 0, seen: 0, values: %{}, capped: false
 
   @type location :: {Path.t() | nil, pos_integer()}
 
@@ -21,8 +21,7 @@ defmodule Refract.Profile.Count do
           blanks: non_neg_integer(),
           seen: non_neg_integer(),
           values: %{Refract.cell() => {non_neg_integer(), pos_integer(), [location()]}},
-          capped: boolean(),
-          singles: :keep | :drop
+          capped: boolean()
         }
 
   @type counted :: {non_neg_integer(), %{String.t() => t()}}
@@ -33,7 +32,8 @@ defmodule Refract.Profile.Count do
           | {:except, [String.t()]}
           | {:max_distinct, pos_integer()}
           | {:max_lines, pos_integer()}
-          | {:singles, :keep | :drop}
+          | {:values, boolean()}
+          | {:fuzzy, number() | false}
 
   @spec run(Enumerable.t(), Shape.t() | module(), [opt()]) ::
           {:ok, Result.t()} | {:error, {:header_not_found, Locate.header_miss()}}
@@ -43,7 +43,7 @@ defmodule Refract.Profile.Count do
     ctx = ctx!(opts, spec.header.columns)
 
     with {:ok, counted} <- add_file({0, %{}}, raw, nil, spec, ctx) do
-      {rows, columns} = finish(counted, :lines)
+      {rows, columns} = finish(counted, :lines, ctx)
 
       {:ok, %Result{shape: shape, rows: rows, columns: columns}}
     end
@@ -59,12 +59,14 @@ defmodule Refract.Profile.Count do
         except: [],
         max_distinct: 5000,
         max_lines: 100,
-        singles: :keep,
+        values: false,
+        fuzzy: 0.94,
         columns: :shape
       )
 
     except = Keyword.fetch!(opts, :except)
-    singles = Keyword.fetch!(opts, :singles)
+    values = Keyword.fetch!(opts, :values)
+    fuzzy = Keyword.fetch!(opts, :fuzzy)
     column_mode = Keyword.fetch!(opts, :columns)
     max_distinct = Keyword.fetch!(opts, :max_distinct)
     max_lines = Keyword.fetch!(opts, :max_lines)
@@ -73,11 +75,13 @@ defmodule Refract.Profile.Count do
     validate_except(except, columns, column_mode)
     validate_limit(max_distinct, :max_distinct)
     validate_limit(max_lines, :max_lines)
-    validate_singles(singles)
+    validate_values(values)
+    validate_fuzzy!(fuzzy)
 
     %Ctx{
       except: except,
-      singles: singles,
+      values: values,
+      fuzzy: fuzzy,
       columns: column_mode,
       max_distinct: max_distinct,
       max_lines: max_lines,
@@ -94,16 +98,17 @@ defmodule Refract.Profile.Count do
       present = Map.keys(positions) -- except
 
       counts =
-        Enum.reduce(present, counts, &Map.put_new(&2, &1, %__MODULE__{singles: ctx.singles}))
+        Enum.reduce(present, counts, &Map.put_new(&2, &1, %__MODULE__{}))
 
       {:ok, Enum.reduce(steps, {rows, counts}, &add_row(&1, &2, present, path, ctx))}
     end
   end
 
-  @spec finish(counted(), :lines | :files) :: {non_neg_integer(), %{String.t() => Column.t()}}
+  @spec finish(counted(), :lines | :files, Ctx.t()) ::
+          {non_neg_integer(), %{String.t() => Column.t()}}
 
-  def finish({rows, counts}, place),
-    do: {rows, Map.new(counts, fn {name, count} -> {name, column(count, place)} end)}
+  def finish({rows, counts}, place, %Ctx{} = ctx),
+    do: {rows, Map.new(counts, fn {name, count} -> {name, column(count, place, ctx)} end)}
 
   defp add_row({_kind, row, %Report.Line{row: line}}, {rows, counts}, present, path, ctx) do
     {rows + 1,
@@ -138,18 +143,33 @@ defmodule Refract.Profile.Count do
   defp seen_again({order, count, locations}, _location, _max_lines),
     do: {order, count + 1, locations}
 
-  defp column(%__MODULE__{capped: true, blanks: blanks}, _place),
+  defp column(%__MODULE__{capped: true, blanks: blanks}, _place, _ctx),
     do: %Column{blanks: blanks, distinct: nil, capped: true}
 
-  defp column(%__MODULE__{blanks: blanks, values: values, singles: singles}, place) do
-    {fuzzy, clusters} =
-      values
-      |> Map.new(fn {cell, {order, count, locations}} ->
+  defp column(%__MODULE__{blanks: blanks, values: values}, place, %Ctx{} = ctx) do
+    variants =
+      Map.new(values, fn {cell, {order, count, locations}} ->
         {cell, {order, variant(cell, count, Enum.reverse(locations), place)}}
       end)
-      |> Group.clusters(singles)
 
-    %Column{blanks: blanks, distinct: map_size(values), fuzzy: fuzzy, clusters: clusters}
+    {fuzzy, clusters} = Group.clusters(variants, ctx.fuzzy)
+
+    %Column{
+      blanks: blanks,
+      distinct: map_size(values),
+      fuzzy: fuzzy,
+      clusters: clusters,
+      values: listed(variants, ctx.values)
+    }
+  end
+
+  defp listed(_variants, false), do: nil
+
+  defp listed(variants, true) do
+    variants
+    |> Map.values()
+    |> Enum.sort_by(fn {order, %Variant{count: count}} -> {-count, order} end)
+    |> Enum.map(fn {_order, variant} -> variant end)
   end
 
   defp variant(cell, count, locations, :lines),
@@ -167,10 +187,19 @@ defmodule Refract.Profile.Count do
     }
   end
 
-  defp validate_singles(singles) when singles in [:keep, :drop], do: :ok
+  defp validate_values(values) when is_boolean(values), do: :ok
 
-  defp validate_singles(singles) do
-    raise ArgumentError, "singles must be :keep or :drop, got: #{inspect(singles)}"
+  defp validate_values(values) do
+    raise ArgumentError, "values must be true or false, got: #{inspect(values)}"
+  end
+
+  @spec validate_fuzzy!(term()) :: :ok
+
+  def validate_fuzzy!(false), do: :ok
+  def validate_fuzzy!(fuzzy) when is_number(fuzzy) and fuzzy >= 0 and fuzzy <= 1, do: :ok
+
+  def validate_fuzzy!(fuzzy) do
+    raise ArgumentError, "fuzzy must be a number from 0 to 1 or false, got: #{inspect(fuzzy)}"
   end
 
   defp validate_columns(columns) when columns in [:shape, :all], do: :ok
@@ -182,14 +211,17 @@ defmodule Refract.Profile.Count do
   defp validate_except(except, columns, :shape) when is_list(except),
     do: except |> Enum.reject(&is_map_key(columns, &1)) |> validate_known()
 
-  defp validate_except(except, _columns, :all) when is_list(except) do
-    if Enum.all?(except, &is_binary/1),
-      do: :ok,
-      else: raise(ArgumentError, "except must be a list of column names, got: #{inspect(except)}")
-  end
+  defp validate_except(except, _columns, :all) when is_list(except),
+    do: except |> Enum.reject(&is_binary/1) |> validate_names()
 
   defp validate_except(except, _columns, _mode) do
     raise ArgumentError, "except must be a list of shape columns, got: #{inspect(except)}"
+  end
+
+  defp validate_names([]), do: :ok
+
+  defp validate_names(bad) do
+    raise ArgumentError, "except must be a list of column names, got: #{inspect(bad)}"
   end
 
   defp validate_known([]), do: :ok
