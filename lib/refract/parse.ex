@@ -22,6 +22,9 @@ defmodule Refract.Parse do
       iex> Refract.Parse.date("02-Oct-2026", formats: ["dd-MMM-yyyy", :iso])
       {:ok, ~D[2026-10-02]}
 
+      iex> Refract.Parse.date("08/01/25", formats: ["dd/MM/20yy"])
+      {:ok, ~D[2025-01-08]}
+
       iex> Refract.Parse.datetime("02/10/2026 9:30", formats: [:dmy])
       {:ok, ~N[2026-10-02 09:30:00]}
 

@@ -696,6 +696,7 @@ Refract.Parse.number("(12.00)", currency: true)              #=> {:ok, Decimal.n
 Refract.Parse.number("n/a")                                  #=> {:error, {:not_a_number, "n/a"}}
 Refract.Parse.date("02-Oct-2026", formats: ["dd-MMM-yyyy"])  #=> {:ok, ~D[2026-10-02]}
 Refract.Parse.date("05/10/2026", formats: [:dmy])            #=> {:ok, ~D[2026-10-05]}
+Refract.Parse.date("08/01/25", formats: ["dd/MM/20yy"])      #=> {:ok, ~D[2025-01-08]}
 Refract.Parse.boolean("Yes")                                 #=> {:ok, true}
 
 Refract.Clean.normalise_whitespace("  big   red\tapple ")     #=> "big red apple"
