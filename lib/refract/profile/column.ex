@@ -4,6 +4,8 @@ defmodule Refract.Profile.Column do
   alias Refract.Profile.Cluster
   alias Refract.Profile.Variant
 
+  @enforce_keys [:blanks, :distinct]
+
   defstruct [:blanks, :distinct, :fuzzy, :values, capped: false, clusters: []]
 
   @type t :: %__MODULE__{

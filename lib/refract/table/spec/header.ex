@@ -1,6 +1,8 @@
 defmodule Refract.Table.Spec.Header do
   @moduledoc false
 
+  @enforce_keys [:columns, :required, :min_matches, :lookup, :regexes]
+
   defstruct [:columns, :required, :min_matches, :lookup, :regexes, ignore: []]
 
   import Refract.String.Utils, only: [blank?: 1, header_cell: 1, normalise: 1]

@@ -12,6 +12,8 @@ defmodule Refract.Validate.Issue do
   alias Refract.Table.Spec.Row
   alias Refract.Validate.Rules
 
+  @enforce_keys [:rule]
+
   defstruct [:line, :column, :field, :rule, :value]
 
   @type rule :: Rules.rule() | atom() | {:recognition, Row.rule() | atom()}

@@ -15,12 +15,11 @@ defmodule Refract.Validate.Validator do
       validation: [columns: %{"post_code" => [:required, MyApp.Validators.PostCode]}]
   """
 
+  import Refract.Utils, only: [exports?: 3]
+
   @callback valid?(cell :: Refract.cell(), opts :: keyword()) :: boolean()
 
   @spec validator?(term()) :: boolean()
 
-  def validator?(module) when is_atom(module),
-    do: Code.ensure_loaded?(module) and function_exported?(module, :valid?, 2)
-
-  def validator?(_rule), do: false
+  def validator?(module), do: exports?(module, :valid?, 2)
 end

@@ -3,6 +3,8 @@ defmodule Refract.Reader.Lookup do
 
   alias Refract.Source
 
+  import Refract.Utils, only: [exports?: 3]
+
   @type reader_entry :: module() | {module(), keyword()}
 
   @spec for_path(Path.t(), [reader_entry()]) ::
@@ -59,11 +61,11 @@ defmodule Refract.Reader.Lookup do
   end
 
   defp validate_reader_module(reader) do
-    if not (Code.ensure_loaded?(reader) and function_exported?(reader, :classify, 3)) do
+    if not exports?(reader, :classify, 3) do
       raise ArgumentError, "reader #{inspect(reader)} must use Refract.Reader"
     end
 
-    if not function_exported?(reader, :extensions, 0) do
+    if not exports?(reader, :extensions, 0) do
       raise ArgumentError, "reader #{inspect(reader)} must declare its extensions/0"
     end
   end

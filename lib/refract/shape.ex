@@ -35,6 +35,8 @@ defmodule Refract.Shape do
           fields: %{String.t() => Field.t()}
         }
 
+  @enforce_keys [:name, :version, :spec]
+
   defstruct [:name, :version, :spec, :markers, :validation, fields: %{}]
 
   @type opt ::

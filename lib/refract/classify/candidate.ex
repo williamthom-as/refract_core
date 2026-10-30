@@ -16,5 +16,7 @@ defmodule Refract.Classify.Candidate do
           markers: [Marker.t()]
         }
 
+  @enforce_keys [:shape, :status, :score]
+
   defstruct [:shape, :status, :score, :header, rows: [], markers: []]
 end

@@ -29,6 +29,8 @@ defmodule Refract.Table do
   alias Refract.Table.Spec.Row
   alias Refract.Table.Spec.Stop
 
+  @enforce_keys [:header, :columns, :rows]
+
   defstruct [:header_row, :header, :columns, :rows]
 
   @type t :: %__MODULE__{

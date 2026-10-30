@@ -5,6 +5,7 @@ defmodule Refract.Classify.Facts.Source do
   alias Refract.Classify.Result
 
   import Refract.Source, only: [path: 1, size: 1]
+  import Refract.Utils, only: [exports?: 3]
 
   @spec add(Result.t(), module(), Refract.source(), keyword()) :: Result.t()
 
@@ -25,13 +26,11 @@ defmodule Refract.Classify.Facts.Source do
 
   defp format(_reader, {:stream, _chunks}, _opts), do: %{}
 
-  defp format(reader, source, opts) do
-    if Code.ensure_loaded?(reader) and function_exported?(reader, :facts, 2) do
-      reader_format(reader.facts(source, opts))
-    else
-      %{}
-    end
-  end
+  defp format(reader, source, opts),
+    do: reader |> exports?(:facts, 2) |> format(reader, source, opts)
+
+  defp format(true, reader, source, opts), do: reader_format(reader.facts(source, opts))
+  defp format(false, _reader, _source, _opts), do: %{}
 
   defp reader_format({:ok, format}), do: format
   defp reader_format({:error, _reason}), do: %{}

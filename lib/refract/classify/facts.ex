@@ -1,6 +1,8 @@
 defmodule Refract.Classify.Facts do
   @moduledoc false
 
+  @enforce_keys [:lines_sampled]
+
   defstruct [
     :path,
     :size,

@@ -9,6 +9,8 @@ defmodule Refract.Table.Body do
 
   import Refract.String.Utils, only: [blank_line?: 1]
 
+  @enforce_keys [:spec, :positions, :values, :misses]
+
   defstruct [:spec, :positions, :values, :misses]
 
   @type step :: {:hit | :miss | :end, Refract.row(), Report.Line.t()}

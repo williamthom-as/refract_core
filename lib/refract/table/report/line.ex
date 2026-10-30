@@ -4,6 +4,8 @@ defmodule Refract.Table.Report.Line do
   alias Refract.Table.Report.Column
   alias Refract.Table.Report.Rule
 
+  @enforce_keys [:check]
+
   defstruct [:row, :check, :passed, columns: %{}, rules: [], extra: []]
 
   @type check :: :header | :row

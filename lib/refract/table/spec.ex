@@ -6,6 +6,8 @@ defmodule Refract.Table.Spec do
   alias Refract.Table.Spec.Row
   alias Refract.Table.Spec.Stop
 
+  @enforce_keys [:header, :row, :stop, :max_misses]
+
   defstruct [:header, :row, :stop, :max_misses]
 
   @type t :: %__MODULE__{

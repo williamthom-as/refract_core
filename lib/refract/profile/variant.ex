@@ -1,6 +1,8 @@
 defmodule Refract.Profile.Variant do
   @moduledoc false
 
+  @enforce_keys [:value, :count]
+
   defstruct [:value, :count, :files, lines: []]
 
   @type t :: %__MODULE__{

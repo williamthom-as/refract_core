@@ -1,6 +1,8 @@
 defmodule Refract.Table.Report.Rule do
   @moduledoc false
 
+  @enforce_keys [:rule, :passed]
+
   defstruct [:rule, :passed, :expected, :actual, :missing]
 
   @type t :: %__MODULE__{

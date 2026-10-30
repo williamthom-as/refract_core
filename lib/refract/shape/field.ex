@@ -4,6 +4,8 @@ defmodule Refract.Shape.Field do
   alias Refract.Grid.Lookup
   alias Refract.Validate.Rules
 
+  @enforce_keys [:label, :at]
+
   defstruct [:label, :at, take: :right, rules: []]
 
   @type t :: %__MODULE__{

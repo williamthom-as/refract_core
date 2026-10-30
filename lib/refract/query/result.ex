@@ -3,6 +3,8 @@ defmodule Refract.Query.Result do
   the result of `Refract.Query.run/3`: `columns` (select order), `rows` are lazy stream of maps
   """
 
+  @enforce_keys [:columns, :rows]
+
   defstruct [:columns, :rows]
 
   @type t :: %__MODULE__{

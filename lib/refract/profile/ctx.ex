@@ -1,6 +1,8 @@
 defmodule Refract.Profile.Ctx do
   @moduledoc false
 
+  @enforce_keys [:max_distinct, :max_lines]
+
   defstruct [
     :max_distinct,
     :max_lines,

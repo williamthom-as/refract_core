@@ -4,6 +4,8 @@ defmodule Refract.Profile.Result do
   alias Refract.Profile.Column
   alias Refract.Shape
 
+  @enforce_keys [:shape, :rows]
+
   defstruct [:shape, :rows, :files, columns: %{}]
 
   @type t :: %__MODULE__{

@@ -21,6 +21,8 @@ defmodule Refract.Privacy.Keyring do
             current: version()
           }
 
+  @enforce_keys [:keys, :pins, :current]
+
   defstruct [:keys, :pins, :current]
 
   @spec new!([opt()]) :: t()

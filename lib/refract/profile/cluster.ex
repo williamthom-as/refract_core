@@ -3,6 +3,8 @@ defmodule Refract.Profile.Cluster do
 
   alias Refract.Profile.Variant
 
+  @enforce_keys [:most_common, :via]
+
   defstruct [:most_common, :via, variants: []]
 
   @type t :: %__MODULE__{

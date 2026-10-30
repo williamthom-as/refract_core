@@ -12,6 +12,8 @@ defmodule Refract.Rows.Ctx do
           column: String.t()
         }
 
+  @enforce_keys [:row, :column]
+
   defstruct [:row, :column]
 
   @spec new(Refract.row(), String.t()) :: t()

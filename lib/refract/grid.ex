@@ -26,6 +26,8 @@ defmodule Refract.Grid do
   alias Refract.Table.Spec
   alias Refract.Validate
 
+  @enforce_keys [:rows, :height, :width]
+
   defstruct [:rows, :height, :width]
 
   @type t :: %__MODULE__{

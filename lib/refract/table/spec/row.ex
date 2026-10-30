@@ -9,6 +9,8 @@ defmodule Refract.Table.Spec.Row do
   alias Refract.Parse.Date, as: DateParser
   alias Refract.Table.Report
 
+  @enforce_keys [:match, :min_score]
+
   defstruct [:match, :min_score]
 
   @type rule ::

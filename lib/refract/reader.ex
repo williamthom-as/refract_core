@@ -42,6 +42,8 @@ defmodule Refract.Reader do
 
   alias Refract.Reader.Lookup
 
+  import Refract.Utils, only: [exports?: 3]
+
   alias Refract.Classify
   alias Refract.Classify.Facts
   alias Refract.Classify.Score
@@ -225,13 +227,10 @@ defmodule Refract.Reader do
 
   @spec indexing(module()) :: :lines | :records
 
-  def indexing(reader), do: reader |> exports_indexing?() |> indexing(reader)
+  def indexing(reader), do: reader |> exports?(:indexing, 0) |> indexing(reader)
 
   defp indexing(true, reader), do: reader.indexing()
   defp indexing(false, _reader), do: :lines
-
-  defp exports_indexing?(reader),
-    do: Code.ensure_loaded?(reader) and function_exported?(reader, :indexing, 0)
 
   @type reader_entry :: Lookup.reader_entry()
 

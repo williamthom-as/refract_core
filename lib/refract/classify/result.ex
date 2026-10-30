@@ -28,6 +28,8 @@ defmodule Refract.Classify.Result do
           candidates: [Candidate.t()]
         }
 
+  @enforce_keys [:verdict]
+
   defstruct [:verdict, :reason, :shape, :file, :drift, :reader, candidates: []]
 
   @spec to_map(t()) :: map()

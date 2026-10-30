@@ -4,6 +4,8 @@ defmodule Refract.Table.Spec.Stop do
   import Refract.String.Utils, only: [blank_line?: 1]
   import Refract.Utils, only: [truthy?: 1]
 
+  @enforce_keys [:conditions]
+
   defstruct [:conditions]
 
   @type condition :: :blank | {:contains, Regex.t()} | (Refract.raw_row() -> as_boolean(term()))

@@ -12,6 +12,9 @@ defmodule Refract.Query do
   alias Refract.Table
 
   import Refract.String.Utils, only: [text: 1]
+  import Refract.Utils, only: [exports?: 3]
+
+  @enforce_keys [:engine, :state]
 
   defstruct [:engine, :state]
 
@@ -186,8 +189,7 @@ defmodule Refract.Query do
   end
 
   defp validate_engine(engine) do
-    if not (is_atom(engine) and Code.ensure_loaded?(engine) and
-              function_exported?(engine, :open, 1)) do
+    if not exports?(engine, :open, 1) do
       raise ArgumentError,
             "engine must implement Refract.Query.Engine, got: #{inspect(engine)}"
     end
