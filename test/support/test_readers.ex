@@ -84,3 +84,24 @@ defmodule Refract.TestReaders.NoExtensions do
   @impl Refract.Reader
   def open(_source, _opts), do: {:error, :refused}
 end
+
+defmodule Refract.TestReaders.Memory do
+  use Refract.Reader
+
+  @enforce_keys [:lines]
+
+  defstruct [:lines]
+
+  @type t :: %__MODULE__{lines: [Refract.raw_row()]}
+
+  @impl Refract.Reader
+  def open(%__MODULE__{lines: lines}, _opts), do: {:ok, lines}
+  def open(source, _opts), do: {:error, {:unsupported_source, source}}
+
+  @impl Refract.Reader
+  def facts(%__MODULE__{lines: lines}, _opts), do: {:ok, %{lines: length(lines)}}
+  def facts(source, _opts), do: {:error, {:unsupported_source, source}}
+
+  @impl Refract.Reader
+  def indexing, do: :records
+end

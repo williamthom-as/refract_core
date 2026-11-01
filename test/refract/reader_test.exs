@@ -206,4 +206,47 @@ defmodule Refract.ReaderTest do
       )
     end
   end
+
+  describe "a source struct" do
+    alias Refract.Classify.Facts
+    alias Refract.Classify.Result
+    alias Refract.Shape
+    alias Refract.Table
+    alias Refract.TestReaders.Memory
+
+    @memory %Memory{lines: [["account", "amount"], ["A-1", "1.00"], ["A-2", "2.50"]]}
+
+    defp ledger_shape do
+      Shape.new(
+        name: "ledger",
+        spec: Table.spec(header: [columns: %{"account" => ["account"], "amount" => ["amount"]}])
+      )
+    end
+
+    test "stream gives row maps" do
+      assert {:ok, rows} = Memory.stream(@memory)
+
+      assert Enum.to_list(rows) == [
+               %{"account" => "A-1", "amount" => "1.00"},
+               %{"account" => "A-2", "amount" => "2.50"}
+             ]
+    end
+
+    test "classify has no path or name and an unknown size, the reader facts kept" do
+      assert {:ok, %Result{verdict: :match, file: file} = result} =
+               Memory.classify(@memory, [ledger_shape()])
+
+      assert %Facts{path: nil, size: :unknown, format: %{lines: 3}} = file
+      assert %Result{reader: {Memory, []}} = result
+    end
+
+    test "validate and profile read it" do
+      assert {:ok, %Refract.Validate.Result{}} = Memory.validate(@memory, ledger_shape())
+      assert {:ok, %Refract.Profile.Result{}} = Memory.profile(@memory, ledger_shape())
+    end
+
+    test "load is unsupported" do
+      assert {:error, {:unsupported_source, @memory}} = Memory.load(@memory)
+    end
+  end
 end

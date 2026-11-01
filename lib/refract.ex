@@ -18,5 +18,5 @@ defmodule Refract do
   @type row :: %{optional(String.t()) => cell()}
 
   # inputs
-  @type source :: Path.t() | {:string, binary()} | {:stream, Enumerable.t()}
+  @type source :: Path.t() | {:string, binary()} | {:stream, Enumerable.t()} | struct()
 end

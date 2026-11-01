@@ -1,6 +1,8 @@
 defmodule Refract.Test.ReaderCase do
   @moduledoc """
   check/verify a custom reader will work with Refract.
+  `load: false` for a reader whose sources have no byte size (a database query): leaves out the
+  `load` test.
 
       use Refract.Test.ReaderCase,
         reader: MyReader,
@@ -8,8 +10,12 @@ defmodule Refract.Test.ReaderCase do
   """
 
   defmacro __using__(opts) do
+    opts = Keyword.validate!(opts, [:reader, :build, load: true])
     reader = Keyword.fetch!(opts, :reader)
     build = Keyword.fetch!(opts, :build)
+    load = Keyword.fetch!(opts, :load)
+
+    validate_load(load)
 
     quote do
       use ExUnit.Case, async: true
@@ -65,13 +71,21 @@ defmodule Refract.Test.ReaderCase do
           assert Enum.to_list(table.rows) == [%{"id" => "1", "name" => "alice"}]
         end
 
-        test "load builds a grid of the cells", %{tmp_dir: dir} do
-          source = build([["id", "name"], ["1", "alice"]], dir)
+        if unquote(load) do
+          test "load builds a grid of the cells", %{tmp_dir: dir} do
+            source = build([["id", "name"], ["1", "alice"]], dir)
 
-          assert {:ok, grid} = @reader.load(source)
-          assert Refract.Grid.cell(grid, "B2") == "alice"
+            assert {:ok, grid} = @reader.load(source)
+            assert Refract.Grid.cell(grid, "B2") == "alice"
+          end
         end
       end
     end
+  end
+
+  defp validate_load(load) when is_boolean(load), do: :ok
+
+  defp validate_load(load) do
+    raise ArgumentError, "load must be true or false, got: #{inspect(load)}"
   end
 end
