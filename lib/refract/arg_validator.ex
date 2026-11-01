@@ -1,5 +1,12 @@
 defmodule Refract.ArgValidator do
-  @moduledoc false
+  @moduledoc """
+  Validates common arg types for public functions. can be used in plugins.
+
+  raises ArgumentError if the value is invalid.
+
+      :ok = Refract.ArgValidator.validate_positive_integer!(total_size, :total_size)
+      :ok = Refract.ArgValidator.validate_boolean!(trans, :trans)
+  """
 
   @spec validate_positive_integer!(term(), atom()) :: :ok
 
