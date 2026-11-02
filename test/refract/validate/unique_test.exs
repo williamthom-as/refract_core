@@ -300,7 +300,7 @@ defmodule Refract.Validate.UniqueTest do
 
     test "the limit" do
       assert describe_issue(line: 4, column: "account", rule: {:max_tracked, :unique}) ==
-               "line 4, account: unique not checked past here, more values than max_tracked"
+               "line 4, account: unique not checked past this point (more values matched than max_tracked)"
     end
   end
 
