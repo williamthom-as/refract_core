@@ -54,22 +54,25 @@ defmodule Refract.Validate do
       Shape.resolve(shape)
 
     columns = Enum.sort(columns)
-    row_issues = &issues(&1, &2, columns, row_rules, values)
 
     rows
     |> Stream.with_index(1)
-    |> mark_rows(checks(unique, max_tracked), row_issues, values, identify_by)
+    |> mark_rows(checks(unique, max_tracked), {columns, row_rules, values}, identify_by)
   end
 
-  defp mark_rows(lines, [], row_issues, _values, identify_by) do
+  defp mark_rows(lines, [], {columns, row_rules, values}, identify_by) do
     Stream.map(lines, fn {row, line} ->
-      mark_row(row, row |> row_issues.(line) |> recorded(row, identify_by))
+      issues = row |> issues(line, columns, row_rules, values) |> recorded(row, identify_by)
+
+      mark_row(row, issues)
     end)
   end
 
-  defp mark_rows(lines, checks, row_issues, values, identify_by) do
+  defp mark_rows(lines, checks, {columns, row_rules, values}, identify_by) do
     lines
-    |> Stream.map(fn {row, line} -> {row, line, row_issues.(row, line)} end)
+    |> Stream.map(fn {row, line} ->
+      {row, line, issues(row, line, columns, row_rules, values)}
+    end)
     |> CrossRow.run(checks, values)
     |> Stream.map(fn {row, issues} -> mark_row(row, recorded(issues, row, identify_by)) end)
   end
