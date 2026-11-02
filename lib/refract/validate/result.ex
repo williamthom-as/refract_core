@@ -35,7 +35,8 @@ defmodule Refract.Validate.Result do
       field: field,
       rule: inspect(rule),
       value: text(issue.value),
-      record: record(issue.record)
+      record: record(issue.record),
+      first_line: issue.first_line
     }
   end
 
