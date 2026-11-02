@@ -30,26 +30,37 @@ defmodule Refract.Validate.Rules do
   @type t :: %__MODULE__{
           columns: %{String.t() => [rule()]},
           rows: [row_rule()],
-          document: [document_rule()]
+          document: [document_rule()],
+          unique: [[String.t()]]
         }
 
-  defstruct columns: %{}, rows: [], document: []
+  defstruct columns: %{}, rows: [], document: [], unique: []
 
   @spec new!(keyword(), %{String.t() => term()}) :: t()
 
   def new!(opts, column_names) do
-    opts = Keyword.validate!(opts, columns: %{}, rows: [], document: [])
+    opts = Keyword.validate!(opts, columns: %{}, rows: [], document: [], unique: [])
 
     columns = Keyword.fetch!(opts, :columns)
     rows = Keyword.fetch!(opts, :rows)
     document = Keyword.fetch!(opts, :document)
+    unique = Keyword.fetch!(opts, :unique)
+
+    validate_unique(unique, column_names)
+
+    {columns, column_unique} = split_unique(columns)
 
     validate_columns(columns, column_names)
 
     Enum.each(rows, &validate_row_rule/1)
     Enum.each(document, &validate_document_rule/1)
 
-    %__MODULE__{columns: columns, rows: rows, document: document}
+    %__MODULE__{
+      columns: columns,
+      rows: rows,
+      document: document,
+      unique: column_unique ++ unique
+    }
   end
 
   @spec validate_rules!([rule()]) :: :ok
@@ -58,6 +69,36 @@ defmodule Refract.Validate.Rules do
 
   def validate_rules!(rules) do
     raise ArgumentError, "rules must be a list, got: #{inspect(rules)}"
+  end
+
+  defp split_unique(columns) do
+    {Map.new(columns, fn {column, rules} -> {column, without_unique(rules)} end),
+     for({column, rules} <- columns, unique?(rules), do: [column])}
+  end
+
+  defp without_unique(rules) when is_list(rules), do: Enum.reject(rules, &(&1 == :unique))
+  defp without_unique(rules), do: rules
+
+  defp unique?(rules) when is_list(rules), do: :unique in rules
+  defp unique?(_rules), do: false
+
+  defp validate_unique(unique, column_names) when is_list(unique),
+    do: Enum.each(unique, &validate_combination(&1, column_names))
+
+  defp validate_unique(unique, _column_names), do: invalid_unique(unique)
+
+  defp validate_combination([_first, _second | _rest] = columns, column_names) do
+    if not Enum.all?(columns, &(is_binary(&1) and is_map_key(column_names, &1))) do
+      invalid_unique(columns)
+    end
+  end
+
+  defp validate_combination(columns, _column_names), do: invalid_unique(columns)
+
+  defp invalid_unique(unique) do
+    raise ArgumentError,
+          "unique must be a list of combinations of two or more shape columns, got: " <>
+            inspect(unique)
   end
 
   defp validate_columns(columns, column_names) do

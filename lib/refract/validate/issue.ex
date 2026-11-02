@@ -17,9 +17,14 @@ defmodule Refract.Validate.Issue do
 
   @enforce_keys [:rule]
 
-  defstruct [:line, :column, :field, :rule, :value, :record]
+  defstruct [:line, :column, :field, :rule, :value, :record, :first_line]
 
-  @type rule :: Rules.rule() | atom() | {:recognition, Row.rule() | atom()}
+  @type rule ::
+          Rules.rule()
+          | atom()
+          | {:recognition, Row.rule() | atom()}
+          | {:unique, [String.t()]}
+          | {:max_tracked, :unique | {:unique, [String.t()]}}
 
   @type t :: %__MODULE__{
           line: pos_integer() | nil,
@@ -27,8 +32,15 @@ defmodule Refract.Validate.Issue do
           field: String.t() | nil,
           rule: rule(),
           value: Refract.cell() | nil,
-          record: %{String.t() => Refract.cell()} | nil
+          record: %{String.t() => Refract.cell()} | nil,
+          first_line: pos_integer() | nil
         }
+
+  @doc false
+  @spec shown(boolean(), Refract.cell()) :: Refract.cell() | nil
+
+  def shown(true, cell), do: cell
+  def shown(false, _cell), do: nil
 
   @spec describe(t()) :: String.t()
 
