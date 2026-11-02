@@ -14,9 +14,10 @@ defmodule Refract.Reader do
   - `suggest`: `within`, `header_row`
   - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`, `values`,
     `fuzzy`, `columns`, `indexing` (set from the reader)
-  - `validate`: `within`, `header_row`, `values`, `indexing` (set from the reader; and `max_bytes`
-    when the shape has fields or document rules, as the whole file is read)
-  - `load`, `fields`: `max_bytes`
+  - `validate`: `within`, `header_row`, `values`, `identify_by`, `indexing` (set from the reader;
+    `max_bytes` and `max_rows` contraint read when the shape has fields or document rules, they
+    generally require the whole file to be read for all validators to be applied)
+  - `load`, `fields`: `max_bytes`, `max_rows` (both max_bytes|rows are used if both are supplied)
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`
 
@@ -44,6 +45,7 @@ defmodule Refract.Reader do
 
   import Refract.Utils, only: [exports?: 3]
 
+  alias Refract.ArgValidator
   alias Refract.Classify
   alias Refract.Classify.Facts
   alias Refract.Classify.Score
@@ -247,12 +249,15 @@ defmodule Refract.Reader do
           {:ok, Grid.t()} | {:error, term()}
 
   def load(reader, source, opts) do
-    {grid_opts, open_opts} = Keyword.split(opts, [:max_bytes])
+    {grid_opts, open_opts} = Keyword.split(opts, [:max_bytes, :max_rows])
 
     max_bytes = Keyword.get(grid_opts, :max_bytes, 10_000_000)
+    max_rows = Keyword.get(grid_opts, :max_rows)
 
-    with :ok <- source |> Source.size() |> within_size(source, max_bytes),
-         do: read(reader, source, open_opts, &{:ok, Grid.new(&1)})
+    validate_max_rows(max_rows)
+
+    with :ok <- source |> Source.size() |> within_size(source, max_bytes, max_rows),
+         do: read(reader, source, open_opts, &grid(&1, max_rows))
   end
 
   @doc false
@@ -265,15 +270,34 @@ defmodule Refract.Reader do
          do: parse_error_as_error(fn -> fun.(raw) end)
   end
 
-  defp within_size({:ok, :unknown}, source, _max_bytes),
+  defp within_size({:ok, :unknown}, source, _max_bytes, nil),
     do: {:error, {:stream_not_allowed, source}}
 
-  defp within_size({:ok, size}, _source, max_bytes) when size <= max_bytes, do: :ok
+  defp within_size({:ok, :unknown}, _source, _max_bytes, _max_rows), do: :ok
 
-  defp within_size({:ok, _size}, _source, max_bytes),
+  defp within_size({:ok, size}, _source, max_bytes, _max_rows) when size <= max_bytes, do: :ok
+
+  defp within_size({:ok, _size}, _source, max_bytes, _max_rows),
     do: {:error, {:max_bytes_exceeded, max_bytes}}
 
-  defp within_size({:error, _reason} = error, _source, _max_bytes), do: error
+  defp within_size({:error, {:unsupported_source, _unsupported}}, _source, _max_bytes, max_rows)
+       when is_integer(max_rows),
+       do: :ok
+
+  defp within_size({:error, _reason} = error, _source, _max_bytes, _max_rows), do: error
+
+  defp grid(raw, nil), do: {:ok, Grid.new(raw)}
+
+  defp grid(raw, max_rows),
+    do: raw |> Enum.take(max_rows + 1) |> Enum.split(max_rows) |> capped_grid(max_rows)
+
+  defp capped_grid({lines, []}, _max_rows), do: {:ok, Grid.new(lines)}
+  defp capped_grid({_lines, _over}, max_rows), do: {:error, {:max_rows_exceeded, max_rows}}
+
+  defp validate_max_rows(nil), do: :ok
+
+  defp validate_max_rows(max_rows),
+    do: ArgValidator.validate_positive_integer!(max_rows, :max_rows)
 
   defp parse_error_as_error(read) do
     read.()

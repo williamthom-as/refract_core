@@ -28,6 +28,17 @@ defmodule Refract.Validate.Result do
     }
   end
 
-  defp issue(%Issue{line: line, column: column, field: field, rule: rule, value: value}),
-    do: %{line: line, column: column, field: field, rule: inspect(rule), value: text(value)}
+  defp issue(%Issue{line: line, column: column, field: field, rule: rule} = issue) do
+    %{
+      line: line,
+      column: column,
+      field: field,
+      rule: inspect(rule),
+      value: text(issue.value),
+      record: record(issue.record)
+    }
+  end
+
+  defp record(nil), do: nil
+  defp record(record), do: Map.new(record, fn {column, value} -> {column, text(value)} end)
 end

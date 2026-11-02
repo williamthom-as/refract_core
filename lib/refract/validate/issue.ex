@@ -1,7 +1,8 @@
 defmodule Refract.Validate.Issue do
   @moduledoc """
-  one validation problem: where (line, column or field), the rule that failed, and the cell
-  when validated with `values: true`
+  one validation problem: where (line, column or field), the rule that failed, the cell
+  when validated with `values: true`, and the record a row issue is about when validated with
+  `identify_by:` (the named columns and their values, shown whatever `values:` says)
 
   - `describe/1` reads it as one line of text
 
@@ -12,9 +13,11 @@ defmodule Refract.Validate.Issue do
   alias Refract.Table.Spec.Row
   alias Refract.Validate.Rules
 
+  import Refract.String.Utils, only: [text: 1]
+
   @enforce_keys [:rule]
 
-  defstruct [:line, :column, :field, :rule, :value]
+  defstruct [:line, :column, :field, :rule, :value, :record]
 
   @type rule :: Rules.rule() | atom() | {:recognition, Row.rule() | atom()}
 
@@ -23,7 +26,8 @@ defmodule Refract.Validate.Issue do
           column: String.t() | nil,
           field: String.t() | nil,
           rule: rule(),
-          value: Refract.cell() | nil
+          value: Refract.cell() | nil,
+          record: %{String.t() => Refract.cell()} | nil
         }
 
   @spec describe(t()) :: String.t()
@@ -33,9 +37,23 @@ defmodule Refract.Validate.Issue do
 
   defp where(%__MODULE__{line: nil, field: nil}), do: ""
   defp where(%__MODULE__{line: nil, field: field}), do: "field #{field}: "
-  defp where(%__MODULE__{line: line, column: nil, field: nil}), do: "line #{line}: "
-  defp where(%__MODULE__{line: line, field: nil, column: column}), do: "line #{line}, #{column}: "
+  defp where(%__MODULE__{column: nil, field: nil} = issue), do: "#{description(issue)}: "
+
+  defp where(%__MODULE__{field: nil, column: column} = issue),
+    do: "#{description(issue)}, #{column}: "
+
   defp where(%__MODULE__{line: line, field: field}), do: "line #{line}, field #{field}: "
+
+  defp description(%__MODULE__{line: line, record: nil}), do: "line #{line}"
+
+  defp description(%__MODULE__{line: line, record: record}),
+    do: "line #{line} (#{record_text(record)})"
+
+  defp record_text(record) do
+    record
+    |> Enum.sort()
+    |> Enum.map_join(", ", fn {column, value} -> "#{column} #{text(value)}" end)
+  end
 
   defp rule_text({:recognition, rule}), do: rule_text(rule)
   defp rule_text(:required), do: "is required"

@@ -20,20 +20,21 @@ defmodule Refract.Validate do
 
   import Refract.String.Utils, only: [blank?: 1]
 
-  @type opt :: {:values, boolean()}
+  @type opt :: {:values, boolean()} | {:identify_by, String.t() | [String.t()] | nil}
 
   @type tagged :: {:ok, Refract.row()} | {:invalid, Refract.row(), [Issue.t()]}
 
   @doc "the options validate takes besides the header search with defaults"
   @spec options() :: keyword()
 
-  def options, do: [values: false, indexing: :lines]
+  def options, do: [values: false, indexing: :lines, identify_by: nil]
 
   @spec rows(Enumerable.t(), Shape.t() | module(), [opt()]) :: Enumerable.t(tagged())
 
   def rows(rows, shape, opts \\ []) do
-    opts = Keyword.validate!(opts, Keyword.take(options(), [:values]))
+    opts = Keyword.validate!(opts, Keyword.take(options(), [:values, :identify_by]))
     values = Keyword.fetch!(opts, :values)
+    identify_by = opts |> Keyword.fetch!(:identify_by) |> identify_by()
 
     %Shape{validation: %Rules{columns: columns, rows: row_rules}} = Shape.resolve(shape)
     columns = Enum.sort(columns)
@@ -41,7 +42,9 @@ defmodule Refract.Validate do
     rows
     |> Stream.with_index(1)
     |> Stream.map(fn {row, line} ->
-      mark_row(row, issues(row, line, columns, row_rules, values))
+      issues = row |> issues(line, columns, row_rules, values) |> recorded(row, identify_by)
+
+      mark_row(row, issues)
     end)
   end
 
@@ -77,6 +80,7 @@ defmodule Refract.Validate do
     opts = Keyword.validate!(opts, options())
     values = Keyword.fetch!(opts, :values)
     indexing = Keyword.fetch!(opts, :indexing)
+    identify_by = opts |> Keyword.fetch!(:identify_by) |> identify_by()
 
     %Shape{spec: spec, validation: %Rules{columns: columns, rows: row_rules}} =
       Shape.resolve(shape)
@@ -89,7 +93,11 @@ defmodule Refract.Validate do
       {:ok, Enum.map(missing, &missing_issue(&1, header_row)),
        Stream.map(steps, fn {kind, row, report} ->
          row = Map.merge(row, absent)
-         {row, step_issues({kind, row, report}, columns, row_rules, values)}
+
+         {row,
+          {kind, row, report}
+          |> step_issues(columns, row_rules, values)
+          |> recorded(row, identify_by)}
        end)}
     end
   end
@@ -159,6 +167,28 @@ defmodule Refract.Validate do
           }
 
     Enum.sort_by(validation ++ recognition, & &1.column) ++ row_issues(row, line, row_rules)
+  end
+
+  defp identify_by(nil), do: nil
+  defp identify_by(column) when is_binary(column), do: [column]
+
+  defp identify_by([_ | _] = columns) do
+    if Enum.all?(columns, &is_binary/1), do: columns, else: invalid_identify_by(columns)
+  end
+
+  defp identify_by(identify_by), do: invalid_identify_by(identify_by)
+
+  defp invalid_identify_by(identify_by) do
+    raise ArgumentError,
+          "identify_by must be a column name or a list of them, got: #{inspect(identify_by)}"
+  end
+
+  defp recorded(issues, _row, nil), do: issues
+
+  defp recorded(issues, row, identify_by) do
+    record = Map.new(identify_by, &{&1, Map.get(row, &1)})
+
+    Enum.map(issues, &%{&1 | record: record})
   end
 
   defp mark_row(row, []), do: {:ok, row}
