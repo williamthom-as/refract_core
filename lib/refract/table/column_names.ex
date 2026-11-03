@@ -1,10 +1,17 @@
 defmodule Refract.Table.ColumnNames do
-  @moduledoc false
+  @moduledoc "row keys a header row has normalised to be valid/unique"
 
   import Refract.String.Utils, only: [header_cell: 1]
 
   @nil_col_prefix "col"
 
+  @doc """
+  Row keys for header row after undergoing a normalisation. all cells are trimmed and unquoted,
+  any blank cells get named `col_<index>` (from 0) if any repeated names they get numbered from 2
+
+      iex> Refract.Table.ColumnNames.from([" Customer ID ", "Name", "", "Balance", "Balance"])
+      ["Customer ID", "Name", "col_2", "Balance", "Balance_2"]
+  """
   @spec from([Refract.cell()]) :: [String.t()]
 
   def from(header) do
@@ -34,6 +41,12 @@ defmodule Refract.Table.ColumnNames do
     names
   end
 
+  @doc """
+  a raw row as a row map under those keys
+
+      iex> Refract.Table.ColumnNames.to_row(["id", "name"], ["1", "alice"])
+      %{"id" => "1", "name" => "alice"}
+  """
   @spec to_row([String.t()], [Refract.cell()]) :: Refract.row()
 
   def to_row(names, raw_row) do

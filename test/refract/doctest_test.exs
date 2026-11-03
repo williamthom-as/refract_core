@@ -6,5 +6,6 @@ defmodule Refract.DoctestTest do
   doctest Refract.Parse
   doctest Refract.Clean
   doctest Refract.Privacy.Redact
+  doctest Refract.Table.ColumnNames
   doctest Refract.Validate.Issue
 end
