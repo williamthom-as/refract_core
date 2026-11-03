@@ -1,6 +1,8 @@
 defmodule Refract.Reader do
   @moduledoc """
-  behaviour for tabular readers. to use, implement `open/2` and return arrays of cells
+  behaviour for tabular readers. to use, implement `open/2` and return arrays of cells, and
+  `open_options/0` listing the options `open/2` (and `facts/2`) take with their defaults, so a
+  caller can tell what a reader takes before calling it
   `use Refract.Reader` injects `stream/2`, `locate/3`, `classify/3`, `suggest/3`, `profile/3`,
   `validate/3`, `fields/3` and `load/2`.
   implement `extensions/0` to be picked by file extension in `Refract.Classify.folder/3`.
@@ -26,12 +28,20 @@ defmodule Refract.Reader do
         use Refract.Reader
 
         @impl Refract.Reader
-        def open(source, opts), do: {:ok, lines_of_cells}
+        def open_options, do: [sheet: nil]
+
+        @impl Refract.Reader
+        def open(source, opts) do
+          opts = Keyword.validate!(opts, open_options())
+          {:ok, lines_of_cells}
+        end
       end
   """
 
   @callback open(source :: Refract.source(), opts :: keyword()) ::
               {:ok, Enumerable.t()} | {:error, term()}
+
+  @callback open_options() :: keyword()
 
   @callback facts(source :: Refract.source(), opts :: keyword()) ::
               {:ok, map()} | {:error, term()}

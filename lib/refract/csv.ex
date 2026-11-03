@@ -39,11 +39,21 @@ defmodule Refract.CSV do
   @impl Refract.Reader
   def extensions, do: ["csv", "tsv"]
 
+  @spec open_options() :: keyword()
+
+  @impl Refract.Reader
+  def open_options, do: [separator: :detect, encoding: :auto]
+
+  @spec encode_options() :: keyword()
+
+  @impl Refract.Writer
+  def encode_options, do: [header: nil, separator: ",", bom: false, escape_formulas: true]
+
   @spec open(source :: Refract.source(), keyword()) :: {:ok, Enumerable.t()} | {:error, term()}
 
   @impl true
   def open(source, opts) do
-    opts = Keyword.validate!(opts, separator: :detect, encoding: :auto)
+    opts = Keyword.validate!(opts, open_options())
     encoding = Keyword.fetch!(opts, :encoding)
 
     Encoding.validate!(encoding)
@@ -66,7 +76,7 @@ defmodule Refract.CSV do
 
   @impl true
   def encode(rows, opts) do
-    opts = Keyword.validate!(opts, header: nil, separator: ",", bom: false, escape_formulas: true)
+    opts = Keyword.validate!(opts, encode_options())
     escape_formulas = Keyword.fetch!(opts, :escape_formulas)
 
     validate_escape_formulas(escape_formulas)
@@ -83,7 +93,7 @@ defmodule Refract.CSV do
   @spec facts(source :: Refract.source(), keyword()) :: {:ok, map()} | {:error, term()}
 
   @impl true
-  def facts(source, opts \\ []), do: Facts.run(source, opts)
+  def facts(source, opts \\ []), do: Facts.run(source, Keyword.validate!(opts, open_options()))
 
   defp supported(%{utf16: true}, :auto), do: {:error, {:unsupported_encoding, :utf16}}
   defp supported(%{line_endings: :cr}, _encoding), do: {:error, {:unsupported_line_endings, :cr}}

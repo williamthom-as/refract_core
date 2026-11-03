@@ -5,6 +5,9 @@ defmodule Refract.ReaderTest do
     use Refract.Reader
 
     @impl Refract.Reader
+    def open_options, do: []
+
+    @impl Refract.Reader
     def open({:stream, rows}, _opts), do: {:ok, rows}
 
     def open(:missing, _opts), do: {:error, :enoent}
@@ -113,6 +116,9 @@ defmodule Refract.ReaderTest do
 
     defmodule RecordsReader do
       use Refract.Reader
+
+      @impl Refract.Reader
+      def open_options, do: []
 
       @impl Refract.Reader
       def open({:stream, rows}, _opts), do: {:ok, rows}

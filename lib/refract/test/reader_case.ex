@@ -62,6 +62,20 @@ defmodule Refract.Test.ReaderCase do
           assert {:error, _reason} = @reader.stream(Path.join(dir, "missing"))
         end
 
+        test "open_options lists open's options with their defaults", %{tmp_dir: dir} do
+          rows = [["id", "name"], ["1", "alice"]]
+
+          assert {:ok, given} = @reader.open(build(rows, dir), @reader.open_options())
+          assert {:ok, defaults} = @reader.open(build(rows, dir), [])
+          assert Enum.to_list(given) == Enum.to_list(defaults)
+        end
+
+        test "an option open_options does not list is refused", %{tmp_dir: dir} do
+          source = build([["id"], ["1"]], dir)
+
+          assert_raise ArgumentError, fn -> @reader.open(source, not_an_option: true) end
+        end
+
         test "locate finds the header below other lines", %{tmp_dir: dir} do
           source = build([["report", ""], ["", ""], ["id", "name"], ["1", "alice"]], dir)
           spec = Refract.Table.spec(header: [columns: %{"id" => ["id"], "name" => ["name"]}])

@@ -1,6 +1,7 @@
 defmodule Refract.Writer do
   @moduledoc """
-  behaviour for writers, implement `encode/2` and `extension/0` to make use of.
+  behaviour for writers, implement `encode/2`, `encode_options/0` (the options `encode/2` takes
+  with their defaults) and `extension/0` to make use of.
   `use Refract.Writer` injects `write/3` and `write_chunks/3`. `cells/2` turns row maps into a
   header line then each row's values in header order, for writers of lines of cells.
 
@@ -12,6 +13,8 @@ defmodule Refract.Writer do
   alias Refract.ArgValidator
 
   @callback encode(rows :: Enumerable.t(), opts :: keyword()) :: Enumerable.t()
+
+  @callback encode_options() :: keyword()
 
   @callback extension() :: String.t()
 

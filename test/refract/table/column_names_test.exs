@@ -101,6 +101,9 @@ defmodule Refract.Table.ColumnNamesTest do
       use Refract.Reader
 
       @impl Refract.Reader
+      def open_options, do: []
+
+      @impl Refract.Reader
       def open({:stream, rows}, _opts), do: {:ok, rows}
     end
 

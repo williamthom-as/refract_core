@@ -8,6 +8,9 @@ defmodule Refract.WriterTest do
     use Refract.Writer
 
     @impl Refract.Writer
+    def encode_options, do: []
+
+    @impl Refract.Writer
     def encode(rows, _opts), do: Stream.map(rows, fn row -> [row["id"], "\n"] end)
 
     @impl Refract.Writer

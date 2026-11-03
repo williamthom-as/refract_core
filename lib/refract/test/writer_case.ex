@@ -23,6 +23,8 @@ defmodule Refract.Test.WriterCase do
 
       defp path(dir, name), do: Path.join(dir, "#{name}.#{@writer.extension()}")
 
+      defp binary(encoded), do: encoded |> Enum.to_list() |> IO.iodata_to_binary()
+
       describe "writer conformance" do
         test "write gives the header then the rows", %{tmp_dir: dir} do
           path = path(dir, "out")
@@ -30,6 +32,20 @@ defmodule Refract.Test.WriterCase do
 
           assert :ok = @writer.write(rows, path, header: ["id", "name"])
           assert read(path) == [["id", "name"], ["1", "alice"], ["2", "bob"]]
+        end
+
+        test "encode_options lists encode's options with their defaults" do
+          rows = [%{"id" => "1", "name" => "alice"}]
+          defaults = Keyword.delete(@writer.encode_options(), :header)
+
+          assert binary(@writer.encode(rows, [header: ["id", "name"]] ++ defaults)) ==
+                   binary(@writer.encode(rows, header: ["id", "name"]))
+        end
+
+        test "an option encode_options does not list is refused" do
+          assert_raise ArgumentError, fn ->
+            [%{"id" => "1"}] |> @writer.encode(not_an_option: true) |> Enum.to_list()
+          end
         end
 
         test "header sets the columns and their order", %{tmp_dir: dir} do
