@@ -6,6 +6,8 @@ defmodule Refract.Validate do
     `source/3`, the rows position from 1 in `rows/3`)
   - field rules on the values read around the table (can be found anywhere)
   - document rules over the field values and every table row together
+  - unique values from column (or combinations of columns). can be limited to max_tracked
+    uniques if the file is huge.
   """
 
   alias Refract.Shape
@@ -14,38 +16,65 @@ defmodule Refract.Validate do
   alias Refract.Table.Report
 
   alias Refract.Validate.Check
+  alias Refract.Validate.CrossRow
   alias Refract.Validate.Issue
   alias Refract.Validate.Result
   alias Refract.Validate.Rules
+  alias Refract.Validate.Unique
 
+  import Refract.ArgValidator, only: [validate_positive_integer!: 2]
   import Refract.String.Utils, only: [blank?: 1]
+  import Refract.Validate.Issue, only: [shown: 2]
 
-  @type opt :: {:values, boolean()} | {:identify_by, String.t() | [String.t()] | nil}
+  @type opt ::
+          {:values, boolean()}
+          | {:identify_by, String.t() | [String.t()] | nil}
+          | {:max_tracked, pos_integer()}
 
   @type tagged :: {:ok, Refract.row()} | {:invalid, Refract.row(), [Issue.t()]}
 
   @doc "the options validate takes besides the header search with defaults"
   @spec options() :: keyword()
 
-  def options, do: [values: false, indexing: :lines, identify_by: nil]
+  def options, do: [values: false, indexing: :lines, identify_by: nil, max_tracked: 1_000_000]
 
   @spec rows(Enumerable.t(), Shape.t() | module(), [opt()]) :: Enumerable.t(tagged())
 
   def rows(rows, shape, opts \\ []) do
-    opts = Keyword.validate!(opts, Keyword.take(options(), [:values, :identify_by]))
+    opts =
+      Keyword.validate!(opts, Keyword.take(options(), [:values, :identify_by, :max_tracked]))
+
     values = Keyword.fetch!(opts, :values)
     identify_by = opts |> Keyword.fetch!(:identify_by) |> identify_by()
+    max_tracked = Keyword.fetch!(opts, :max_tracked)
 
-    %Shape{validation: %Rules{columns: columns, rows: row_rules}} = Shape.resolve(shape)
+    validate_positive_integer!(max_tracked, :max_tracked)
+
+    %Shape{validation: %Rules{columns: columns, rows: row_rules, unique: unique}} =
+      Shape.resolve(shape)
+
     columns = Enum.sort(columns)
 
     rows
     |> Stream.with_index(1)
-    |> Stream.map(fn {row, line} ->
+    |> mark_rows(checks(unique, max_tracked), {columns, row_rules, values}, identify_by)
+  end
+
+  defp mark_rows(lines, [], {columns, row_rules, values}, identify_by) do
+    Stream.map(lines, fn {row, line} ->
       issues = row |> issues(line, columns, row_rules, values) |> recorded(row, identify_by)
 
       mark_row(row, issues)
     end)
+  end
+
+  defp mark_rows(lines, checks, {columns, row_rules, values}, identify_by) do
+    lines
+    |> Stream.map(fn {row, line} ->
+      {row, line, issues(row, line, columns, row_rules, values)}
+    end)
+    |> CrossRow.run(checks, values)
+    |> Stream.map(fn {row, issues} -> mark_row(row, recorded(issues, row, identify_by)) end)
   end
 
   @spec source(Enumerable.t(), Shape.t() | module(), keyword()) ::
@@ -81,8 +110,11 @@ defmodule Refract.Validate do
     values = Keyword.fetch!(opts, :values)
     indexing = Keyword.fetch!(opts, :indexing)
     identify_by = opts |> Keyword.fetch!(:identify_by) |> identify_by()
+    max_tracked = Keyword.fetch!(opts, :max_tracked)
 
-    %Shape{spec: spec, validation: %Rules{columns: columns, rows: row_rules}} =
+    validate_positive_integer!(max_tracked, :max_tracked)
+
+    %Shape{spec: spec, validation: %Rules{columns: columns, rows: row_rules, unique: unique}} =
       Shape.resolve(shape)
 
     with {:ok, header_row, positions, steps} <-
@@ -90,17 +122,40 @@ defmodule Refract.Validate do
       absent = Locate.absent(spec, positions)
       {missing, columns} = columns |> Enum.sort() |> Enum.split_with(&missing?(&1, absent))
 
-      {:ok, Enum.map(missing, &missing_issue(&1, header_row)),
-       Stream.map(steps, fn {kind, row, report} ->
-         row = Map.merge(row, absent)
+      step_issues = &step_issues(&1, columns, row_rules, values)
 
-         {row,
-          {kind, row, report}
-          |> step_issues(columns, row_rules, values)
-          |> recorded(row, identify_by)}
-       end)}
+      {:ok, Enum.map(missing, &missing_issue(&1, header_row)),
+       steps_with_issues(
+         steps,
+         checks(unique, max_tracked),
+         absent,
+         step_issues,
+         values,
+         identify_by
+       )}
     end
   end
+
+  defp steps_with_issues(steps, [], absent, step_issues, _values, identify_by) do
+    Stream.map(steps, fn {kind, row, report} ->
+      row = Map.merge(row, absent)
+
+      {row, {kind, row, report} |> step_issues.() |> recorded(row, identify_by)}
+    end)
+  end
+
+  defp steps_with_issues(steps, checks, absent, step_issues, values, identify_by) do
+    steps
+    |> Stream.map(fn {kind, row, %Report.Line{row: line} = report} ->
+      row = Map.merge(row, absent)
+
+      {row, line, step_issues.({kind, row, report})}
+    end)
+    |> CrossRow.run(checks, values)
+    |> Stream.map(fn {row, issues} -> {row, recorded(issues, row, identify_by)} end)
+  end
+
+  defp checks(unique, max_tracked), do: Enum.map(unique, &Unique.new(&1, max_tracked))
 
   defp missing?({column, rules}, absent), do: is_map_key(absent, column) and :required in rules
 
@@ -217,7 +272,4 @@ defmodule Refract.Validate do
 
   defp rule_name({name, fun}) when is_atom(name) and is_function(fun, 1), do: name
   defp rule_name(rule), do: rule
-
-  defp shown(true, cell), do: cell
-  defp shown(false, _cell), do: nil
 end

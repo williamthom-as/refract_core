@@ -17,9 +17,14 @@ defmodule Refract.Validate.Issue do
 
   @enforce_keys [:rule]
 
-  defstruct [:line, :column, :field, :rule, :value, :record]
+  defstruct [:line, :column, :field, :rule, :value, :record, :first_line]
 
-  @type rule :: Rules.rule() | atom() | {:recognition, Row.rule() | atom()}
+  @type rule ::
+          Rules.rule()
+          | atom()
+          | {:recognition, Row.rule() | atom()}
+          | {:unique, [String.t()]}
+          | {:max_tracked, :unique | {:unique, [String.t()]}}
 
   @type t :: %__MODULE__{
           line: pos_integer() | nil,
@@ -27,13 +32,20 @@ defmodule Refract.Validate.Issue do
           field: String.t() | nil,
           rule: rule(),
           value: Refract.cell() | nil,
-          record: %{String.t() => Refract.cell()} | nil
+          record: %{String.t() => Refract.cell()} | nil,
+          first_line: pos_integer() | nil
         }
+
+  @doc false
+  @spec shown(boolean(), Refract.cell()) :: Refract.cell() | nil
+
+  def shown(true, cell), do: cell
+  def shown(false, _cell), do: nil
 
   @spec describe(t()) :: String.t()
 
-  def describe(%__MODULE__{rule: rule, value: value} = issue),
-    do: where(issue) <> rule_text(rule) <> got(value)
+  def describe(%__MODULE__{rule: rule, value: value, first_line: first_line} = issue),
+    do: where(issue) <> rule_text(rule) <> got(value) <> first_seen(first_line)
 
   defp where(%__MODULE__{line: nil, field: nil}), do: ""
   defp where(%__MODULE__{line: nil, field: field}), do: "field #{field}: "
@@ -70,6 +82,19 @@ defmodule Refract.Validate.Issue do
   defp rule_text({:min, bound}), do: "must be at least #{bound}"
   defp rule_text({:max, bound}), do: "must be at most #{bound}"
   defp rule_text({:in, values}), do: "must be one of #{Enum.join(values, ", ")}"
+  defp rule_text(:unique), do: "must be unique"
+
+  defp rule_text({:unique, columns}),
+    do: "#{Enum.join(columns, " and ")} must be unique together"
+
+  defp rule_text({:max_tracked, :unique}),
+    do: "unique not checked past this point (more values matched than max_tracked)"
+
+  defp rule_text({:max_tracked, {:unique, columns}}),
+    do:
+      "#{Enum.join(columns, " and ")} unique together not checked past this point " <>
+        "(more values matched than max_tracked)"
+
   defp rule_text({module, _opts}) when is_atom(module), do: rule_text(module)
   defp rule_text(name) when is_atom(name), do: "fails #{name(name)}"
 
@@ -77,4 +102,7 @@ defmodule Refract.Validate.Issue do
 
   defp got(value) when value in [nil, ""], do: ""
   defp got(value), do: ", got #{inspect(value)}"
+
+  defp first_seen(nil), do: ""
+  defp first_seen(line), do: ", first on line #{line}"
 end

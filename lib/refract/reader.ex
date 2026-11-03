@@ -14,9 +14,10 @@ defmodule Refract.Reader do
   - `suggest`: `within`, `header_row`
   - `profile`: `within`, `header_row`, `except`, `max_distinct`, `max_lines`, `values`,
     `fuzzy`, `columns`, `indexing` (set from the reader)
-  - `validate`: `within`, `header_row`, `values`, `identify_by`, `indexing` (set from the reader;
-    `max_bytes` and `max_rows` contraint read when the shape has fields or document rules, they
-    generally require the whole file to be read for all validators to be applied)
+  - `validate`: `within`, `header_row`, `values`, `identify_by`, `max_tracked`, `indexing` (set
+    from the reader; `max_bytes` and `max_rows` contraint read when the shape has fields or
+    document rules, they generally require the whole file to be read for all validators to be
+    applied)
   - `load`, `fields`: `max_bytes`, `max_rows` (both max_bytes|rows are used if both are supplied)
 
   note: you can check/verify a custom reader with `Refract.Test.ReaderCase`

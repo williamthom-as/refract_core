@@ -12,9 +12,9 @@ defmodule Refract.Shape.FromMap do
   @header_keys ~w(columns required min_matches ignore)
   @row_keys ~w(match min_score)
   @marker_keys ~w(file content)
-  @validation_keys ~w(columns)
+  @validation_keys ~w(columns unique)
   @field_keys ~w(label take at rules)
-  @rule_names ~w(required integer number date datetime min max in)
+  @rule_names ~w(required unique integer number date datetime min max in)
   @date_formats ~w(iso ymd dmy mdy)
 
   @spec run(term(), [Shape.from_map_opt()]) :: {:ok, Shape.t()} | {:error, Shape.error()}
@@ -313,12 +313,24 @@ defmodule Refract.Shape.FromMap do
     validation = present(validation)
 
     with :ok <- known_keys(validation, @validation_keys, "validation"),
-         {:ok, columns} <- validation_columns(Map.get(validation, "columns", %{}), validators) do
-      {:ok, [columns: columns]}
+         {:ok, columns} <- validation_columns(Map.get(validation, "columns", %{}), validators),
+         {:ok, unique} <- validation_unique(Map.get(validation, "unique", [])) do
+      {:ok, [columns: columns, unique: unique]}
     end
   end
 
   defp validation(validation, _validators), do: invalid("validation", validation)
+
+  defp validation_unique(unique) when is_list(unique),
+    do: unique |> Enum.all?(&combination?/1) |> validation_unique(unique)
+
+  defp validation_unique(unique), do: invalid("validation.unique", unique)
+
+  defp validation_unique(true, unique), do: {:ok, unique}
+  defp validation_unique(false, unique), do: invalid("validation.unique", unique)
+
+  defp combination?(columns) when is_list(columns), do: Enum.all?(columns, &is_binary/1)
+  defp combination?(_columns), do: false
 
   defp validation_columns(columns, validators) when is_map(columns),
     do: validation_columns(Map.to_list(columns), validators, %{})
@@ -347,6 +359,7 @@ defmodule Refract.Shape.FromMap do
   end
 
   defp validation_rule(_path, "required", _validators), do: {:ok, :required}
+  defp validation_rule(_path, "unique", _validators), do: {:ok, :unique}
 
   defp validation_rule(_path, name, validators) when is_map_key(validators, name),
     do: {:ok, Map.fetch!(validators, name)}
