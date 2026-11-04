@@ -17,6 +17,39 @@ defmodule Refract.WriterTest do
     def extension, do: "txt"
   end
 
+  describe "for_path/2" do
+    defmodule OtherCsvWriter do
+      use Refract.Writer
+
+      @impl Refract.Writer
+      def encode_options, do: []
+
+      @impl Refract.Writer
+      def encode(rows, _opts), do: rows
+
+      @impl Refract.Writer
+      def extension, do: "csv"
+    end
+
+    test "csv goes to the csv writer, in any case" do
+      assert Refract.Writer.for_path("out/bills.csv") == {:ok, Refract.CSV}
+      assert Refract.Writer.for_path("BILLS.CSV") == {:ok, Refract.CSV}
+    end
+
+    test "a writer passed in takes its own extension" do
+      assert Refract.Writer.for_path("out.txt", [StubWriter]) == {:ok, StubWriter}
+    end
+
+    test "a writer passed in for csv takes it over" do
+      assert Refract.Writer.for_path("out.csv", [OtherCsvWriter]) == {:ok, OtherCsvWriter}
+    end
+
+    test "an extension no writer takes" do
+      assert Refract.Writer.for_path("notes.md") == {:error, {:unsupported, "md"}}
+      assert Refract.Writer.for_path("out") == {:error, {:unsupported, ""}}
+    end
+  end
+
   describe "use Refract.Writer" do
     test "injects write/3 that writes encode/2 output to a file", %{tmp_dir: dir} do
       path = Path.join(dir, "out.txt")

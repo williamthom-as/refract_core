@@ -9,6 +9,8 @@ defmodule Refract.Table.Locate do
   alias Refract.Table.Spec
   alias Refract.Table.Spec.Header
 
+  import Refract.String.Utils, only: [blank?: 1]
+
   @type header_miss :: %{row: pos_integer(), matched: [String.t()], missing: [String.t()]} | nil
 
   @spec run(Enumerable.t(), Spec.t(), keyword()) ::
@@ -73,15 +75,27 @@ defmodule Refract.Table.Locate do
 
   defp positions(%Report.Line{row: row, columns: columns, extra: extra} = report, raw, :all) do
     named = Header.positions(report)
-    names = raw |> Enum.at(row - 1) |> ColumnNames.from()
+    line = Enum.at(raw, row - 1)
+    names = ColumnNames.from(line)
 
-    unnamed =
-      Enum.map(extra, &elem(&1, 0)) ++
-        for {_name, %Report.Column{others: others}} <- columns,
-            {index, _cell} <- others,
-            do: index
+    unnamed = extra_indexes(extra) ++ other_indexes(columns) ++ blank_indexes(line, named)
 
     Enum.reduce(unnamed, named, &Map.put_new(&2, Enum.at(names, &1), &1))
+  end
+
+  defp extra_indexes(extra), do: Enum.map(extra, &elem(&1, 0))
+
+  defp other_indexes(columns) do
+    for {_name, %Report.Column{others: others}} <- columns, {index, _cell} <- others, do: index
+  end
+
+  defp blank_indexes(line, named) do
+    taken = named |> Map.values() |> MapSet.new()
+
+    for {cell, index} <- Enum.with_index(line),
+        blank?(cell),
+        not MapSet.member?(taken, index),
+        do: index
   end
 
   @spec absent(Spec.t(), Header.positions()) :: %{String.t() => nil}

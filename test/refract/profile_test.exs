@@ -317,6 +317,24 @@ defmodule Refract.ProfileTest do
       assert unnamed -- (rows |> Enum.at(0) |> Map.keys()) == []
     end
 
+    test "a blank header cell is profiled under the name stream gives it" do
+      source = {:string, "Account,,Amount\nA-1,31/01/2024,1.00\nA-2,,2.00\nA-3,31/01/2024,3.00\n"}
+
+      assert {:ok, %Result{columns: columns}} = CSV.profile(source, ledger(), columns: :all)
+      assert {:ok, rows} = CSV.stream(source)
+
+      assert columns |> Map.keys() |> Enum.sort() == ["account", "amount", "col_1"]
+      assert rows |> Enum.at(0) |> Map.has_key?("col_1")
+      assert %Column{blanks: 1, distinct: 1} = columns["col_1"]
+    end
+
+    test "a blank header cell is left out without columns: :all" do
+      source = {:string, "Account,,Amount\nA-1,31/01/2024,1.00\n"}
+
+      assert {:ok, %Result{columns: columns}} = CSV.profile(source, ledger())
+      refute Map.has_key?(columns, "col_1")
+    end
+
     test "a quoted header cell loses its quotes" do
       source = {:string, "Account,Cost Centre,Amount,\"\"\"Notes\"\"\"\nA-1,north,1.00,ok\n"}
 

@@ -11,6 +11,7 @@ defmodule Refract.Writer do
   """
 
   alias Refract.ArgValidator
+  alias Refract.Writer.Lookup
 
   @callback encode(rows :: Enumerable.t(), opts :: keyword()) :: Enumerable.t()
 
@@ -37,6 +38,10 @@ defmodule Refract.Writer do
   end
 
   @write_buffer_size 1_000
+
+  @spec for_path(Path.t(), [module()]) :: {:ok, module()} | {:error, {:unsupported, String.t()}}
+
+  def for_path(path, writers \\ []), do: Lookup.for_path(path, writers)
 
   @spec cells(Enumerable.t(), [String.t()] | nil) :: Enumerable.t()
 
