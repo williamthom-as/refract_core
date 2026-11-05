@@ -66,7 +66,7 @@ defmodule Refract.E2E.LongToWideTest do
 
     assert :ok =
              readings()
-             |> Rows.group(by: "asset_tag", into: &widen(&1, types))
+             |> Rows.fold(by: "asset_tag", into: &widen(&1, types))
              |> CSV.write(out, header: ["asset_tag", "readings"] ++ types ++ ["latest_at"])
 
     assert File.read!(out) == Golden.expected("long_to_wide")
@@ -75,7 +75,7 @@ defmodule Refract.E2E.LongToWideTest do
   test "the wide rows can be cut back to the readings alone" do
     [first | _] =
       readings()
-      |> Rows.group(by: "asset_tag", into: &widen(&1, reading_types()))
+      |> Rows.fold(by: "asset_tag", into: &widen(&1, reading_types()))
       |> Rows.take(&(&1 in reading_types()))
       |> Enum.to_list()
 

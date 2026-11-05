@@ -635,6 +635,85 @@ defmodule Refract.RowsTest do
   end
 
   describe "group/2" do
+    @accounts [
+      %{"account" => "A-1", "status" => "open"},
+      %{"account" => "A-2", "status" => "closed"},
+      %{"account" => "A-1", "status" => "open"},
+      %{"account" => "A-3", "status" => ""},
+      %{"account" => "A-2", "status" => "open"}
+    ]
+
+    defp positions(groups),
+      do: Enum.map(groups, fn {values, rows} -> {values, Enum.map(rows, &elem(&1, 0))} end)
+
+    test "each value with the rows it is on, most common first, ties in first seen order" do
+      groups = Rows.group(@accounts, by: ["account"])
+
+      assert positions(groups) == [{["A-1"], [1, 3]}, {["A-2"], [2, 5]}, {["A-3"], [4]}]
+
+      assert [{["A-1"], [{1, %{"account" => "A-1", "status" => "open"}} | _rest]} | _groups] =
+               groups
+    end
+
+    test "a column name is the same as a list of one" do
+      assert Rows.group(@accounts, by: "account") == Rows.group(@accounts, by: ["account"])
+    end
+
+    test "several columns are grouped together" do
+      assert positions(Rows.group(@accounts, by: ["account", "status"])) == [
+               {["A-1", "open"], [1, 3]},
+               {["A-2", "closed"], [2]},
+               {["A-2", "open"], [5]}
+             ]
+    end
+
+    test "a row blank in any of the columns is left out" do
+      assert @accounts |> Rows.group(by: ["status"]) |> positions() ==
+               [{["open"], [1, 3, 5]}, {["closed"], [2]}]
+    end
+
+    test "blanks: :keep groups the blanks too" do
+      assert @accounts |> Rows.group(by: ["status"], blanks: :keep) |> positions() ==
+               [{["open"], [1, 3, 5]}, {["closed"], [2]}, {[""], [4]}]
+    end
+
+    test "keep_rows: false gives positions only" do
+      assert Rows.group(@accounts, by: ["account"], keep_rows: false) ==
+               [{["A-1"], [1, 3]}, {["A-2"], [2, 5]}, {["A-3"], [4]}]
+    end
+
+    test "values are compared as read" do
+      rows = [%{"id" => "A-1"}, %{"id" => "a-1"}, %{"id" => " A-1"}, %{"id" => 1}, %{"id" => "1"}]
+
+      assert rows |> Rows.group(by: "id") |> length() == 5
+    end
+
+    test "an unknown column raises" do
+      assert_raise KeyError, fn -> Rows.group(@accounts, by: ["acount"]) end
+    end
+
+    test "no rows, no groups" do
+      assert Rows.group([], by: ["account"]) == []
+    end
+
+    test "options are checked" do
+      assert_raise ArgumentError, ~r/by must be a column name or a non empty list of them/, fn ->
+        Rows.group(@accounts, by: [])
+      end
+
+      assert_raise ArgumentError, ~r/blanks must be :skip or :keep/, fn ->
+        Rows.group(@accounts, by: "account", blanks: :drop)
+      end
+
+      assert_raise ArgumentError, ~r/keep_rows must be true or false/, fn ->
+        Rows.group(@accounts, by: "account", keep_rows: "yes")
+      end
+
+      assert_raise ArgumentError, fn -> Rows.group(@accounts, by: "account", sort: :count) end
+    end
+  end
+
+  describe "fold/2" do
     @lines [
       %{"id" => "i-1", "kg" => "2", "seen" => "2026"},
       %{"id" => "i-1", "kg" => "3", "seen" => "2027"},
@@ -645,7 +724,7 @@ defmodule Refract.RowsTest do
       do: %{"kg" => lines |> Enum.map(&String.to_integer(&1["kg"])) |> Enum.sum()}
 
     test "folds the lines of each id into one row with the function" do
-      assert @lines |> Rows.group(by: "id", into: &total/1) |> Enum.to_list() == [
+      assert @lines |> Rows.fold(by: "id", into: &total/1) |> Enum.to_list() == [
                %{"id" => "i-1", "kg" => 5},
                %{"id" => "i-2", "kg" => 5}
              ]
@@ -653,7 +732,7 @@ defmodule Refract.RowsTest do
 
     test "the function is given every line of the id in order" do
       assert @lines
-             |> Rows.group(by: "id", into: &%{"seen" => Enum.map(&1, fn l -> l["seen"] end)})
+             |> Rows.fold(by: "id", into: &%{"seen" => Enum.map(&1, fn l -> l["seen"] end)})
              |> Enum.to_list() == [
                %{"id" => "i-1", "seen" => ["2026", "2027"]},
                %{"id" => "i-2", "seen" => ["2026"]}
@@ -661,7 +740,7 @@ defmodule Refract.RowsTest do
     end
 
     test "the by column is always on the row, even if the function drops it" do
-      assert [row | _] = @lines |> Rows.group(by: "id", into: fn _ -> %{} end) |> Enum.to_list()
+      assert [row | _] = @lines |> Rows.fold(by: "id", into: fn _ -> %{} end) |> Enum.to_list()
 
       assert row == %{"id" => "i-1"}
     end
@@ -669,42 +748,42 @@ defmodule Refract.RowsTest do
     test "only neighbouring lines are grouped, like pivot" do
       lines = [%{"id" => "a"}, %{"id" => "b"}, %{"id" => "a"}]
 
-      assert lines |> Rows.group(by: "id", into: &%{"n" => length(&1)}) |> Enum.map(& &1["id"]) ==
+      assert lines |> Rows.fold(by: "id", into: &%{"n" => length(&1)}) |> Enum.map(& &1["id"]) ==
                ["a", "b", "a"]
     end
 
     test "unknown by column raises" do
       assert_raise KeyError, fn ->
-        @lines |> Rows.group(by: "di", into: &total/1) |> Enum.to_list()
+        @lines |> Rows.fold(by: "di", into: &total/1) |> Enum.to_list()
       end
     end
 
     test "a function that does not return a row raises" do
       assert_raise ArgumentError, ~r/i-1/, fn ->
-        @lines |> Rows.group(by: "id", into: fn _ -> :nope end) |> Enum.to_list()
+        @lines |> Rows.fold(by: "id", into: fn _ -> :nope end) |> Enum.to_list()
       end
     end
 
     test "into must be a function of the lines" do
-      assert_raise ArgumentError, fn -> Rows.group(@lines, by: "id", into: &Map.get/2) end
+      assert_raise ArgumentError, fn -> Rows.fold(@lines, by: "id", into: &Map.get/2) end
     end
 
     test "an unknown option raises" do
-      assert_raise ArgumentError, fn -> Rows.group(@lines, by: "id", into: &total/1, with: 1) end
+      assert_raise ArgumentError, fn -> Rows.fold(@lines, by: "id", into: &total/1, with: 1) end
     end
 
     test "a missing option raises" do
-      assert_raise KeyError, fn -> Rows.group(@lines, by: "id") end
+      assert_raise KeyError, fn -> Rows.fold(@lines, by: "id") end
     end
 
     test "no lines gives no rows" do
-      assert [] |> Rows.group(by: "id", into: &total/1) |> Enum.to_list() == []
+      assert [] |> Rows.fold(by: "id", into: &total/1) |> Enum.to_list() == []
     end
 
     test "is lazy" do
       rows = Stream.map(@lines, fn _ -> raise "read too early" end)
 
-      _stream = Rows.group(rows, by: "id", into: &total/1)
+      _stream = Rows.fold(rows, by: "id", into: &total/1)
     end
   end
 

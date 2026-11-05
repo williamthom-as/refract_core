@@ -4,8 +4,11 @@ defmodule Refract.Rows do
   unknown columns raises. `update` can take either a function operating on the value, or a
   function provided both the value and a `Refract.Rows.Ctx`(holds row and operated on column
   name).
-  `group` folds lines of one id val into a row with a function, `pivot` is the key/value special
-  case of it. both need the lines for one id val next to each other. `parallel` runs a pipeline on
+  `fold` folds a contiguous run of lines of one id val into a row with a function, `pivot` is the
+  key/value special case of it. both need the lines for one id val next to each other.
+  `group` gives each value of a column, or combination of columns, with the rows it is on (their
+  positions from 1), most common first; it reads the whole input, so unlike the rest it is not
+  lazy. `parallel` runs a pipeline on
   chunks across cores for perf gains
 
       rows
@@ -166,6 +169,30 @@ defmodule Refract.Rows do
 
   def distinct(rows, column), do: Stream.uniq_by(rows, &Map.fetch!(&1, column))
 
+  @type group_opt ::
+          {:by, String.t() | [String.t()]} | {:blanks, :skip | :keep} | {:keep_rows, boolean()}
+
+  @spec group(Enumerable.t(), [group_opt()]) ::
+          [{[Refract.cell()], [{pos_integer(), Refract.row()}] | [pos_integer()]}]
+
+  def group(rows, opts) do
+    opts = Keyword.validate!(opts, [:by, blanks: :skip, keep_rows: true])
+    by = opts |> Keyword.fetch!(:by) |> group_columns()
+    blanks = Keyword.fetch!(opts, :blanks)
+    keep_rows = Keyword.fetch!(opts, :keep_rows)
+
+    validate_blanks(blanks)
+    ArgValidator.validate_boolean!(keep_rows, :keep_rows)
+
+    rows
+    |> Stream.with_index(1)
+    |> Enum.reduce(%{}, &add_to_group(&1, &2, by, blanks, keep_rows))
+    |> Enum.sort_by(fn {_values, {first, count, _occurrences}} -> {-count, first} end)
+    |> Enum.map(fn {values, {_first, _count, occurrences}} ->
+      {values, Enum.reverse(occurrences)}
+    end)
+  end
+
   @spec fill_down(Enumerable.t(), String.t() | [String.t()]) :: Enumerable.t()
 
   def fill_down(rows, column) do
@@ -201,9 +228,9 @@ defmodule Refract.Rows do
     end)
   end
 
-  @spec group(Enumerable.t(), keyword()) :: Enumerable.t()
+  @spec fold(Enumerable.t(), keyword()) :: Enumerable.t()
 
-  def group(rows, opts) do
+  def fold(rows, opts) do
     opts = Keyword.validate!(opts, [:by, :into])
 
     by = Keyword.fetch!(opts, :by)
@@ -233,7 +260,7 @@ defmodule Refract.Rows do
     value = Keyword.fetch!(opts, :value)
     columns = Keyword.fetch!(opts, :columns)
 
-    group(rows,
+    fold(rows,
       by: by,
       into: fn [first | _] = lines ->
         id = Map.fetch!(first, by)
@@ -338,4 +365,45 @@ defmodule Refract.Rows do
 
   defp chunk_rows({:ok, {:ok, rows}}), do: rows
   defp chunk_rows({:ok, {:error, exception, stacktrace}}), do: reraise(exception, stacktrace)
+
+  defp group_columns(column) when is_binary(column), do: [column]
+
+  defp group_columns([_ | _] = columns) do
+    if Enum.all?(columns, &is_binary/1), do: columns, else: invalid_group_columns(columns)
+  end
+
+  defp group_columns(columns), do: invalid_group_columns(columns)
+
+  defp invalid_group_columns(columns) do
+    raise ArgumentError,
+          "by must be a column name or a non empty list of them, got: #{inspect(columns)}"
+  end
+
+  defp validate_blanks(blanks) when blanks in [:skip, :keep], do: :ok
+
+  defp validate_blanks(blanks) do
+    raise ArgumentError, "blanks must be :skip or :keep, got: #{inspect(blanks)}"
+  end
+
+  defp add_to_group({row, position}, groups, by, blanks, keep_rows) do
+    values = Enum.map(by, &Map.fetch!(row, &1))
+
+    values
+    |> group_skipped?(blanks)
+    |> add_occurrence(groups, values, occurrence(row, position, keep_rows), position)
+  end
+
+  defp group_skipped?(values, :skip), do: Enum.any?(values, &Utils.blank?/1)
+  defp group_skipped?(_values, :keep), do: false
+
+  defp add_occurrence(true, groups, _values, _occurrence, _position), do: groups
+
+  defp add_occurrence(false, groups, values, occurrence, position) do
+    Map.update(groups, values, {position, 1, [occurrence]}, fn {first, count, occurrences} ->
+      {first, count + 1, [occurrence | occurrences]}
+    end)
+  end
+
+  defp occurrence(row, position, true), do: {position, row}
+  defp occurrence(_row, position, false), do: position
 end
