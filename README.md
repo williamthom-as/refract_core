@@ -397,7 +397,7 @@ result
 | 8 | sku | `~r/^[A-Z]-\d{3}$/` | `x-1` | not a capital letter, a dash and three digits |
 | 8 | | `:line_total_adds_up` | | with no qty the line cannot add up |
 
-- **column rules** - `:required`, `:integer`, `:number`, `:date`, `:datetime`, a regex, `{:min, n}` / `{:max, n}` (numbers in any form, or dates), `{:in, values}`, a named function `{:name, fun}`, a [validator module](#custom-validators); a column reports its first failing rule; a blank cell fails only `:required`
+- **column rules** - `:required`, `:integer`, `:number`, `:date`, `:datetime`, a regex, `{:min, n}` / `{:max, n}` (inclusive) / `{:above, n}` / `{:below, n}` (strict; numbers in any form, or dates), `{:in, values}`, a named function `{:name, fun}`, a [validator module](#custom-validators); a column reports its first failing rule; a blank cell fails only `:required`
 - **row rules** - named functions over the whole row (reported by name)
 - **lines** - issues report the line in the file, failures are reported and the rows after it are still checked
 - **values** - issues carry no cell values unless `values: true`

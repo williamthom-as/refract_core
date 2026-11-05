@@ -154,6 +154,40 @@ defmodule Refract.ValidateTest do
                validate([line(%{"description" => ~D[2026-11-01]})], shape) |> issues()
     end
 
+    test "above and below are strict, the bound itself fails" do
+      shape = invoice(columns: %{"line_total" => [{:above, 0}, {:below, 100}]})
+
+      for {value, expected} <- [
+            {"50", []},
+            {"0", [{:above, 0}]},
+            {"0.00", [{:above, 0}]},
+            {"100", [{:below, 100}]},
+            {"$99.99", []},
+            {"lots", [{:above, 0}]}
+          ] do
+        assert validate([line(%{"line_total" => value})], shape)
+               |> issues()
+               |> Enum.map(& &1.rule) ==
+                 expected
+      end
+    end
+
+    test "above and below compare dates" do
+      shape =
+        invoice(columns: %{"description" => [{:above, ~D[2026-10-01]}, {:below, ~D[2026-10-31]}]})
+
+      assert validate([line(%{"description" => "2026-10-15"})], shape) |> issues() == []
+
+      assert [%{rule: {:above, ~D[2026-10-01]}}] =
+               validate([line(%{"description" => "2026-10-01"})], shape) |> issues()
+    end
+
+    test "a blank cell passes above and below" do
+      shape = invoice(columns: %{"line_total" => [{:above, 0}]})
+
+      assert validate([line(%{"line_total" => ""})], shape) |> issues() == []
+    end
+
     test "in takes one of a list, compared as text" do
       shape = invoice(columns: %{"qty" => [{:in, ["1", "2", "3"]}]})
 
@@ -290,6 +324,27 @@ defmodule Refract.ValidateTest do
     end
   end
 
+  describe "passes?/2" do
+    test "a cell passes or fails one rule" do
+      assert Validate.passes?({:min, 100}, "1,250.00")
+      refute Validate.passes?({:min, 100}, "99")
+      assert Validate.passes?({:in, ["open"]}, "open")
+      assert Validate.passes?(~r/^Glob/, "Globex")
+      refute Validate.passes?({:above, 0}, "0")
+    end
+
+    test "a blank cell passes every rule but required, as validation does" do
+      assert Validate.passes?({:min, 1}, "")
+      assert Validate.passes?({:in, ["open"]}, nil)
+      refute Validate.passes?(:required, "  ")
+    end
+
+    test "a rule validation does not know raises" do
+      assert_raise ArgumentError, fn -> Validate.passes?({:between, 1}, "1") end
+      assert_raise ArgumentError, fn -> Validate.passes?({:above, "ten"}, "1") end
+    end
+  end
+
   describe "Shape.from_map/1 validation" do
     test "column rules come from the map, rows stay elixir only" do
       map = %{
@@ -311,6 +366,23 @@ defmodule Refract.ValidateTest do
       assert [:required, %Regex{}] = columns["sku"]
       assert columns["qty"] == [:integer, {:min, 1}]
       assert columns["line_total"] == [:required, :number, {:max, 10_000}, {:in, ["1", "2"]}]
+    end
+
+    test "above and below come from the map, as numbers or iso dates" do
+      map = %{
+        "name" => "invoice",
+        "header" => %{"columns" => %{"qty" => ["qty"], "sku" => ["sku"]}},
+        "validation" => %{
+          "columns" => %{
+            "qty" => [%{"above" => 0}, %{"below" => 100}],
+            "sku" => [%{"above" => "2026-01-01"}]
+          }
+        }
+      }
+
+      assert {:ok, shape} = Shape.from_map(map)
+      assert shape.validation.columns["qty"] == [{:above, 0}, {:below, 100}]
+      assert shape.validation.columns["sku"] == [{:above, ~D[2026-01-01]}]
     end
 
     test "an unknown rule in the map is an error naming where" do

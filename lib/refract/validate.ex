@@ -8,6 +8,8 @@ defmodule Refract.Validate do
   - document rules over the field values and every table row together
   - unique values from column (or combinations of columns). can be limited to max_tracked
     uniques if the file is huge.
+  - `passes?/2` checks one cell against one column rule, the same as validation (a blank cell
+    passes every rule but `:required`)
   """
 
   alias Refract.Shape
@@ -37,6 +39,14 @@ defmodule Refract.Validate do
   @spec options() :: keyword()
 
   def options, do: [values: false, indexing: :lines, identify_by: nil, max_tracked: 1_000_000]
+
+  @spec passes?(Rules.rule(), Refract.cell()) :: boolean()
+
+  def passes?(rule, cell) do
+    Rules.validate_rules!([rule])
+
+    is_nil(first_failed([rule], cell))
+  end
 
   @spec rows(Enumerable.t(), Shape.t() | module(), [opt()]) :: Enumerable.t(tagged())
 

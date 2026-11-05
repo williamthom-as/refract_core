@@ -16,6 +16,10 @@ defmodule Refract.Validate.Check do
   def passes?({:max, %Date{} = bound}, cell), do: date_compare(cell, bound) in [:eq, :lt]
   def passes?({:min, bound}, cell), do: number_compare(cell, bound) in [:eq, :gt]
   def passes?({:max, bound}, cell), do: number_compare(cell, bound) in [:eq, :lt]
+  def passes?({:above, %Date{} = bound}, cell), do: date_compare(cell, bound) == :gt
+  def passes?({:below, %Date{} = bound}, cell), do: date_compare(cell, bound) == :lt
+  def passes?({:above, bound}, cell), do: number_compare(cell, bound) == :gt
+  def passes?({:below, bound}, cell), do: number_compare(cell, bound) == :lt
   def passes?({:in, values}, cell), do: text(cell) in Enum.map(values, &text/1)
   def passes?(rule, cell) when is_type_rule(rule), do: Row.passes?(rule, cell)
 

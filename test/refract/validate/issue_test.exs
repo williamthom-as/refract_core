@@ -57,6 +57,8 @@ defmodule Refract.Validate.IssueTest do
     test "bounds and lists" do
       assert describe_issue(rule: {:min, 0}) == "must be at least 0"
       assert describe_issue(rule: {:max, ~D[2026-12-31]}) == "must be at most 2026-12-31"
+      assert describe_issue(rule: {:above, 0}) == "must be more than 0"
+      assert describe_issue(rule: {:below, 100}) == "must be less than 100"
       assert describe_issue(rule: {:in, ["AUD", "NZD"]}) == "must be one of AUD, NZD"
     end
 

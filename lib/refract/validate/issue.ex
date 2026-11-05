@@ -81,6 +81,8 @@ defmodule Refract.Validate.Issue do
   defp rule_text(%Regex{} = regex), do: "must match #{inspect(regex)}"
   defp rule_text({:min, bound}), do: "must be at least #{bound}"
   defp rule_text({:max, bound}), do: "must be at most #{bound}"
+  defp rule_text({:above, bound}), do: "must be more than #{bound}"
+  defp rule_text({:below, bound}), do: "must be less than #{bound}"
   defp rule_text({:in, values}), do: "must be one of #{Enum.join(values, ", ")}"
   defp rule_text(:unique), do: "must be unique"
 

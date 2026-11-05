@@ -370,6 +370,12 @@ defmodule Refract.Shape.FromMap do
   defp validation_rule(path, %{"max" => bound} = rule, _validators) when map_size(rule) == 1,
     do: bound(path, :max, bound)
 
+  defp validation_rule(path, %{"above" => bound} = rule, _validators) when map_size(rule) == 1,
+    do: bound(path, :above, bound)
+
+  defp validation_rule(path, %{"below" => bound} = rule, _validators) when map_size(rule) == 1,
+    do: bound(path, :below, bound)
+
   defp validation_rule(_path, %{"in" => values} = rule, _validators)
        when map_size(rule) == 1 and is_list(values),
        do: {:ok, {:in, values}}

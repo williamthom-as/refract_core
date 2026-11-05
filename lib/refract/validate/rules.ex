@@ -7,6 +7,8 @@ defmodule Refract.Validate.Rules do
 
   import Refract.Table.Spec.Row, only: [is_type_rule: 1]
 
+  @bounds [:min, :max, :above, :below]
+
   @type rule ::
           :required
           | :integer
@@ -14,7 +16,7 @@ defmodule Refract.Validate.Rules do
           | :date
           | :datetime
           | Regex.t()
-          | {:min | :max, number() | Decimal.t() | Date.t()}
+          | {:min | :max | :above | :below, number() | Decimal.t() | Date.t()}
           | {:in, [term()]}
           | {:date | :datetime, [DateParser.format()]}
           | {atom(), (Refract.cell() -> as_boolean(term()))}
@@ -117,9 +119,9 @@ defmodule Refract.Validate.Rules do
   defp validate_rule(:required), do: :ok
   defp validate_rule(rule) when is_type_rule(rule), do: Row.validate_type_rule!(rule)
   defp validate_rule(%Regex{}), do: :ok
-  defp validate_rule({bound, n}) when bound in [:min, :max] and is_number(n), do: :ok
-  defp validate_rule({bound, %Decimal{}}) when bound in [:min, :max], do: :ok
-  defp validate_rule({bound, %Date{}}) when bound in [:min, :max], do: :ok
+  defp validate_rule({bound, n}) when bound in @bounds and is_number(n), do: :ok
+  defp validate_rule({bound, %Decimal{}}) when bound in @bounds, do: :ok
+  defp validate_rule({bound, %Date{}}) when bound in @bounds, do: :ok
   defp validate_rule({:in, values}) when is_list(values), do: :ok
   defp validate_rule({name, fun}) when is_atom(name) and is_function(fun, 1), do: :ok
 
