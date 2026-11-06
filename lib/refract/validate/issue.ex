@@ -4,10 +4,13 @@ defmodule Refract.Validate.Issue do
   when validated with `values: true`, and the record a row issue is about when validated with
   `identify_by:` (the named columns and their values, shown whatever `values:` says)
 
-  - `describe/1` reads it as one line of text
+  - `describe/1` reads it as one line of text, `describe_rule/1` a rule alone
 
       iex> Refract.Validate.Issue.describe(%Refract.Validate.Issue{line: 3, column: "account", rule: :required})
       "line 3, account: is required"
+
+      iex> Refract.Validate.Issue.describe_rule({:min, 0})
+      "must be at least 0"
   """
 
   alias Refract.Table.Spec.Row
@@ -45,7 +48,7 @@ defmodule Refract.Validate.Issue do
   @spec describe(t()) :: String.t()
 
   def describe(%__MODULE__{rule: rule, value: value, first_line: first_line} = issue),
-    do: where(issue) <> rule_text(rule) <> got(value) <> first_seen(first_line)
+    do: where(issue) <> describe_rule(rule) <> got(value) <> first_seen(first_line)
 
   defp where(%__MODULE__{line: nil, field: nil}), do: ""
   defp where(%__MODULE__{line: nil, field: field}), do: "field #{field}: "
@@ -67,38 +70,40 @@ defmodule Refract.Validate.Issue do
     |> Enum.map_join(", ", fn {column, value} -> "#{column} #{text(value)}" end)
   end
 
-  defp rule_text({:recognition, rule}), do: rule_text(rule)
-  defp rule_text(:required), do: "is required"
-  defp rule_text(:column_missing), do: "column is missing"
-  defp rule_text(:integer), do: "must be an integer"
-  defp rule_text(:number), do: "must be a number"
-  defp rule_text(:date), do: "must be a date"
-  defp rule_text(:datetime), do: "must be a datetime"
+  @spec describe_rule(rule()) :: String.t()
 
-  defp rule_text({kind, formats}) when kind in [:date, :datetime] and is_list(formats),
-    do: "#{rule_text(kind)} (#{Enum.join(formats, ", ")})"
+  def describe_rule({:recognition, rule}), do: describe_rule(rule)
+  def describe_rule(:required), do: "is required"
+  def describe_rule(:column_missing), do: "column is missing"
+  def describe_rule(:integer), do: "must be an integer"
+  def describe_rule(:number), do: "must be a number"
+  def describe_rule(:date), do: "must be a date"
+  def describe_rule(:datetime), do: "must be a datetime"
 
-  defp rule_text(%Regex{} = regex), do: "must match #{inspect(regex)}"
-  defp rule_text({:min, bound}), do: "must be at least #{bound}"
-  defp rule_text({:max, bound}), do: "must be at most #{bound}"
-  defp rule_text({:above, bound}), do: "must be more than #{bound}"
-  defp rule_text({:below, bound}), do: "must be less than #{bound}"
-  defp rule_text({:in, values}), do: "must be one of #{Enum.join(values, ", ")}"
-  defp rule_text(:unique), do: "must be unique"
+  def describe_rule({kind, formats}) when kind in [:date, :datetime] and is_list(formats),
+    do: "#{describe_rule(kind)} (#{Enum.join(formats, ", ")})"
 
-  defp rule_text({:unique, columns}),
+  def describe_rule(%Regex{} = regex), do: "must match #{inspect(regex)}"
+  def describe_rule({:min, bound}), do: "must be at least #{bound}"
+  def describe_rule({:max, bound}), do: "must be at most #{bound}"
+  def describe_rule({:above, bound}), do: "must be more than #{bound}"
+  def describe_rule({:below, bound}), do: "must be less than #{bound}"
+  def describe_rule({:in, values}), do: "must be one of #{Enum.join(values, ", ")}"
+  def describe_rule(:unique), do: "must be unique"
+
+  def describe_rule({:unique, columns}),
     do: "#{Enum.join(columns, " and ")} must be unique together"
 
-  defp rule_text({:max_tracked, :unique}),
+  def describe_rule({:max_tracked, :unique}),
     do: "unique not checked past this point (more values matched than max_tracked)"
 
-  defp rule_text({:max_tracked, {:unique, columns}}),
+  def describe_rule({:max_tracked, {:unique, columns}}),
     do:
       "#{Enum.join(columns, " and ")} unique together not checked past this point " <>
         "(more values matched than max_tracked)"
 
-  defp rule_text({module, _opts}) when is_atom(module), do: rule_text(module)
-  defp rule_text(name) when is_atom(name), do: "fails #{name(name)}"
+  def describe_rule({module, _opts}) when is_atom(module), do: describe_rule(module)
+  def describe_rule(name) when is_atom(name), do: "fails #{name(name)}"
 
   defp name(atom), do: atom |> inspect() |> String.trim_leading(":")
 

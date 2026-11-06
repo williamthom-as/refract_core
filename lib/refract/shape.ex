@@ -13,6 +13,11 @@ defmodule Refract.Shape do
   `from_map/2` and `load/2`, then uses the names in column and field rules
 
       Refract.Shape.load("shapes/order.yml", validators: %{"abn" => MyApp.Validators.ABN})
+
+  `describe_error/1` reads a `from_map/2` or `load/2` error as text
+
+      iex> Refract.Shape.describe_error({:invalid_value, {"header", 3}})
+      "invalid_value header"
   """
 
   alias Refract.ArgValidator
@@ -184,12 +189,14 @@ defmodule Refract.Shape do
     end
   end
 
-  defp describe_error({:invalid_value, {key, _value}}), do: "invalid_value #{key}"
+  @spec describe_error(load_error()) :: String.t()
 
-  defp describe_error({reason, detail}) when is_binary(detail) or is_atom(detail),
+  def describe_error({:invalid_value, {key, _value}}), do: "invalid_value #{key}"
+
+  def describe_error({reason, detail}) when is_binary(detail) or is_atom(detail),
     do: "#{reason} #{detail}"
 
-  defp describe_error({reason, _detail}), do: "#{reason}"
+  def describe_error({reason, _detail}), do: "#{reason}"
 
   defp validate_name(name) when is_binary(name) do
     if blank?(name) do

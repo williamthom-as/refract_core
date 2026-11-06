@@ -234,7 +234,7 @@ defmodule Refract.ValidatorTest do
     end
 
     test "a registry name that shadows a built in rule raises" do
-      for name <- ~w(required integer number date datetime min max in) do
+      for name <- ~w(required integer number date datetime min max above below in) do
         assert_raise ArgumentError, ~r/#{name}/, fn ->
           Shape.from_map(order_map(%{}), validators: %{name => ABN})
         end

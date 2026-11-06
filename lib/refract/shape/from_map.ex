@@ -14,8 +14,8 @@ defmodule Refract.Shape.FromMap do
   @marker_keys ~w(file content)
   @validation_keys ~w(columns unique)
   @field_keys ~w(label take at rules)
-  @rule_names ~w(required unique integer number date datetime min max in)
-  @date_formats ~w(iso ymd dmy mdy)
+  @rule_names ~w(required unique integer number date datetime min max above below in)
+  @date_formats %{"iso" => :iso, "ymd" => :ymd, "dmy" => :dmy, "mdy" => :mdy}
 
   @spec run(term(), [Shape.from_map_opt()]) :: {:ok, Shape.t()} | {:error, Shape.error()}
 
@@ -145,7 +145,7 @@ defmodule Refract.Shape.FromMap do
 
   defp date_formats(_formats), do: :error
 
-  defp date_format(name) when name in @date_formats, do: String.to_existing_atom(name)
+  defp date_format(name) when is_map_key(@date_formats, name), do: Map.fetch!(@date_formats, name)
   defp date_format(pattern), do: pattern
 
   defp dated(path, kind, formats, rule) do
@@ -388,6 +388,8 @@ defmodule Refract.Shape.FromMap do
   defp validation_rule(path, rule, _validators), do: rule(path, rule)
 
   defp validator(path, rule, {:ok, module}, options) when is_map(options) do
+    Code.ensure_loaded(module)
+
     case validator_opts(Map.to_list(options), []) do
       {:ok, opts} -> {:ok, {module, opts}}
       :error -> invalid(path, rule)
