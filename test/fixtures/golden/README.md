@@ -2,6 +2,7 @@ golden files
 ============
 
 all files from original cure project [github/williamthom-as/cure]
+total_arrivals input is abs overseas arrivals and departures data licensed cc by 4.0
 
 dir                  cure spec                                   files
 empty_columns        empty columns spec                          input expected

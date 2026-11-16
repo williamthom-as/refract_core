@@ -30,10 +30,10 @@ Each one of the features can be used on its own, or work together to build compl
   - [Query](#query): run SQL over folders of files and the tables you've found, through an engine plugin. Think querying tabular data using SQL without needing to load it into a database first. Useful for joins, aggregations, and filtering across multiple files.
   - [Plugins](#plugins): extend Refract with new file formats (XLSX, JSON already available) or query engines (DuckDB available)
 
-Note: Refract started as a port of the `Cure` project (https://www.github.com/williamthom-as/cure) to the Elixir ecosystem. It now offers major QoL improvements over the original, whilst being fully feature compatible with it.
+Note: Refract started as a port of the `Cure` project (https://www.github.com/williamthom-as/cure) to the Elixir ecosystem. It now offers major QoL improvements over the original, and Cure's original golden files run as tests here.
 
 ```elixir
-{:refract, github: "williamthom-as/refract"}
+{:refract, github: "williamthom-as/refract_core", tag: "v0.1.0"}
 ```
 
 ---
@@ -746,6 +746,8 @@ Refract.Privacy.Pseudonym.reverse!("735034101269", :account, keyring)
 
 Keys come from `REFRACT_KEY_1`, `REFRACT_KEY_2`, ... (versioned, rotate by adding one), one derived key per domain.
 
+Refract's FF1 and keyed pseudonyms have not been independently audited. Use them for demo, test and shared sample data, not as compliance grade anonymisation. Anyone holding the key can reverse a pseudonym.
+
 ---
 
 ## Extend
@@ -840,3 +842,7 @@ Writers are the same, all with `write` and `write_chunks`; `Refract.CSV` also ta
 **`refract_duckdb`** - the query engine behind [Query](#query).
 
 Your own reader, writer or engine: implement `Refract.Reader`, `Refract.Writer` or `Refract.Query.Engine`, and check it with `Refract.Test.ReaderCase`, `WriterCase` or `EngineCase`.
+
+## License
+
+Apache-2.0, see [LICENSE](LICENSE).
